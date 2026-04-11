@@ -1,0 +1,43 @@
+server:
+  port: 8080
+
+# spring 컨테이너 설정 관련
+spring:
+  config:
+    import: optional:file:.env[.properties]
+
+  application:
+    name: infragen
+
+  datasource:
+    url: ${MYSQL_DATABASE_URL}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${MYSQL_USER}
+    password: ${MYSQL_PASSWORD}
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+
+    show-sql: true
+
+  servlet:
+    encoding:
+      charset: UTF-8
+
+# jwt 설정 관련
+jwt:
+  secret: ${JWT_SECRET}
+  access-token:
+    expiration-time: 3600000 # 1시간 (밀리초 단위)
+  refresh-token:
+    expiration-time: 1209600000 # 14일
+  dev-token:
+    expiration-time: 1209600000
+  issuer: infra-gen

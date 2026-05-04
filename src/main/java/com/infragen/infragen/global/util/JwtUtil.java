@@ -35,7 +35,7 @@ public class JwtUtil {
         // 표준 클레임만 작성하였고, 비공개 클레임은 claim 메서드로 정보를 추가 ex) .claim("role", "USER")
         return Jwts.builder()
                 .subject(memberId.toString()) // 해당 토큰의 주체(memberId)
-                .issuedAt(Date.from(now.toInstant())) // 언제 발급했는지
+                .issuedAt(now) // 언제 발급했는지
                 .expiration(validity)
                 .signWith(secretKey)
                 .claim("role", role)

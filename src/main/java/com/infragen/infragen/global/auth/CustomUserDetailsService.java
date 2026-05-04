@@ -1,6 +1,6 @@
 package com.infragen.infragen.global.auth;
 
-import com.example.pace.domain.member.repository.MemberRepository;
+import com.infragen.infragen.domain.member.repository.MemberRepository;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;

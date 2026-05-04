@@ -1,6 +1,6 @@
 package com.infragen.infragen.global.auth;
 
-import com.example.pace.domain.member.entity.Member;
+import com.infragen.infragen.domain.member.entity.Member;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.security.core.GrantedAuthority;

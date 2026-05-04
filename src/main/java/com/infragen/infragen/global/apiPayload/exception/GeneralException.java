@@ -5,7 +5,7 @@ import lombok.Getter;
 
 @Getter
 public class GeneralException extends RuntimeException {
-    private final com.infragen.infragen.global.apiPayload.code.BaseErrorCode code;
+    private final BaseErrorCode code;
 
     public GeneralException(BaseErrorCode code) {
         super(code.getMessage());

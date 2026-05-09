@@ -2,9 +2,9 @@ package com.infragen.infragen.global.util;
 
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
-import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
+import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
@@ -21,24 +21,32 @@ public class RedisUtil {
         return redisTemplate.opsForValue().get(key);
     }
 
+    // 데이터를 가져오면서 즉시 삭제 (동시성 방어용)
+    public Object getAndDelete(String key) {
+        return redisTemplate.opsForValue().getAndDelete(key);
+    }
+
     // 데이터 삭제
     public void delete(String key) {
         redisTemplate.delete(key);
     }
 
-    // 존재 여부 확인
-    public boolean hasKey(String key) {
-        return redisTemplate.hasKey(key);
+    // 블랙리스트 토큰 확인
+    public boolean isBlackList(String accessToken) {
+        return hasKey(accessToken);
     }
 
-    // 블랙리스트 등록 (key가 액세스 토큰, value가 "logout", ttl이 남은 유효 시간이 되도록)
+    // 존재 여부 확인
+    public boolean hasKey(String key) {
+        return Boolean.TRUE.equals(redisTemplate.hasKey(key));
+    }
+
+    // 블랙리스트 등록 (key가 액세스 토큰, value가 "logout", ttl이 남은 유효 시간이 됨)
     public void setBlackList(String accessToken, Long remainingTime) {
         if (remainingTime > 0) {
             redisTemplate.opsForValue().set(accessToken, "logout", remainingTime, TimeUnit.MILLISECONDS);
         }
     }
-
-    public boolean isBlackList(String accessToken) {
-        return hasKey(accessToken);
-    }
 }
+
+

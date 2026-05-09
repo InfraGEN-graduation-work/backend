@@ -5,9 +5,9 @@ import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
-// 워크북에서 했던 것처럼 JwtUtil 클래스의 생성자 부분에 @Value 어노테이션으로 application.yml 파일의 내용을 직접적으로 읽어들이지 않고, 스프링 빈으로써 관리
+// JwtUtil 클래스의 생성자 부분에 @Value 어노테이션으로 application.yml 파일의 내용을 직접적으로 읽어들이지 않고, 스프링 빈으로써 관리
 @Getter
-@Setter // yaml의 값을 필드에 주입하기 위해 Setter가 필요 (ConfigurationProperties의 작동 원리)
+@Setter // yaml의 값을 필드에 주입하기 위해 Setter가 필요 (ConfigurationProperties의 작동 원리, Jackson 라이브러리)
 @Configuration
 @ConfigurationProperties(prefix = "jwt") // application.yaml에서 jwt로 시작하는 설정값들을 이 클래스의 필드와 1:1로 매핑
 public class JwtProperties {

@@ -1,16 +1,17 @@
 package com.infragen.infragen.global.util;
 
-import com.infragen.infragen.domain.member.enums.Role;
-import com.infragen.infragen.global.config.JwtProperties;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
-import java.nio.charset.StandardCharsets;
+import org.springframework.stereotype.Component;
+import lombok.extern.slf4j.Slf4j;
 import java.time.Duration;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import javax.crypto.SecretKey;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Component;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.ExpiredJwtException;
+import com.infragen.infragen.domain.member.enums.Role;
+import com.infragen.infragen.global.config.JwtProperties;
 
 @Slf4j
 @Component
@@ -28,14 +29,12 @@ public class JwtUtil {
     }
 
     // 토큰 생성
-    private String createToken(Long memberId, Duration accessExpiration, Role role, String category) {
+    private String createToken(Long memberId, Duration expiration, Role role, String category) {
         Date now = new Date();
-        Date validity = new Date(now.getTime() + accessExpiration.toMillis());
-
-        // 표준 클레임만 작성하였고, 비공개 클레임은 claim 메서드로 정보를 추가 ex) .claim("role", "USER")
+        Date validity = new Date(now.getTime() + expiration.toMillis());
         return Jwts.builder()
-                .subject(memberId.toString()) // 해당 토큰의 주체(memberId)
-                .issuedAt(now) // 언제 발급했는지
+                .subject(memberId.toString())
+                .issuedAt(now)
                 .expiration(validity)
                 .signWith(secretKey)
                 .claim("role", role)
@@ -43,23 +42,33 @@ public class JwtUtil {
                 .compact();
     }
 
-    // 토큰이 유효한지 검증
+    // 토큰의 유효성 검증
     public boolean validateToken(String token) {
         try {
-            Jwts.parser()
-                    .verifyWith(secretKey)
-                    .build()
-                    .parseSignedClaims(token);
-
+            getClaims(token);
             return true;
         } catch (Exception e) {
-            log.warn("Invalid JWT token: {}", token);
+            log.warn("Invalid token: {}", token);
             return false;
         }
     }
 
-    // 토큰에서 클레임을 추출하는 메서드
-    public Claims getClaimsFromToken(String token) {
+    // 유효 시간 추출
+    public Long getExpirationTime(String token) {
+        try {
+            Claims claims = getClaims(token);
+            Date expiration = claims.getExpiration();
+            long now = new Date().getTime();
+
+            // 현재 시간과의 차이를 반환
+            return expiration.getTime() - now;
+        } catch (Exception e) {
+            return 0L;
+        }
+    }
+
+    // jwt 파싱 및 클레임 추출
+    public Claims getClaims(String token) {
         return Jwts.parser()
                 .verifyWith(secretKey)
                 .build()
@@ -67,17 +76,21 @@ public class JwtUtil {
                 .getPayload();
     }
 
-    public Long getExpirationTime(String token) {
-        Date expiration = Jwts.parser()
-                .verifyWith(secretKey)
-                .build()
-                .parseSignedClaims(token)
-                .getPayload().getExpiration();
-
-        long now = new Date().getTime();
-
-        // 현재 시간과의 차이를 반환
-        return expiration.getTime() - now;
+    /**
+     * 로그아웃 전용: 토큰이 만료되었더라도 파싱하여 Claims를 강제로 반환
+     * 단, 서명(Signature)이 다르거나 손상된 토큰이면 예외를 던짐
+     */
+    public Claims getClaimsForLogout(String token) {
+        try {
+            return getClaims(token);
+        } catch (ExpiredJwtException e) {
+            // 토큰이 만료되었을 뿐, 서명은 유효하므로 안에 들어있는 Claims를 꺼내서 반환
+            return e.getClaims();
+        } catch (Exception e) {
+            // 서명이 조작되었거나 형식이 깨진 경우는 로그아웃조차 시켜주지 않음
+            log.warn("Invalid token for logout: {}", token);
+            throw new IllegalArgumentException("유효하지 않은 토큰입니다.");
+        }
     }
 
     // 액세스 토큰 생성

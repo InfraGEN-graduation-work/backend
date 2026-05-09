@@ -2,7 +2,7 @@ package com.infragen.infragen.global.auth.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.infragen.infragen.domain.auth.exception.AuthException;
-import com.infragen.infragen.domain.auth.exception.code.AuthErrorCode;
+import com.infragen.infragen.domain.auth.exception.code.error.AuthErrorCode;
 import com.infragen.infragen.global.apiPayload.ApiResponse;
 import com.infragen.infragen.global.apiPayload.code.BaseErrorCode;
 import com.infragen.infragen.global.apiPayload.code.GeneralErrorCode;

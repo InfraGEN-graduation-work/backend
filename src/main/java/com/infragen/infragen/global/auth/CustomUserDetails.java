@@ -1,26 +1,30 @@
 package com.infragen.infragen.global.auth;
 
-import com.infragen.infragen.domain.member.entity.Member;
+import com.infragen.infragen.domain.member.dto.response.MemberResDTO;
 import java.util.Collection;
 import java.util.List;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
-public record CustomUserDetails(Member member) implements UserDetails {
+public record CustomUserDetails(MemberResDTO.MemberResultDTO memberDTO) implements UserDetails {
+    public Long getMemberId() {
+        return memberDTO.id();
+    }
+
     // 사용자의 권한 목록 반환
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(() -> member.getRole().toString());
+        return List.of(() -> memberDTO.role().toString());
     }
 
     @Override
     public String getPassword() {
-        return null; // 소셜 로그인만을 사용하기 때문에 null을 반환
+        return ""; // 소셜 로그인 사용 및 폼 로그인을 사용하지 않기 때문에 빈 문자열만 반환
     }
 
     @Override
     public String getUsername() {
-        return String.valueOf(member.getId());
+        return String.valueOf(memberDTO.id());
     }
 
     @Override
@@ -40,6 +44,6 @@ public record CustomUserDetails(Member member) implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return member.getIsActive();
+        return memberDTO.isActive();
     }
 }

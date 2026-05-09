@@ -2,6 +2,7 @@ package com.infragen.infragen.global.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.infragen.infragen.global.apiPayload.ApiResponse;
+import com.infragen.infragen.domain.auth.exception.code.error.AuthErrorCode;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -26,7 +27,7 @@ public class AuthenticationEntryPointImpl implements AuthenticationEntryPoint {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED); // 응답 타입 지정(json)
         response.setCharacterEncoding("UTF-8"); // 인코딩 설정
         ApiResponse<Void> errorResponse = ApiResponse.onFailure(
-                AuthErrorCode.UNAUTHORIZED,
+                AuthErrorCode.TOKEN_INVALID,
                 null
         );
 

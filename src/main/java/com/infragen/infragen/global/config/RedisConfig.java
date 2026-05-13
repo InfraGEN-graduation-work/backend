@@ -1,5 +1,12 @@
 package com.infragen.infragen.global.config;
 
+
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.DefaultTyping;
+import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
+import tools.jackson.databind.jsontype.PolymorphicTypeValidator;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
@@ -11,8 +18,12 @@ import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.GenericJacksonJsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
+import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
+import org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration;
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
+import io.lettuce.core.api.StatefulConnection;
 import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
@@ -20,7 +31,9 @@ import java.time.Duration;
 
 @Configuration
 @EnableCaching
+@RequiredArgsConstructor
 public class RedisConfig {
+    private final ObjectMapper objectMapper;
 
     @Value("${spring.data.redis.host}")
     private String host;
@@ -33,9 +46,22 @@ public class RedisConfig {
 
     @Bean
     public RedisConnectionFactory redisConnectionFactory() {
-        RedisStandaloneConfiguration config = new RedisStandaloneConfiguration(host, port);
-        config.setPassword(password);
-        return new LettuceConnectionFactory(config);
+        // 커넥션 풀 설정
+        GenericObjectPoolConfig<StatefulConnection<?, ?>> poolConfig = new GenericObjectPoolConfig<>();
+        poolConfig.setMaxTotal(8); // 최대 활성 커넥션 수
+        poolConfig.setMaxIdle(8);  // 최대 유휴 커넥션 수
+        poolConfig.setMinIdle(0);  // 최소 유휴 커넥션 수
+
+        // Lettuce 풀링 클라이언트 설정
+        LettuceClientConfiguration clientConfig = LettucePoolingClientConfiguration.builder()
+                .poolConfig(poolConfig)
+                .build();
+
+        // 서버 설정
+        RedisStandaloneConfiguration serverConfig = new RedisStandaloneConfiguration(host, port);
+        serverConfig.setPassword(password);
+
+        return new LettuceConnectionFactory(serverConfig, clientConfig);
     }
 
     @Bean
@@ -43,21 +69,23 @@ public class RedisConfig {
         RedisTemplate<String, Object> redisTemplate = new RedisTemplate<>();
         redisTemplate.setConnectionFactory(redisConnectionFactory());
 
+        RedisSerializer<Object> serializer = redisSerializer();
+
         redisTemplate.setKeySerializer(new StringRedisSerializer());
-        redisTemplate.setValueSerializer(new StringRedisSerializer());
+        redisTemplate.setValueSerializer(serializer);
+        redisTemplate.setHashKeySerializer(new StringRedisSerializer());
+        redisTemplate.setHashValueSerializer(serializer);
 
         return redisTemplate;
     }
 
     @Bean
     public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
-        // Redis 캐시 설정 구성
+        RedisSerializer<Object> serializer = redisSerializer();
+
         RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
-                // Key는 String으로 직렬화
                 .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
-                // Value는 JSON 형태로 직렬화 (객체 저장 가능)
-                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(RedisSerializer.json()))
-                // 캐시 유효 기간 설정 (예: 1시간)
+                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(serializer))
                 .entryTtl(Duration.ofHours(1));
 
         return RedisCacheManager.RedisCacheManagerBuilder
@@ -65,5 +93,23 @@ public class RedisConfig {
                 .cacheDefaults(config)
                 .build();
     }
-}
 
+    @Bean
+    public RedisSerializer<Object> redisSerializer() {
+        // 아무 클래스로나 변환되지 않도록 허용된 타입인지 검사하는 보안 장치
+        PolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
+                .allowIfBaseType(Object.class)
+                .build();
+
+        // 기존 설정을 유지하며 새로운 설정을 추가한 ObjectMapper 생성
+        ObjectMapper redisObjectMapper = objectMapper.rebuild()
+                .activateDefaultTyping(
+                        ptv,
+                        DefaultTyping.NON_FINAL, // 클래스가 final이 아닌 경우에만 타입 정보 기록
+                        JsonTypeInfo.As.PROPERTY // 타입 정보를 JSON의 한 속성(Property)으로 포함
+                )
+                .build();
+
+        return new GenericJacksonJsonRedisSerializer(redisObjectMapper);
+    }
+}

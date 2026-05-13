@@ -1,6 +1,7 @@
 package com.infragen.infragen.global.auth;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
 import com.infragen.infragen.global.apiPayload.ApiResponse;
 import com.infragen.infragen.domain.auth.exception.code.error.AuthErrorCode;
 import jakarta.servlet.ServletException;
@@ -14,8 +15,9 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class AuthenticationEntryPointImpl implements AuthenticationEntryPoint {
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     @Override
     public void commence(

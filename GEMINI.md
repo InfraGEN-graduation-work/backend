@@ -1,65 +1,110 @@
-# 목표
-- 주어진 기획을 정확히 구현
-- 과한 추상화/리팩토링 없이 실용적인 코드 작성
-- 실제 서비스에 바로 사용할 수 있는 수준 유지
+# Goal
 
-# 작업 원칙
-1. 요구사항 우선 (임의 확장 금지)
-2. 가독성 중심 (명확한 네이밍, 흐름)
-3. 현실적 설계 (SRP를 참고하되, 응집도와 유지보수성을 우선해 유연하게 적용)
-4. 안정성 확보 (null/예외/실패 케이스 최소 대응)
-5. 선 제안 후, 실행 (파일을 생성, 수정하거나 스크립트 명령어를 실행하기 전, 반드시 사용자에게 의도와 목적을 설명해야 함. 또한 관련 코드도 제공해야 함.)
+- Implement requirements accurately
+- Write practical, maintainable, production-ready code
+- Avoid unnecessary abstraction, refactoring, or over-engineering
 
-# Spring (백엔드) 규칙
-- Controller -> Service -> Repository 흐름 유지
-- 비즈니스 로직은 Service에 집중
-- 트랜잭션은 필요한 범위에서만 적용(클래스 단위가 아닌, 메서드 단위에 적용)
-- JPA 사용 시 N+1, 불필요한 쿼리 주의
-- 과한 DTO/Mapper 분리 금지 (필요한 경우만)
-- 예외는 일관된 방식으로 처리 (unchecked 우선)
-- null 반환보다 Optional 또는 명확한 예외 사용
+---
 
-# 작업 순서
-## 1. 요구사항 요약
-- 핵심 기능만 간단히 정리
+# Core Principles
 
-## 2. 설계
-- 필요한 구성요소 (클래스/컴포넌트/함수)
-- 각 책임과 데이터 흐름 (간단히)
+1. Requirements First
+- Do not add features beyond the requested scope
+- Avoid speculative implementations
 
-## 3. 자기 검증 (반드시 수행)
-아래를 점검:
-- 논리 오류 가능성
-- 예외/엣지케이스 누락
-- 유지보수 시 문제
-- 성능 문제 가능성
-- 보안 문제 가능성
-- 코드를 직접 수정하기 전 한 번 더 검토 및 재검증
+2. Simplicity First
+- Prefer simple and practical solutions
+- Avoid excessive patterns, layers, and abstractions
 
-## 4. 코드 작성
-- 실행 가능한 코드 작성
-- 불필요한 추상화/최적화 금지
-- 바로 이해 가능한 수준 유지
+3. Readability & Maintainability
+- Use clear naming and predictable flow
+- Prioritize maintainability over cleverness
+- Keep responsibilities cohesive and practical
 
-# 출력 형식
-1. 요구사항 요약
-2. 설계
-3. 코드
-4. 검증 결과
-   - 문제점
-   - 유지해도 되는 부분
-   - 개선 필요 부분 (있는 경우만)
-5. 상세한 코드 설명
+4. Stability First
+- Handle null, exception, and failure cases reasonably
+- Minimize obvious runtime risks
 
-# 금지 사항
-- 과한 리팩토링
-- 불필요한 분리/추상화
-- 요구사항 외 기능 추가
-- 교과서식 과설계
+5. Explain Before Executing
+- Before modifying files or running commands:
+  - explain intent and purpose
+  - describe affected files/components
+  - provide relevant code context when necessary
 
-# 최종 기준
-- 실무에서 바로 사용 가능한가?
-- 이해하기 쉬운가?
-- 과하지 않고 적절한가?
+---
 
-이 기준을 항상 유지하라.
+# Spring Backend Rules
+
+- Maintain Controller -> Service -> Repository flow
+- Keep business logic in the Service layer
+- Use transactions only where necessary
+  - prefer method-level transactions
+- Be careful about:
+  - N+1 problems
+  - unnecessary queries
+  - inefficient JPA usage
+- Avoid excessive DTO/Mapper separation
+- Handle exceptions consistently
+  - prefer unchecked exceptions
+- Prefer Optional or explicit exceptions over null
+
+---
+
+# Work Process
+
+## 1. Requirement Summary
+- Summarize core requirements briefly
+
+## 2. Design
+- List required classes/functions/components
+- Explain responsibilities and data flow briefly
+
+## 3. Code Implementation
+- Write executable and understandable code
+- Avoid premature optimization or unnecessary abstraction
+
+## 4. Self Verification
+Check for:
+- logical issues
+- missing edge cases
+- maintainability concerns
+- performance problems
+- security risks
+
+Review once more before finalizing code.
+
+---
+
+# Output Format
+
+1. Requirement Summary
+2. Design
+3. Code
+4. Verification Result
+   - issues
+   - acceptable parts
+   - improvements needed (if any)
+5. Implementation Notes
+   - explain overall flow and key decisions briefly
+   - explain important or non-obvious parts when necessary
+   - keep explanations concise and practical
+
+---
+
+# Anti-Patterns
+
+Avoid:
+- excessive refactoring
+- unnecessary abstraction or separation
+- features outside the requirements
+- textbook-style over-engineering
+
+---
+
+# Final Standard
+
+Always ensure:
+- production usability
+- readability
+- practical simplicity
+- maintainable structure

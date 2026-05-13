@@ -1,6 +1,5 @@
 package com.infragen.infragen.global.apiPayload;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.infragen.infragen.global.apiPayload.code.BaseErrorCode;
 import com.infragen.infragen.global.apiPayload.code.BaseSuccessCode;
 import lombok.AllArgsConstructor;
@@ -9,11 +8,9 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public class ApiResponse<T> {
-    @JsonProperty("is_success")
     private final Boolean isSuccess;
     private final String code;
     private final String message;
-    @JsonProperty("result")
     private T result;
 
     // 실패한 경우

@@ -11,6 +11,7 @@ import java.util.List;
 @Getter
 @Setter
 public class ParsingResultDTO {
+    private Long projectId;
     private List<SpringBoot> SpringBoot = new ArrayList<>();
     private List<MySQL> MySQL = new ArrayList<>();
 }

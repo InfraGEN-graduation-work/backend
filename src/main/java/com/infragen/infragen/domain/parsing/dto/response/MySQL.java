@@ -1,8 +1,6 @@
 package com.infragen.infragen.domain.parsing.dto.response;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 
 @Getter
 @JsonPropertyOrder({ "nodeId", "positionX", "positionY", "databaseName", "rootPassword" })

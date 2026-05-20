@@ -36,7 +36,7 @@ public class ParsingService {
             if (type == null) return;
             switch (type) {
                 case "SPRING_BOOT":
-                    SpringBoot springBoot = SpringBootNode(node);
+                    SpringBoot springBoot = springBootNode(node);
 
                     if (usedPorts.contains(springBoot.getPort())) {
                         throw new ParsingException("중복된 포트 번호가 존재합니다: " + springBoot.getPort());
@@ -46,7 +46,7 @@ public class ParsingService {
                     result.getSpringBoot().add(springBoot);
                     break;
                 case "MYSQL":
-                    MySQL mySQL = MySQLNode(node);
+                    MySQL mySQL = mySQLNode(node);
                     result.getMySQL().add(mySQL);
                     break;
             }
@@ -55,7 +55,7 @@ public class ParsingService {
         return result;
     }
 
-    private SpringBoot SpringBootNode(NodeDTO node){
+    private SpringBoot springBootNode(NodeDTO node){
         JsonNode props = objectMapper.valueToTree(node.getProperties());
         int port = props.path("port").asInt();
         String env = props.path("env").asString();
@@ -74,7 +74,7 @@ public class ParsingService {
         );
     }
 
-    private MySQL MySQLNode(NodeDTO node){
+    private MySQL mySQLNode(NodeDTO node){
         JsonNode props = objectMapper.valueToTree(node.getProperties());
         String dbName = props.path("databaseName").asString();
         String dbPass = props.path("rootPassword").asString();

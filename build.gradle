@@ -62,3 +62,13 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+// plain.jar 생성 방지
+jar {
+    enabled = false
+}
+
+// 빌드 결과물 이름을 app.jar로 고정
+bootJar {
+    archiveFileName = 'app.jar'
+}

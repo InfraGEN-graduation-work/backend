@@ -26,77 +26,79 @@ import java.time.Duration;
 @Configuration
 @EnableCaching
 public class RedisConfig {
-        @Value("${spring.data.redis.host}")
-        private String host;
+	@Value("${spring.data.redis.host}")
+	private String host;
 
-        @Value("${spring.data.redis.port}")
-        private int port;
+	@Value("${spring.data.redis.port}")
+	private int port;
 
-        @Value("${spring.data.redis.password}")
-        private String password;
+	@Value("${spring.data.redis.password}")
+	private String password;
 
-        @Bean
-        public RedisConnectionFactory redisConnectionFactory() {
-                // 커넥션 풀 설정
-                GenericObjectPoolConfig<StatefulConnection<?, ?>> poolConfig = new GenericObjectPoolConfig<>();
-                poolConfig.setMaxTotal(8); // 최대 활성 커넥션 수
-                poolConfig.setMaxIdle(8); // 최대 유휴 커넥션 수
-                poolConfig.setMinIdle(0); // 최소 유휴 커넥션 수
+	@Bean
+	public RedisConnectionFactory redisConnectionFactory() {
+		// 커넥션 풀 설정
+		GenericObjectPoolConfig<StatefulConnection<?, ?>> poolConfig = new GenericObjectPoolConfig<>();
+		poolConfig.setMaxTotal(8); // 최대 활성 커넥션 수
+		poolConfig.setMaxIdle(8); // 최대 유휴 커넥션 수
+		poolConfig.setMinIdle(0); // 최소 유휴 커넥션 수
 
-                // Lettuce 풀링 클라이언트 설정
-                LettuceClientConfiguration clientConfig = LettucePoolingClientConfiguration.builder()
-                                .poolConfig(poolConfig)
-                                .build();
+		// Lettuce 풀링 클라이언트 설정
+		LettuceClientConfiguration clientConfig = LettucePoolingClientConfiguration.builder()
+				.poolConfig(poolConfig)
+				.build();
 
-                // 서버 설정
-                RedisStandaloneConfiguration serverConfig = new RedisStandaloneConfiguration(host, port);
-                serverConfig.setPassword(password);
+		// 서버 설정
+		RedisStandaloneConfiguration serverConfig = new RedisStandaloneConfiguration(host, port);
+		serverConfig.setPassword(password);
 
-                return new LettuceConnectionFactory(serverConfig, clientConfig);
-        }
+		return new LettuceConnectionFactory(serverConfig, clientConfig);
+	}
 
-        @Bean
-        public RedisTemplate<String, Object> redisTemplate(
-                        RedisConnectionFactory connectionFactory,
-                        RedisSerializer<Object> serializer) {
-                RedisTemplate<String, Object> redisTemplate = new RedisTemplate<>();
-                redisTemplate.setConnectionFactory(connectionFactory);
+	@Bean
+	public RedisTemplate<String, Object> redisTemplate(
+			RedisConnectionFactory connectionFactory,
+			RedisSerializer<Object> serializer
+	) {
+		RedisTemplate<String, Object> redisTemplate = new RedisTemplate<>();
+		redisTemplate.setConnectionFactory(connectionFactory);
 
-                redisTemplate.setKeySerializer(new StringRedisSerializer());
-                redisTemplate.setValueSerializer(serializer);
-                redisTemplate.setHashKeySerializer(new StringRedisSerializer());
-                redisTemplate.setHashValueSerializer(serializer);
+		redisTemplate.setKeySerializer(new StringRedisSerializer());
+		redisTemplate.setValueSerializer(serializer);
+		redisTemplate.setHashKeySerializer(new StringRedisSerializer());
+		redisTemplate.setHashValueSerializer(serializer);
 
-                return redisTemplate;
-        }
+		return redisTemplate;
+	}
 
-        @Bean
-        public CacheManager cacheManager(
-                        RedisConnectionFactory connectionFactory,
-                        RedisSerializer<Object> serializer) {
-                RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
-                                .serializeKeysWith(RedisSerializationContext.SerializationPair
-                                                .fromSerializer(new StringRedisSerializer()))
-                                .serializeValuesWith(
-                                                RedisSerializationContext.SerializationPair.fromSerializer(serializer))
-                                .entryTtl(Duration.ofHours(1));
+	@Bean
+	public CacheManager cacheManager(
+			RedisConnectionFactory connectionFactory,
+			RedisSerializer<Object> serializer
+	) {
+		RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
+				.serializeKeysWith(RedisSerializationContext.SerializationPair
+						.fromSerializer(new StringRedisSerializer()))
+				.serializeValuesWith(
+						RedisSerializationContext.SerializationPair.fromSerializer(serializer))
+				.entryTtl(Duration.ofHours(1));
 
-                return RedisCacheManager.RedisCacheManagerBuilder
-                                .fromConnectionFactory(connectionFactory)
-                                .cacheDefaults(config)
-                                .build();
-        }
+		return RedisCacheManager.RedisCacheManagerBuilder
+				.fromConnectionFactory(connectionFactory)
+				.cacheDefaults(config)
+				.build();
+	}
 
-        @Bean
-        public RedisSerializer<Object> redisSerializer() {
-                // 허용된 타입만 역직렬화 가능하도록 제한
-                PolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
-                                .allowIfSubType("com.smartschedule.smartschedule")
-                                .allowIfSubType("java.util")
-                                .build();
+	@Bean
+	public RedisSerializer<Object> redisSerializer() {
+		// 허용된 타입만 역직렬화 가능하도록 제한
+		PolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
+				.allowIfSubType("com.infragen.infragen")
+				.allowIfSubType("java.util")
+				.build();
 
-                return GenericJacksonJsonRedisSerializer.builder()
-                                .enableDefaultTyping(ptv)
-                                .build();
-        }
+		return GenericJacksonJsonRedisSerializer.builder()
+				.enableDefaultTyping(ptv)
+				.build();
+	}
 }

@@ -1,4 +1,18 @@
 services:
+  # Nginx 설정
+  infragen-nginx:
+    image: nginx:stable-alpine
+    container_name: infragen-nginx
+    restart: always
+    depends_on:
+      - infragen-app
+    networks:
+      - infragen-network
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+
   # mysql 설정
   infragen-mysql:
     image: 'mysql:8.0'
@@ -30,6 +44,24 @@ services:
       - '127.0.0.1:6379:6379'
     volumes:
       - redis_data:/data
+    networks:
+      - infragen-network
+
+  # spring boot 설정
+  infragen-app:
+    image: ${DOCKERHUB_USERNAME}/infragen-app:latest
+    container_name: infragen-app
+    restart: always
+    ports:
+      - '127.0.0.1:8080:8080'
+    env_file:
+      - .env
+    environment:
+      MYSQL_DATABASE_URL: jdbc:mysql://infragen-mysql:3306/${MYSQL_DATABASE}
+      REDIS_HOST: infragen-redis
+    depends_on:
+      - infragen-mysql
+      - infragen-redis
     networks:
       - infragen-network
 

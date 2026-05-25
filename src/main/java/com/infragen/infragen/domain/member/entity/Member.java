@@ -17,15 +17,9 @@ import com.infragen.infragen.global.entity.BaseEntity;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @SQLDelete(sql = "UPDATE member SET is_active = false WHERE id = ?")
 @SQLRestriction("is_active = true")
-@Table(
-    name = "member",
-    uniqueConstraints = {
-        @UniqueConstraint(
-            name = "uk_social_provider_social_id",
-            columnNames = {"social_provider", "social_id"}
-        )
-    }
-)
+@Table(name = "member", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_social_provider_social_id", columnNames = { "social_provider", "social_id" })
+})
 public class Member extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

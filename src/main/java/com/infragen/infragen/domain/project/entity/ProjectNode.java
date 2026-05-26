@@ -1,6 +1,7 @@
 package com.infragen.infragen.domain.project.entity;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.Map;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -55,7 +56,7 @@ public class ProjectNode extends BaseEntity {
         this.nodeName = nodeName;
         this.positionX = positionX;
         this.positionY = positionY;
-        this.properties = properties;
+        this.properties = (properties != null) ? properties : new HashMap<>();
         this.project = project;
     }
 }

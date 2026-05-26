@@ -15,8 +15,8 @@ public class ParsingController {
     private final ParsingService parsingService;
 
     @PostMapping("/{projectId}/parsing")
-    public ResponseEntity<ParsingResultDTO> parsingInfraStructure(@PathVariable Long projectId ,@Valid @RequestBody ParsingReqDTO requestDTO){
-        ParsingResultDTO result = parsingService.parsing(requestDTO);
+    public ResponseEntity<ParsingResultDTO> parsingInfraStructure(@PathVariable Long projectId ,@RequestBody ParsingReqDTO requestDTO){
+        ParsingResultDTO result = parsingService.parsing(requestDTO , projectId);
 
         return ResponseEntity.ok(result);
     }

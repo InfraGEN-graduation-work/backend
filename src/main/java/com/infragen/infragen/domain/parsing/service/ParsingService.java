@@ -12,6 +12,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 @Service
@@ -20,20 +21,23 @@ public class ParsingService {
     private final ObjectMapper objectMapper;
     private final ValidateGraphStructure validateGraphStructure;
 
-    public ParsingResultDTO parsing(ParsingReqDTO requestDTO){
+    public ParsingResultDTO parsing(ParsingReqDTO requestDTO , Long projectId){
         if (requestDTO.getNodes() == null || requestDTO.getNodes().isEmpty()){
-            return new ParsingResultDTO();
+            throw new ParsingException("node가 없습니다.");
         }
 
         validateGraphStructure.validate(requestDTO.getNodes() , requestDTO.getEdges());
 
         ParsingResultDTO result = new ParsingResultDTO();
+        if (!Objects.equals(requestDTO.getProjectId(), projectId)) {
+            throw new ParsingException("프로젝트 id가 다릅니다.");
+        }
         result.setProjectId(requestDTO.getProjectId());
         Set<Integer> usedPorts = new HashSet<>();
 
         requestDTO.getNodes().forEach(node -> {
             String type = node.getComponentType();
-            if (type == null) return;
+            if (type == null || type.isEmpty()) throw new ParsingException("컴포넌트 설정이 누락되었습니다.");
             switch (type) {
                 case "SPRING_BOOT":
                     SpringBoot springBoot = springBootNode(node);
@@ -62,15 +66,12 @@ public class ParsingService {
         if (port < 1024 || port > 65535) {
             throw new ParsingException("포트 번호는 1024 ~ 65535 사이여야 합니다. 입력값: " + port);
         }
-        if (env == null || env.isBlank()) {
-            throw new ParsingException("SpringBoot의 환경변수 설정이 누락되었습니다.");
-        }
         return new SpringBoot(
                 node.getNodeId(),
                 node.getPositionX(),
                 node.getPositionY(),
-                props.path("port").asInt(),
-                props.path("env").asString()
+                port,
+                env
         );
     }
 

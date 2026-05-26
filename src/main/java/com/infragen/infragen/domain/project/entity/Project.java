@@ -45,12 +45,12 @@ public class Project extends BaseEntity {
             String description,
             ProjectStatus status,
             Member member,
-            boolean isActive
+            Boolean isActive
     ) {
         this.title = title;
         this.description = description;
         this.status = status;
         this.member = member;
-        this.isActive = isActive;
+        this.isActive = (isActive != null) ? isActive : true;
     }
 }

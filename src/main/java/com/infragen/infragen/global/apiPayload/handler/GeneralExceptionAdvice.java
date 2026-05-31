@@ -53,6 +53,19 @@ public class GeneralExceptionAdvice {
                 ));
     }
 
+    // 잘못된 인자 또는 존재하지 않는 Enum 값 요청 처리
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<@NonNull ApiResponse<String>> handleIllegalArgumentException(IllegalArgumentException e) {
+        log.warn("Illegal argument exception: {}", e.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.onFailure(
+                        GeneralErrorCode.BAD_REQUEST,
+                        e.getMessage()
+                ));
+    }
+
     // 그 외의 정의되지 않은 모든 예외 처리
     @ExceptionHandler(Exception.class)
     public ResponseEntity<@NonNull ApiResponse<String>> handleException(Exception e) {

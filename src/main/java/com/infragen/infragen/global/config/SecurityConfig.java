@@ -34,8 +34,8 @@ public class SecurityConfig {
     private final String[] allowUris = {
             "/swagger-ui/**",
             "/v3/api-docs/**",
-            "/api/v1/auth/**",
-            "/health", // 인증 관련해서는 jwt 토큰 인증 없이도 요청을 보낼 수 있어야 함
+            "/api/v1/auth/**", // 인증 관련해서는 jwt 토큰 인증 없이도 요청을 보낼 수 있어야 함
+            "/health",
     };
 
     @Bean

@@ -1,4 +1,4 @@
-package com.infragen.infragen.global.config;
+package com.infragen.infragen.global.properties;
 
 import lombok.Getter;
 import lombok.Setter;

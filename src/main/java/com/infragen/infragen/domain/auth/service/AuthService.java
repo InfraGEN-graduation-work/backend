@@ -46,7 +46,7 @@ public class AuthService {
         Member member = memberQueryService.findByEmail(request.getEmail());
 
         if (!passwordEncoder.matches(request.getPassword(), member.getPassword())) {
-            throw new AuthException(AuthErrorCode.TOKEN_INVALID);
+            throw new AuthException(AuthErrorCode.UNMATCHED_EMAIL_OR_PASSWORD);
         }
 
         return generateAndSaveTokens(member.getId(), member.getRole());

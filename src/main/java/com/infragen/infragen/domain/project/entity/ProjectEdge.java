@@ -17,7 +17,13 @@ import lombok.NoArgsConstructor;
 @Table(name = "project_edge")
 public class ProjectEdge extends BaseEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "project_edge_seq_gen")
+    @SequenceGenerator(
+            name = "project_edge_seq_gen",
+            sequenceName = "project_edge_seq",
+            initialValue = 1,
+            allocationSize = 50
+    )
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)

@@ -7,7 +7,8 @@ import com.infragen.infragen.domain.auth.exception.code.error.AuthErrorCode;
 import com.infragen.infragen.domain.auth.exception.code.success.AuthSuccessCode;
 import com.infragen.infragen.domain.auth.service.AuthService;
 import com.infragen.infragen.global.apiPayload.ApiResponse;
-import com.infragen.infragen.global.config.JwtProperties;
+import com.infragen.infragen.global.properties.JwtProperties;
+
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -55,7 +56,10 @@ public class AuthController {
 
     // 토큰 재발급
     @PostMapping("/reissue")
-    public ApiResponse<AuthResDTO.AccessTokenResultDTO> reissueToken(@CookieValue(value = "refresh_token", required = false) String refreshToken, HttpServletResponse response) {
+    public ApiResponse<AuthResDTO.AccessTokenResultDTO> reissueToken(
+        @CookieValue(value = "refresh_token", required = false) String refreshToken,
+        HttpServletResponse response
+    ) {
         if (refreshToken == null || refreshToken.isBlank()) {
             throw new AuthException(AuthErrorCode.TOKEN_INVALID);
         }

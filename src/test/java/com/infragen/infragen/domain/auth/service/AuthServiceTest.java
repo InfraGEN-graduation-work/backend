@@ -13,6 +13,8 @@ import com.infragen.infragen.domain.member.enums.SocialProvider;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
 import com.infragen.infragen.domain.member.service.command.MemberCommandService;
 import com.infragen.infragen.domain.member.service.query.MemberQueryService;
+import com.infragen.infragen.domain.member.exception.MemberException;
+import com.infragen.infragen.domain.member.exception.code.MemberErrorCode;
 import com.infragen.infragen.global.util.JwtUtil;
 import com.infragen.infragen.global.util.RedisUtil;
 import io.jsonwebtoken.Claims;
@@ -72,6 +74,28 @@ class AuthServiceTest {
         assertNotNull(result);
         assertEquals("access_token", result.getAccessToken());
         verify(redisUtil).set(eq("RT:1"), eq("refresh_token"), any());
+    }
+
+    @Test
+    @DisplayName("일반 회원가입 - 이메일 중복 시 예외 발생 검증")
+    void signup_Fail_DuplicateEmail() {
+        // given
+        AuthReqDTO.SignupDTO request = AuthReqDTO.SignupDTO.builder()
+                .email("duplicate@test.com")
+                .password("password")
+                .nickname("Tester")
+                .build();
+
+        when(memberCommandService.createMember(any()))
+                .thenThrow(new MemberException(MemberErrorCode.DUPLICATE_EMAIL));
+
+        // when & then
+        assertThrows(MemberException.class, 
+                () -> authService.signup(request));
+        
+        // 토큰 발급 및 레디스 저장이 호출되지 않아야 함
+        verify(jwtUtil, never()).createAccessToken(anyLong(), any());
+        verify(redisUtil, never()).set(anyString(), anyString(), any());
     }
 
     @Test

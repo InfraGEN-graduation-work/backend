@@ -37,6 +37,11 @@ public enum ProjectErrorCode implements BaseErrorCode {
             "필수 인프라 연결이 누락되었습니다.",
             "PROJECT400_3"
     ),
+    DUPLICATE_NODE_NAME(
+            HttpStatus.BAD_REQUEST,
+            "중복된 노드 이름이 존재합니다.",
+            "PROJECT400_4"
+    ),
     ;
     private final HttpStatus httpStatus;
     private final String message;

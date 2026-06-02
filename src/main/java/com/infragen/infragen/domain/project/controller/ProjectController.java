@@ -60,6 +60,7 @@ public class ProjectController implements ProjectControllerDocs {
         );
     }
 
+    @Override
     @DeleteMapping("/{projectId}")
     public ApiResponse<Void> deleteProject(
         @AuthenticationPrincipal CustomUserDetails userDetails,

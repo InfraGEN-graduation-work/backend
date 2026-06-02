@@ -11,6 +11,8 @@ import com.infragen.infragen.domain.member.dto.response.MemberResDTO;
 import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.enums.SocialProvider;
+import com.infragen.infragen.domain.member.exception.MemberException;
+import com.infragen.infragen.domain.member.exception.code.MemberErrorCode;
 import com.infragen.infragen.domain.member.service.command.MemberCommandService;
 import com.infragen.infragen.domain.member.service.query.MemberQueryService;
 import com.infragen.infragen.global.util.JwtUtil;
@@ -43,13 +45,21 @@ public class AuthService {
 
     // 일반 로그인
     public AuthResDTO.TokenResultDTO login(AuthReqDTO.LoginDTO request) {
-        Member member = memberQueryService.findByEmail(request.getEmail());
+        // 이메일이 틀렸거나 비밀번호가 틀려도 같은 응답을 내게끔
+        try {
+            Member member = memberQueryService.findByEmail(request.getEmail());
 
-        if (!passwordEncoder.matches(request.getPassword(), member.getPassword())) {
-            throw new AuthException(AuthErrorCode.UNMATCHED_EMAIL_OR_PASSWORD);
+            if (!passwordEncoder.matches(request.getPassword(), member.getPassword())) {
+                throw new AuthException(AuthErrorCode.UNMATCHED_EMAIL_OR_PASSWORD);
+            }
+
+            return generateAndSaveTokens(member.getId(), member.getRole());
+        } catch (MemberException e) {
+            if (e.getCode() == MemberErrorCode.MEMBER_NOT_FOUND) {
+                throw new AuthException(AuthErrorCode.UNMATCHED_EMAIL_OR_PASSWORD);
+            }
+            throw e;
         }
-
-        return generateAndSaveTokens(member.getId(), member.getRole());
     }
 
     // 소셜 로그인

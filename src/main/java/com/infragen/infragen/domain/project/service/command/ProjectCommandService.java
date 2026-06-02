@@ -67,18 +67,24 @@ public class ProjectCommandService {
 
         // 신규 Node 리스트 일괄 생성 및 저장
         List<ProjectNode> newNodes = ProjectNodeConverter.toEntityList(request.nodes(), project);
-        projectNodeRepository.saveAll(newNodes);
+        List<ProjectNode> savedNodes = projectNodeRepository.saveAll(newNodes);
 
-        // Edge 매핑을 위한 Node Map 구성
-        Map<String, ProjectNode> nodeMap = newNodes.stream()
-            .collect(Collectors.toMap(ProjectNode::getNodeName, node -> node));
+        // Edge 매핑을 위한 Node Map 구성 (중복 키 발생 시 예외 처리)
+        Map<String, ProjectNode> nodeMap = savedNodes.stream()
+            .collect(Collectors.toMap(
+                ProjectNode::getNodeName,
+                node -> node,
+                (existing, replacement) -> {
+                    throw new ProjectException(ProjectErrorCode.DUPLICATE_NODE_NAME);
+                }
+            ));
 
         // 신규 Edge 리스트 일괄 생성 및 저장
         List<ProjectEdge> newEdges = ProjectEdgeConverter.toEntityList(request.edges(), project, nodeMap);
-        projectEdgeRepository.saveAll(newEdges);
+        List<ProjectEdge> savedEdges = projectEdgeRepository.saveAll(newEdges);
 
         log.info("프로젝트 수정 완료: id={}", projectId);
-        return ProjectConverter.toProjectDetailResDTO(project, newNodes, newEdges);
+        return ProjectConverter.toProjectDetailResDTO(project, savedNodes, savedEdges);
     }
 
     @Transactional
@@ -92,7 +98,6 @@ public class ProjectCommandService {
         projectEdgeRepository.deleteByProjectId(projectId);
         projectNodeRepository.deleteByProjectId(projectId);
 
-        // 부모 프로젝트 삭제 (Soft Delete 수행)
         projectRepository.delete(project);
 
         log.info("프로젝트 삭제 완료: id={}", projectId);

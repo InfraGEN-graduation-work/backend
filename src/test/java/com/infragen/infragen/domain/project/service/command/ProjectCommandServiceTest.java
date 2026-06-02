@@ -143,6 +143,8 @@ class ProjectCommandServiceTest {
         );
 
         when(projectRepository.findByIdAndMemberId(projectId, memberId)).thenReturn(Optional.of(project));
+        when(projectNodeRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(projectEdgeRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         // when
         ProjectResDTO.ProjectDetailResDTO result = projectCommandService.updateProject(projectId, updateRequest, memberId);

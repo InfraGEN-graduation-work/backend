@@ -19,6 +19,8 @@ import com.infragen.infragen.domain.project.entity.ProjectEdge;
 import com.infragen.infragen.domain.project.repository.ProjectRepository;
 import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
 import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
+import com.infragen.infragen.domain.project.repository.ProjectHistoryRepository;
+import com.infragen.infragen.domain.project.repository.GeneratedFileRepository;
 import com.infragen.infragen.domain.project.exception.ProjectException;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +33,8 @@ public class ProjectCommandService {
     private final ProjectRepository projectRepository;
     private final ProjectNodeRepository projectNodeRepository;
     private final ProjectEdgeRepository projectEdgeRepository;
+    private final ProjectHistoryRepository projectHistoryRepository;
+    private final GeneratedFileRepository generatedFileRepository;
     private final MemberQueryService memberQueryService;
 
     @Transactional
@@ -94,7 +98,9 @@ public class ProjectCommandService {
         Project project = projectRepository.findByIdAndMemberId(projectId, memberId)
             .orElseThrow(() -> new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
 
-        // 외래키 무결성을 위해 자식 데이터 물리 선삭제 (Edge -> Node)
+        // 외래키 무결성을 위해 자식 데이터 물리 선삭제 (File -> History -> Edge -> Node)
+        generatedFileRepository.deleteByProjectId(projectId);
+        projectHistoryRepository.deleteByProjectId(projectId);
         projectEdgeRepository.deleteByProjectId(projectId);
         projectNodeRepository.deleteByProjectId(projectId);
 

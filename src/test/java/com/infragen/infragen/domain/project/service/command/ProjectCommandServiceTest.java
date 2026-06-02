@@ -11,6 +11,8 @@ import com.infragen.infragen.domain.project.entity.Project;
 import com.infragen.infragen.domain.project.repository.ProjectRepository;
 import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
 import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
+import com.infragen.infragen.domain.project.repository.ProjectHistoryRepository;
+import com.infragen.infragen.domain.project.repository.GeneratedFileRepository;
 import com.infragen.infragen.domain.project.dto.request.ProjectNodeReqDTO;
 import com.infragen.infragen.domain.project.dto.request.ProjectEdgeReqDTO;
 import com.infragen.infragen.domain.project.exception.ProjectException;
@@ -46,6 +48,12 @@ class ProjectCommandServiceTest {
 
     @Mock
     private ProjectEdgeRepository projectEdgeRepository;
+
+    @Mock
+    private ProjectHistoryRepository projectHistoryRepository;
+
+    @Mock
+    private GeneratedFileRepository generatedFileRepository;
 
     @Mock
     private MemberQueryService memberQueryService;
@@ -200,6 +208,8 @@ class ProjectCommandServiceTest {
 
         // then
         verify(projectRepository).findByIdAndMemberId(projectId, memberId);
+        verify(generatedFileRepository).deleteByProjectId(projectId);
+        verify(projectHistoryRepository).deleteByProjectId(projectId);
         verify(projectEdgeRepository).deleteByProjectId(projectId);
         verify(projectNodeRepository).deleteByProjectId(projectId);
         verify(projectRepository).delete(project);
@@ -220,6 +230,8 @@ class ProjectCommandServiceTest {
 
         assertEquals(ProjectErrorCode.PROJECT_NOT_FOUND, exception.getCode());
         verify(projectRepository).findByIdAndMemberId(projectId, memberId);
+        verify(generatedFileRepository, never()).deleteByProjectId(anyLong());
+        verify(projectHistoryRepository, never()).deleteByProjectId(anyLong());
         verify(projectEdgeRepository, never()).deleteByProjectId(anyLong());
         verify(projectNodeRepository, never()).deleteByProjectId(anyLong());
         verify(projectRepository, never()).delete(any(Project.class));

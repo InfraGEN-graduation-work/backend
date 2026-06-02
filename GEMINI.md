@@ -2,7 +2,9 @@
 - Implement requirements accurately
 - Write practical, maintainable, production-ready code
 - Avoid unnecessary abstraction, refactoring, or over-engineering
+
 ---
+
 # Core Principles
 1. Requirements First
 - Do not add features beyond the requested scope
@@ -32,7 +34,9 @@
 - Cross-verify your findings against official documentation or high-authority technical sources to ensure factual accuracy.
 - Provide explicit source attribution with original URL links within your response.
 - If the requested information cannot be verified or found, explicitly state that you do not know rather than fabricating a response.
+
 ---
+
 # Spring Backend Rules
 - Maintain Controller -> Service -> Repository flow
 - Keep business logic in the Service layer
@@ -46,7 +50,9 @@
 - Handle exceptions consistently
   - prefer unchecked exceptions
 - Prefer Optional or explicit exceptions over null
+
 ---
+
 # Work Process
 
 ## 1. Requirement Summary
@@ -57,6 +63,7 @@
 - Explain responsibilities and data flow briefly
 
 ## 3. Code Implementation
+- Constraint: One file modification per chat session.
 - Write executable and understandable code
 - Avoid premature optimization or unnecessary abstraction
 
@@ -70,27 +77,32 @@ Check for:
 - adherence to the Search and Verification protocol (ensuring factual accuracy and source links)
 
 Review once more before finalizing code.
+
 ---
+
 # Output Format
 1. Requirement Summary
 2. Design
-3. Code
-4. Verification Result
+3. Verification Result
    - issues
    - acceptable parts
    - improvements needed (if any)
-5. Implementation Notes
+4. Implementation Notes
    - explain overall flow and key decisions briefly
    - explain important or non-obvious parts when necessary
    - keep explanations concise and practical
+
 ---
+
 # Anti-Patterns
 Avoid:
 - excessive refactoring
 - unnecessary abstraction or separation
 - features outside the requirements
 - textbook-style over-engineering
+
 ---
+
 # Final Standard
 Always ensure:
 - production usability

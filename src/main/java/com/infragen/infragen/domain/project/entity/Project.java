@@ -1,7 +1,5 @@
 package com.infragen.infragen.domain.project.entity;
 
-import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.SQLRestriction;
 import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.project.enums.ProjectStatus;
 import com.infragen.infragen.global.entity.BaseEntity;
@@ -14,8 +12,6 @@ import lombok.NoArgsConstructor;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@SQLDelete(sql = "UPDATE project SET is_active = false WHERE id = ?")
-@SQLRestriction("is_active = true")
 @Table(name = "project")
 public class Project extends BaseEntity {
     @Id
@@ -32,9 +28,6 @@ public class Project extends BaseEntity {
     @Column(nullable = false, length = 20)
     private ProjectStatus status;
 
-    @Column(name = "is_active")
-    private boolean isActive;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "member_id", nullable = false)
     private Member member;
@@ -44,13 +37,16 @@ public class Project extends BaseEntity {
             String title,
             String description,
             ProjectStatus status,
-            Member member,
-            Boolean isActive
+            Member member
     ) {
         this.title = title;
         this.description = description;
         this.status = status;
         this.member = member;
-        this.isActive = (isActive != null) ? isActive : true;
+    }
+
+    public void updateInfo(String title, String description) {
+        this.title = title;
+        this.description = description;
     }
 }

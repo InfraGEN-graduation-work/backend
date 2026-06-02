@@ -19,7 +19,13 @@ import lombok.NoArgsConstructor;
 @Table(name = "project_node")
 public class ProjectNode extends BaseEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "project_node_seq_gen")
+    @SequenceGenerator(
+            name = "project_node_seq_gen",
+            sequenceName = "project_node_seq",
+            initialValue = 1,
+            allocationSize = 50
+    )
     private Long id;
 
     @Enumerated(EnumType.STRING)

@@ -4,7 +4,8 @@ import com.infragen.infragen.domain.auth.dto.response.KakaoTokenResDTO;
 import com.infragen.infragen.domain.auth.dto.response.KakaoUserInfoDTO;
 import com.infragen.infragen.domain.auth.exception.AuthException;
 import com.infragen.infragen.domain.auth.exception.code.error.AuthErrorCode;
-import com.infragen.infragen.global.config.KakaoProperties;
+import com.infragen.infragen.global.properties.KakaoProperties;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;

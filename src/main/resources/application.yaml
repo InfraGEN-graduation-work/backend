@@ -26,6 +26,12 @@ spring:
       ddl-auto: update
 
     show-sql: true
+    properties:
+      hibernate:
+        jdbc.batch_size: 50
+        order_inserts: true
+        order_updates: true
+        jdbc.batch_versioned_data: true
 
   servlet:
     encoding:

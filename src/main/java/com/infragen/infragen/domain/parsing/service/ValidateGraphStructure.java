@@ -2,7 +2,9 @@ package com.infragen.infragen.domain.parsing.service;
 
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
 import com.infragen.infragen.domain.parsing.dto.request.NodeDTO;
+import com.infragen.infragen.domain.parsing.enums.ComponentType;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
+import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -12,10 +14,17 @@ public class ValidateGraphStructure {
     public void validate(List<NodeDTO> nodes , List<EdgeDTO> edges) {
         if (nodes == null || nodes.isEmpty()) return;
 
+        Map<String , ComponentType> nodeTypeMap = new HashMap<>();
         Map<String, List<String>> adjList = new HashMap<>();
         Map<String, Integer> indegree = new HashMap<>();
         for (NodeDTO node : nodes) {
             if (node == null || node.getNodeId() == null) continue;
+            String typeStr = node.getComponentType();
+            if (typeStr == null || typeStr.isEmpty()) {
+                throw new ParsingException(ParsingErrorCode.MISSING_COMPONENT_TYPE);
+            }
+            ComponentType type = ComponentType.valueOf(typeStr);
+            nodeTypeMap.put(node.getNodeId(), type);
             adjList.put(node.getNodeId(), new ArrayList<>());
             indegree.put(node.getNodeId(), 0);
         }
@@ -29,11 +38,12 @@ public class ValidateGraphStructure {
             String target = edge.getTargetNodeId();
 
             if (!adjList.containsKey(source) || !adjList.containsKey(target)) {
-                throw new ParsingException("존재하지 않는 노드가 연결선에 포함되어 있습니다.");
+                throw new ParsingException(ParsingErrorCode.INVALID_EDGE_NODE);
             }
-
-            if (Objects.equals(source, target)) {
-                throw new ParsingException("잘못된 의존성 방향입니다.");
+            ComponentType sourceType = nodeTypeMap.get(source);
+            ComponentType targetType = nodeTypeMap.get(target);
+            if (sourceType.getStartupPriority() > targetType.getStartupPriority()) {
+                throw new ParsingException(ParsingErrorCode.INVALID_COMPONENT_DEPENDENCY);
             }
             adjList.get(source).add(target);
             indegree.put(target, indegree.get(target) + 1);
@@ -60,7 +70,7 @@ public class ValidateGraphStructure {
         }
 
         if (visitedCount != nodes.size()) {
-            throw new ParsingException("인프라 아키텍처에 순환 참조가 존재합니다.");
+            throw new ParsingException(ParsingErrorCode.CYCLE_DETECTED);
         }
     }
 }

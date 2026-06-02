@@ -4,12 +4,12 @@ import lombok.Getter;
 
 @Getter
 @JsonPropertyOrder({ "nodeId", "positionX", "positionY", "databaseName", "rootPassword" })
-public class MySQL extends BaseComponent{
+public class MySQLComponent extends BaseComponent{
 
     private String databaseName;
     private String rootPassword;
 
-    public MySQL(String id, float posX, float posY, String databaseName, String rootPassword) {
+    public MySQLComponent(String id, float posX, float posY, String databaseName, String rootPassword) {
         super(id, posX, posY);
         this.databaseName = databaseName;
         this.rootPassword = rootPassword;

@@ -56,18 +56,6 @@ public class GeneralExceptionAdvice {
                 ));
     }
 
-    @ExceptionHandler(ParsingException.class)
-    public ResponseEntity<@NonNull ApiResponse<String>> handleParsingException(ParsingException e) {
-        log.warn("Infrastructure parsing error occurred: {}", e.getMessage());
-
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(ApiResponse.onFailure(
-                        GeneralErrorCode.BAD_REQUEST,
-                        e.getMessage()
-                ));
-
-    }
     // 그 외의 정의되지 않은 모든 예외 처리
     @ExceptionHandler(Exception.class)
     public ResponseEntity<@NonNull ApiResponse<String>> handleException(Exception e) {

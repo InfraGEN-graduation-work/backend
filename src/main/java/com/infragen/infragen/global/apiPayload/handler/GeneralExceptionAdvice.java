@@ -1,18 +1,15 @@
 package com.infragen.infragen.global.apiPayload.handler;
 
-import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.global.apiPayload.ApiResponse;
 import com.infragen.infragen.global.apiPayload.code.BaseErrorCode;
 import com.infragen.infragen.global.apiPayload.code.GeneralErrorCode;
 import com.infragen.infragen.global.apiPayload.exception.GeneralException;
-import com.nimbusds.oauth2.sdk.http.HTTPEndpoint;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
-import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 

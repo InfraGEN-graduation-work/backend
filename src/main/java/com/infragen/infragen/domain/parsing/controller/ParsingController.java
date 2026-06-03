@@ -5,9 +5,7 @@ import com.infragen.infragen.domain.parsing.dto.request.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.exception.code.success.ParsingSuccessCode;
 import com.infragen.infragen.domain.parsing.service.ParsingService;
 import com.infragen.infragen.global.apiPayload.ApiResponse;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController

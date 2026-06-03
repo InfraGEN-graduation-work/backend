@@ -9,7 +9,6 @@ import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.SpringBootComponent;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -39,7 +38,7 @@ public class ParsingService {
         Set<Integer> usedPorts = new HashSet<>();
 
         requestDTO.getNodes().forEach(node -> {
-            ComponentType type = ComponentType.valueOf(node.getComponentType());
+            ComponentType type = ComponentType.valueOf(node.getComponentType().toUpperCase());
             switch (type) {
                 case SPRING_BOOT:
                     SpringBootComponent springBoot = springBootNode(node);

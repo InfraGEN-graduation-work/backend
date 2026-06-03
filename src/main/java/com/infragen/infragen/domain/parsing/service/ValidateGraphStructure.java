@@ -23,7 +23,7 @@ public class ValidateGraphStructure {
             if (typeStr == null || typeStr.isEmpty()) {
                 throw new ParsingException(ParsingErrorCode.MISSING_COMPONENT_TYPE);
             }
-            ComponentType type = ComponentType.valueOf(typeStr);
+            ComponentType type = ComponentType.valueOf(typeStr.toUpperCase());
             nodeTypeMap.put(node.getNodeId(), type);
             adjList.put(node.getNodeId(), new ArrayList<>());
             indegree.put(node.getNodeId(), 0);
@@ -69,7 +69,7 @@ public class ValidateGraphStructure {
             }
         }
 
-        if (visitedCount != nodes.size()) {
+        if (visitedCount != nodeTypeMap.size()) {
             throw new ParsingException(ParsingErrorCode.CYCLE_DETECTED);
         }
     }

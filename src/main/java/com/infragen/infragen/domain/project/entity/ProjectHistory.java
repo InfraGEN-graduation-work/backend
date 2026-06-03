@@ -16,7 +16,15 @@ import lombok.NoArgsConstructor;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "project_history")
+@Table(
+    name = "project_history",
+    uniqueConstraints = {
+        @UniqueConstraint(
+            name = "uq_project_history_project_version",
+            columnNames = {"project_id", "version_name"}
+        )
+    }
+)
 public class ProjectHistory extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

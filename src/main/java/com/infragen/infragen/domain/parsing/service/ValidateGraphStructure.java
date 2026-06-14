@@ -49,7 +49,7 @@ public class ValidateGraphStructure {
             indegree.put(target, indegree.get(target) + 1);
         }
 
-        Queue<String> queue = new LinkedList<>();
+        Queue<String> queue = new ArrayDeque<>();
         for (String nodeId : indegree.keySet()) {
             if (indegree.get(nodeId) == 0) {
                 queue.add(nodeId);

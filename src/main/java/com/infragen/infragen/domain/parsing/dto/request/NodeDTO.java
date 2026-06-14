@@ -1,14 +1,18 @@
 package com.infragen.infragen.domain.parsing.dto.request;
 
+import lombok.AllArgsConstructor;
 import lombok.Getter;
-import lombok.Setter;
+import lombok.NoArgsConstructor;
+
+import java.util.Map;
 
 @Getter
-@Setter
+@NoArgsConstructor
+@AllArgsConstructor
 public class NodeDTO {
     private String nodeId;
     private String componentType;
     private Float positionX;
     private Float positionY;
-    private Object properties;
+    private Map<String, Object> properties;
 }

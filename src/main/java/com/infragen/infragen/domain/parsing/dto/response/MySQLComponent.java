@@ -1,17 +1,28 @@
 package com.infragen.infragen.domain.parsing.dto.response;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import lombok.Builder;
 import lombok.Getter;
 
 @Getter
-@JsonPropertyOrder({ "nodeId", "positionX", "positionY", "databaseName", "rootPassword" })
+
+@JsonPropertyOrder({ "nodeId", "positionX", "positionY", "imageVersion",
+        "containerName", "env", "port", "volumeName" })
 public class MySQLComponent extends BaseComponent{
 
-    private String databaseName;
-    private String rootPassword;
+    private String imageVersion;
+    private String containerName;
+    private MySQLEnvComponent env;
+    private int port;
+    private String volumeName;
 
-    public MySQLComponent(String id, float posX, float posY, String databaseName, String rootPassword) {
+    @Builder
+    public MySQLComponent(String id, float posX, float posY, String imageVersion,
+                                 String containerName, MySQLEnvComponent env, int port, String volumeName) {
         super(id, posX, posY);
-        this.databaseName = databaseName;
-        this.rootPassword = rootPassword;
+        this.imageVersion = imageVersion;
+        this.containerName = containerName;
+        this.env = env;
+        this.port = port;
+        this.volumeName = volumeName;
     }
 }

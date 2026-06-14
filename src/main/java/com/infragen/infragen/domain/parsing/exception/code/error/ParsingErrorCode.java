@@ -54,9 +54,15 @@ public enum ParsingErrorCode implements BaseErrorCode {
             "인프라 아키텍처에 순환 참조가 존재합니다.",
             "PARSING400_9"
     ),
-    INVALID_COMPONENT_DEPENDENCY(HttpStatus.BAD_REQUEST,
+    INVALID_COMPONENT_DEPENDENCY(
+            HttpStatus.BAD_REQUEST,
             "잘못된 컴포넌트 의존성 방향입니다.",
             "PARSING400_10")
+    ,
+    UNSUPPORTED_COMPONENT_TYPE(
+            HttpStatus.BAD_REQUEST ,
+            "지원하지 않는 컴포넌트 타입입니다." ,
+            "PARSING400_11")
     ;
 
     private final HttpStatus httpStatus;

@@ -1,7 +1,5 @@
 package com.infragen.infragen.domain.member.service.query;
 
-import com.infragen.infragen.domain.auth.exception.AuthException;
-import com.infragen.infragen.domain.auth.exception.code.error.AuthErrorCode;
 import com.infragen.infragen.domain.member.converter.MemberConverter;
 import com.infragen.infragen.domain.member.dto.response.MemberResDTO;
 import com.infragen.infragen.domain.member.entity.Member;

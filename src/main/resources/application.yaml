@@ -55,6 +55,7 @@ cors:
 # kakao 설정 관련
 kakao:
   client-id: ${KAKAO_CLIENT_ID}
+  client-secret: ${KAKAO_CLIENT_SECRET}
   redirect-uri: ${KAKAO_REDIRECT_URI}
   authorization-uri: https://kauth.kakao.com/oauth/authorize
   token-uri: https://kauth.kakao.com/oauth/token

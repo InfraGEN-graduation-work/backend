@@ -14,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -32,7 +33,8 @@ public class KakaoOAuthClient {
             body.add("client_id", kakaoProperties.getClientId());
             body.add("redirect_uri", kakaoProperties.getRedirectUri());
             body.add("code", authorizationCode);
-
+            body.add("client_secret", kakaoProperties.getClientSecret());
+            
             return restClient.post()
                     .uri(kakaoProperties.getTokenUri())
                     .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_FORM_URLENCODED_VALUE + ";charset=utf-8")

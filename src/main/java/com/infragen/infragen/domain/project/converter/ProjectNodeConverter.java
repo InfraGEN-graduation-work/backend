@@ -4,7 +4,7 @@ import com.infragen.infragen.domain.project.dto.request.ProjectNodeReqDTO;
 import com.infragen.infragen.domain.project.dto.response.ProjectNodeResDTO;
 import com.infragen.infragen.domain.project.entity.Project;
 import com.infragen.infragen.domain.project.entity.ProjectNode;
-import com.infragen.infragen.domain.project.enums.ComponentType;
+import com.infragen.infragen.global.enums.ComponentType;
 
 import java.util.List;
 

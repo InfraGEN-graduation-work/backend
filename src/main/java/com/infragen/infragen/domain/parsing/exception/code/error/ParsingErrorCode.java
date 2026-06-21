@@ -57,13 +57,38 @@ public enum ParsingErrorCode implements BaseErrorCode {
     INVALID_COMPONENT_DEPENDENCY(
             HttpStatus.BAD_REQUEST,
             "잘못된 컴포넌트 의존성 방향입니다.",
-            "PARSING400_10")
-    ,
+            "PARSING400_10"
+    ),
     UNSUPPORTED_COMPONENT_TYPE(
-            HttpStatus.BAD_REQUEST ,
-            "지원하지 않는 컴포넌트 타입입니다." ,
-            "PARSING400_11")
-    ;
+            HttpStatus.BAD_REQUEST,
+            "지원하지 않는 컴포넌트 타입입니다.",
+            "PARSING400_11"
+    ),
+    MISSING_SPRING_BOOT_NAME(
+            HttpStatus.BAD_REQUEST,
+            "Spring Boot 서비스 이름이 누락되었습니다.",
+            "PARSING400_12"
+    ),
+    MISSING_JAVA_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "Java 버전이 누락되었습니다.",
+            "PARSING400_13"
+    ),
+    MISSING_NODE_ID(
+            HttpStatus.BAD_REQUEST,
+            "nodeId가 누락되었습니다.",
+            "PARSING400_14"
+    ),
+    DUPLICATE_NODE_ID(
+            HttpStatus.BAD_REQUEST,
+            "중복된 nodeId가 존재합니다.",
+            "PARSING400_15"
+    ),
+    INVALID_EDGE_ENDPOINT(
+            HttpStatus.BAD_REQUEST,
+            "연결선의 source 또는 target이 누락되었습니다.",
+            "PARSING400_16"
+    );
 
     private final HttpStatus httpStatus;
     private final String message;

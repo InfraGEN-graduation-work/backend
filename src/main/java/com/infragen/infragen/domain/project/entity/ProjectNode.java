@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
-import com.infragen.infragen.domain.project.enums.ComponentType;
+import com.infragen.infragen.global.enums.ComponentType;
 import com.infragen.infragen.global.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;

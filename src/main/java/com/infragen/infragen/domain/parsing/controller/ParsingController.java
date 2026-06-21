@@ -1,23 +1,39 @@
 package com.infragen.infragen.domain.parsing.controller;
 
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.infragen.infragen.domain.generation.dto.response.GenerateResDTO;
+import com.infragen.infragen.domain.generation.exception.code.success.GenerationSuccessCode;
+import com.infragen.infragen.domain.generation.service.command.GenerationCommandService;
 import com.infragen.infragen.domain.parsing.dto.request.ParsingReqDTO;
-import com.infragen.infragen.domain.parsing.dto.request.ParsingResultDTO;
-import com.infragen.infragen.domain.parsing.exception.code.success.ParsingSuccessCode;
-import com.infragen.infragen.domain.parsing.service.ParsingService;
 import com.infragen.infragen.global.apiPayload.ApiResponse;
+import com.infragen.infragen.global.auth.CustomUserDetails;
+
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/v1/auth")
+@RequestMapping("/api/v1/projects/{projectId}")
 @RequiredArgsConstructor
 public class ParsingController {
-    private final ParsingService parsingService;
+    private final GenerationCommandService generationCommandService;
 
-    @PostMapping("/{projectId}/parsing")
-    public ApiResponse<ParsingResultDTO> parsingInfraStructure(@PathVariable Long projectId , @RequestBody ParsingReqDTO requestDTO){
-        ParsingResultDTO result = parsingService.parsing(requestDTO , projectId);
+    @PostMapping("/generate")
+    public ApiResponse<GenerateResDTO.GenerateResultResDTO> generateInfrastructure(
+        @AuthenticationPrincipal CustomUserDetails userDetails,
+        @PathVariable Long projectId,
+        @RequestBody ParsingReqDTO requestDTO
+    ) {
+        GenerateResDTO.GenerateResultResDTO result = generationCommandService.generate(
+            projectId,
+            requestDTO,
+            userDetails.getMemberId()
+        );
 
-        return ApiResponse.onSuccess(ParsingSuccessCode.PARSING_SUCCESS , result);
+        return ApiResponse.onSuccess(GenerationSuccessCode.GENERATE_SUCCESS, result);
     }
 }

@@ -27,12 +27,11 @@ public class AuthController {
     // 일반 회원가입
     @PostMapping("/signup") 
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<AuthResDTO.AccessTokenResultDTO> signup(
-        @RequestBody @Valid AuthReqDTO.SignupDTO request,
-        HttpServletResponse response
+    public ApiResponse<Void> signup(
+        @RequestBody @Valid AuthReqDTO.SignupDTO request
     ) {
-        AuthResDTO.TokenResultDTO tokens = authService.signup(request);
-        return handleTokenResponse(tokens, response, AuthSuccessCode.SIGNUP_SUCCESS);
+        authService.signup(request);
+        return ApiResponse.onSuccess(AuthSuccessCode.SIGNUP_SUCCESS, null);
     }
 
     // 일반 로그인

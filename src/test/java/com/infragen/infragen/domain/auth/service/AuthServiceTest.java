@@ -54,7 +54,7 @@ class AuthServiceTest {
     private AuthService authService;
 
     @Test
-    @DisplayName("일반 회원가입 - 성공 시 토큰 반환 검증")
+    @DisplayName("일반 회원가입 - 성공 시 회원만 생성하고 토큰은 발급하지 않음")
     void signup_Success() {
         // given
         AuthReqDTO.SignupDTO request = AuthReqDTO.SignupDTO.builder()
@@ -63,17 +63,15 @@ class AuthServiceTest {
                 .id(1L).email("test@test.com").role(Role.ROLE_USER).build();
 
         when(memberCommandService.createMember(any())).thenReturn(memberDTO);
-        when(jwtUtil.createAccessToken(anyLong(), any())).thenReturn("access_token");
-        when(jwtUtil.createRefreshToken(anyLong())).thenReturn("refresh_token");
-        when(jwtUtil.getExpirationTime(anyString())).thenReturn(1000L);
 
         // when
-        AuthResDTO.TokenResultDTO result = authService.signup(request);
+        authService.signup(request);
 
         // then
-        assertNotNull(result);
-        assertEquals("access_token", result.getAccessToken());
-        verify(redisUtil).set(eq("RT:1"), eq("refresh_token"), any());
+        verify(memberCommandService).createMember(request);
+        verify(jwtUtil, never()).createAccessToken(anyLong(), any());
+        verify(jwtUtil, never()).createRefreshToken(anyLong());
+        verify(redisUtil, never()).set(anyString(), anyString(), any());
     }
 
     @Test

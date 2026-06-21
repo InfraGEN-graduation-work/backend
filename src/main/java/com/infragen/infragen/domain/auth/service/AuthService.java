@@ -37,10 +37,9 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final KakaoOAuthClient kakaoOAuthClient;
 
-    // 일반 회원가입
-    public AuthResDTO.TokenResultDTO signup(AuthReqDTO.SignupDTO request) {
-        MemberResDTO.MemberResultDTO memberDTO = memberCommandService.createMember(request);
-        return generateAndSaveTokens(memberDTO.id(), memberDTO.role());
+    // 일반 회원가입 (인증 토큰·응답 본문 없음 — 로그인에서 별도 처리)
+    public void signup(AuthReqDTO.SignupDTO request) {
+        memberCommandService.createMember(request);
     }
 
     // 일반 로그인

@@ -33,4 +33,8 @@ public class MemberQueryService {
         return memberRepository.findById(id)
                 .orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
     }
+
+    public MemberResDTO.MemberResultDTO getMe(Long memberId) {
+        return MemberConverter.toResultDTO(findById(memberId));
+    }
 }

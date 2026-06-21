@@ -12,6 +12,8 @@ import com.infragen.infragen.domain.member.enums.SocialProvider;
 import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.global.entity.BaseEntity;
 
+import java.util.UUID;
+
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -65,5 +67,22 @@ public class Member extends BaseEntity {
         this.isActive = isActive;
         this.socialProvider = socialProvider;
         this.socialId = socialId;
+    }
+
+    // 회원 탈퇴 처리. 식별 정보를 마스킹해 unique 제약을 해제하고, 동일 이메일·소셜 계정 재가입을 허용
+    public void withdraw() {
+        if (Boolean.FALSE.equals(this.isActive)) {
+            return;
+        }
+        this.email = createMaskedEmail(this.id);
+        this.socialId = null;
+        this.socialProvider = null;
+        this.nickname = "탈퇴회원";
+        this.isActive = false;
+    }
+
+    private static String createMaskedEmail(Long memberId) {
+        String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        return "withdrawn_" + memberId + "_" + suffix + "@deleted.infragen.local";
     }
 }

@@ -19,6 +19,7 @@ import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.global.enums.ComponentType;
 import com.infragen.infragen.global.enums.ComponentType.ComponentCategory;
 
+import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 
 @Component
@@ -30,8 +31,8 @@ public class DockerComposeIaCGenerator implements IaCGenerator {
 
     // Compose renderer와 호스트 앱 env contributor를 주입받아 Map으로 보관
     public DockerComposeIaCGenerator(
-        List<ComposeServiceRenderer> renderers,
-        List<HostAppEnvContributor> hostAppEnvContributors
+        @NonNull List<ComposeServiceRenderer> renderers,
+        @NonNull List<HostAppEnvContributor> hostAppEnvContributors
     ) {
         this.rendererMap = renderers.stream()
             .collect(Collectors.toMap(
@@ -152,7 +153,8 @@ public class DockerComposeIaCGenerator implements IaCGenerator {
         for (String block : serviceBlocks) {
             content.append(block);
         }
-
+        
+        // 마지막 줄의 개행 문자 제거
         if (content.charAt(content.length() - 1) == '\n') {
             content.setLength(content.length() - 1);
         }

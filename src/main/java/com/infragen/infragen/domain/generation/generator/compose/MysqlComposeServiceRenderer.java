@@ -2,6 +2,8 @@ package com.infragen.infragen.domain.generation.generator.compose;
 
 import org.springframework.stereotype.Component;
 
+import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
+import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLEnvComponent;
@@ -22,6 +24,9 @@ public class MysqlComposeServiceRenderer implements ComposeServiceRenderer {
     public String render(BaseComponent component, ComposeGenerationContext context) {
         MySQLComponent mysql = (MySQLComponent) component;
         MySQLEnvComponent env = mysql.getEnv();
+        if (env == null) {
+            throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
+        }
 
         String serviceName = ComposeYamlSupport.toServiceName(
             mysql.getContainerName(), null, TYPE_LABEL); // nameOrLabel 누락 시 typeFallback 사용

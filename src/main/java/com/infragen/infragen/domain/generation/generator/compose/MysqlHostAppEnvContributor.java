@@ -2,6 +2,8 @@ package com.infragen.infragen.domain.generation.generator.compose;
 
 import org.springframework.stereotype.Component;
 
+import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
+import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLEnvComponent;
@@ -25,6 +27,9 @@ public class MysqlHostAppEnvContributor implements HostAppEnvContributor {
     ) {
         MySQLComponent mysql = (MySQLComponent) dependency;
         MySQLEnvComponent env = mysql.getEnv();
+        if (env == null) {
+            throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
+        }
         int hostPort = mysql.getPort();
 
         String jdbcUrl = "jdbc:mysql://"

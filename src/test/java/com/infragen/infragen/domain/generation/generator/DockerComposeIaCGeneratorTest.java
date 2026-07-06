@@ -2,6 +2,7 @@ package com.infragen.infragen.domain.generation.generator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.List;
 
@@ -11,6 +12,8 @@ import org.junit.jupiter.api.Test;
 
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
 import com.infragen.infragen.domain.generation.enums.OutputFormat;
+import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
+import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.generation.generator.compose.MysqlComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.compose.MysqlHostAppEnvContributor;
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
@@ -84,7 +87,29 @@ class DockerComposeIaCGeneratorTest {
         assertFalse(fileContent(bundle, "docker-compose.yml").contains("eclipse-temurin"));
     }
 
+    @Test
+    @DisplayName("MySQL env 누락 — GENERATION400_2")
+    void generate_MysqlEnvMissing_ThrowsGenerationException() {
+        ParsingResultDTO parsingResult = localDevParsingResultWithMysqlEnv(null);
+
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> generator.generate(parsingResult)
+        );
+
+        assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
+    }
+
     private static ParsingResultDTO localDevParsingResult() {
+        return localDevParsingResultWithMysqlEnv(MySQLEnvComponent.builder()
+            .databaseName("appdb")
+            .username("user")
+            .userPassword("userpass12")
+            .rootPassword("rootpass12")
+            .build());
+    }
+
+    private static ParsingResultDTO localDevParsingResultWithMysqlEnv(MySQLEnvComponent env) {
         MySQLComponent mysql = MySQLComponent.builder()
             .id("node-1")
             .posX(100f)
@@ -93,12 +118,7 @@ class DockerComposeIaCGeneratorTest {
             .containerName("mysql")
             .volumeName("mysql_data")
             .port(3306)
-            .env(MySQLEnvComponent.builder()
-                .databaseName("appdb")
-                .username("user")
-                .userPassword("userpass12")
-                .rootPassword("rootpass12")
-                .build())
+            .env(env)
             .build();
 
         SpringBootComponent springBoot = SpringBootComponent.builder()

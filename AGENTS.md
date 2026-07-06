@@ -5,7 +5,7 @@
 ## Reference Docs
 
 - Generate 관련 최신 상태는 `../docs/integration-roadmap.md`를 먼저 확인합니다.
-- 백엔드 작업 전 `GEMINI.md`, `README.md`, 관련 Java 파일을 확인합니다.
+- 백엔드 작업 전 `README.md`, 관련 Java 파일을 확인합니다.
 - 자세한 백엔드 규칙은 `../.codex/rules/backend.md`를 따릅니다.
 - Generate 파이프라인 작업은 `../.codex/context/generate-pipeline.md`를 따릅니다.
 

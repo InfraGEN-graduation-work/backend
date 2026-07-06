@@ -3,7 +3,7 @@ package com.infragen.infragen.domain.member.controller;
 import com.infragen.infragen.domain.auth.service.AuthService;
 import com.infragen.infragen.domain.member.controller.docs.MemberControllerDocs;
 import com.infragen.infragen.domain.member.dto.response.MemberResDTO;
-import com.infragen.infragen.domain.member.exception.code.MemberSuccessCode;
+import com.infragen.infragen.domain.member.exception.code.success.MemberSuccessCode;
 import com.infragen.infragen.domain.member.service.query.MemberQueryService;
 import com.infragen.infragen.global.apiPayload.ApiResponse;
 import com.infragen.infragen.global.auth.CustomUserDetails;

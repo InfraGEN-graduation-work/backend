@@ -153,13 +153,7 @@ public class DockerComposeIaCGenerator implements IaCGenerator {
         for (String block : serviceBlocks) {
             content.append(block);
         }
-        
-        // 마지막 줄의 개행 문자 제거
-        if (content.charAt(content.length() - 1) == '\n') {
-            content.setLength(content.length() - 1);
-        }
 
-        content.append('\n');
         return content.toString();
     }
 }

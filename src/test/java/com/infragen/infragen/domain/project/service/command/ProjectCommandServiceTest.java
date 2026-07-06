@@ -3,8 +3,9 @@ package com.infragen.infragen.domain.project.service.command;
 import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.exception.MemberException;
-import com.infragen.infragen.domain.member.exception.code.MemberErrorCode;
+import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
 import com.infragen.infragen.domain.member.service.query.MemberQueryService;
+import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 import com.infragen.infragen.domain.project.dto.request.ProjectReqDTO;
 import com.infragen.infragen.domain.project.dto.response.ProjectResDTO;
 import com.infragen.infragen.domain.project.entity.Project;
@@ -57,6 +58,9 @@ class ProjectCommandServiceTest {
 
     @Mock
     private MemberQueryService memberQueryService;
+
+    @Mock
+    private ProjectQueryService projectQueryService;
 
     @InjectMocks
     private ProjectCommandService projectCommandService;
@@ -150,7 +154,7 @@ class ProjectCommandServiceTest {
                 "New Title", "New Desc", List.of(nodeReq), List.of(edgeReq)
         );
 
-        when(projectRepository.findByIdAndMemberId(projectId, memberId)).thenReturn(Optional.of(project));
+        when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(project);
         when(projectNodeRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(projectEdgeRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -164,7 +168,7 @@ class ProjectCommandServiceTest {
         assertEquals(1, result.nodes().size());
         assertEquals(1, result.edges().size());
 
-        verify(projectRepository).findByIdAndMemberId(projectId, memberId);
+        verify(projectQueryService).getOwnedProject(projectId, memberId);
         verify(projectEdgeRepository).deleteByProjectId(projectId);
         verify(projectNodeRepository).deleteByProjectId(projectId);
         verify(projectNodeRepository).saveAll(anyList());
@@ -182,14 +186,15 @@ class ProjectCommandServiceTest {
                 "New Title", "New Desc", Collections.emptyList(), Collections.emptyList()
         );
 
-        when(projectRepository.findByIdAndMemberId(projectId, memberId)).thenReturn(Optional.empty());
+        when(projectQueryService.getOwnedProject(projectId, memberId))
+            .thenThrow(new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
 
         // when & then
         ProjectException exception = assertThrows(ProjectException.class,
                 () -> projectCommandService.updateProject(projectId, updateRequest, memberId));
 
         assertEquals(ProjectErrorCode.PROJECT_NOT_FOUND, exception.getCode());
-        verify(projectRepository).findByIdAndMemberId(projectId, memberId);
+        verify(projectQueryService).getOwnedProject(projectId, memberId);
         verify(projectEdgeRepository, never()).deleteByProjectId(anyLong());
     }
 
@@ -201,13 +206,13 @@ class ProjectCommandServiceTest {
         Long projectId = 100L;
         Project project = Project.builder().build();
 
-        when(projectRepository.findByIdAndMemberId(projectId, memberId)).thenReturn(Optional.of(project));
+        when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(project);
 
         // when
         projectCommandService.deleteProject(projectId, memberId);
 
         // then
-        verify(projectRepository).findByIdAndMemberId(projectId, memberId);
+        verify(projectQueryService).getOwnedProject(projectId, memberId);
         verify(generatedFileRepository).deleteByProjectId(projectId);
         verify(projectHistoryRepository).deleteByProjectId(projectId);
         verify(projectEdgeRepository).deleteByProjectId(projectId);
@@ -222,14 +227,15 @@ class ProjectCommandServiceTest {
         Long memberId = 1L;
         Long projectId = 100L;
 
-        when(projectRepository.findByIdAndMemberId(projectId, memberId)).thenReturn(Optional.empty());
+        when(projectQueryService.getOwnedProject(projectId, memberId))
+            .thenThrow(new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
 
         // when & then
         ProjectException exception = assertThrows(ProjectException.class,
                 () -> projectCommandService.deleteProject(projectId, memberId));
 
         assertEquals(ProjectErrorCode.PROJECT_NOT_FOUND, exception.getCode());
-        verify(projectRepository).findByIdAndMemberId(projectId, memberId);
+        verify(projectQueryService).getOwnedProject(projectId, memberId);
         verify(generatedFileRepository, never()).deleteByProjectId(anyLong());
         verify(projectHistoryRepository, never()).deleteByProjectId(anyLong());
         verify(projectEdgeRepository, never()).deleteByProjectId(anyLong());

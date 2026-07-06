@@ -8,7 +8,8 @@ public class GeneratedFileResDTO {
         Long fileId,
         String fileName,
         String filePath,
-        Integer fileSize
+        Integer fileSize,
+        String content
     ) {
     }
 }

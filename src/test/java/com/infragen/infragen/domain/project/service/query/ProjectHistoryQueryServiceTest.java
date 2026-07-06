@@ -11,7 +11,6 @@ import static org.mockito.Mockito.when;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,12 +28,11 @@ import com.infragen.infragen.domain.project.exception.ProjectHistoryException;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectHistoryErrorCode;
 import com.infragen.infragen.domain.project.repository.ProjectHistoryRepository;
-import com.infragen.infragen.domain.project.repository.ProjectRepository;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectHistoryQueryServiceTest {
     @Mock
-    private ProjectRepository projectRepository;
+    private ProjectQueryService projectQueryService;
 
     @Mock
     private ProjectHistoryRepository projectHistoryRepository;
@@ -69,7 +67,7 @@ class ProjectHistoryQueryServiceTest {
 
         List<ProjectHistory> historyList = List.of(history2, history1);
 
-        when(projectRepository.findByIdAndMemberId(projectId, memberId)).thenReturn(Optional.of(project));
+        when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(project);
         when(projectHistoryRepository.findAllByProjectIdOrderByCreatedAtDesc(projectId)).thenReturn(historyList);
 
         ProjectHistoryResDTO.HistoryPreviewListResDTO result = projectHistoryQueryService.getHistories(projectId, memberId);
@@ -79,7 +77,7 @@ class ProjectHistoryQueryServiceTest {
         assertEquals("v2", result.historyList().get(0).versionName());
         assertEquals("v1", result.historyList().get(1).versionName());
 
-        verify(projectRepository).findByIdAndMemberId(projectId, memberId);
+        verify(projectQueryService).getOwnedProject(projectId, memberId);
         verify(projectHistoryRepository).findAllByProjectIdOrderByCreatedAtDesc(projectId);
     }
 
@@ -89,13 +87,14 @@ class ProjectHistoryQueryServiceTest {
         Long memberId = 1L;
         Long projectId = 100L;
 
-        when(projectRepository.findByIdAndMemberId(projectId, memberId)).thenReturn(Optional.empty());
+        when(projectQueryService.getOwnedProject(projectId, memberId))
+            .thenThrow(new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
 
         ProjectException exception = assertThrows(ProjectException.class,
                 () -> projectHistoryQueryService.getHistories(projectId, memberId));
 
         assertEquals(ProjectErrorCode.PROJECT_NOT_FOUND, exception.getCode());
-        verify(projectRepository).findByIdAndMemberId(projectId, memberId);
+        verify(projectQueryService).getOwnedProject(projectId, memberId);
         verify(projectHistoryRepository, never()).findAllByProjectIdOrderByCreatedAtDesc(anyLong());
     }
 
@@ -118,8 +117,8 @@ class ProjectHistoryQueryServiceTest {
         ReflectionTestUtils.setField(history, "createdAt", LocalDateTime.now());
         ReflectionTestUtils.setField(history, "generatedFileList", new ArrayList<>());
 
-        when(projectRepository.findByIdAndMemberId(projectId, memberId)).thenReturn(Optional.of(project));
-        when(projectHistoryRepository.findByIdAndProjectId(historyId, projectId)).thenReturn(Optional.of(history));
+        when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(project);
+        when(projectHistoryRepository.findByIdAndProjectId(historyId, projectId)).thenReturn(java.util.Optional.of(history));
 
         ProjectHistoryResDTO.HistoryDetailResDTO result = projectHistoryQueryService.getHistoryDetail(projectId, historyId, memberId);
 
@@ -129,7 +128,7 @@ class ProjectHistoryQueryServiceTest {
         assertEquals("First save", result.description());
         assertEquals(0, result.generatedFileList().size());
 
-        verify(projectRepository).findByIdAndMemberId(projectId, memberId);
+        verify(projectQueryService).getOwnedProject(projectId, memberId);
         verify(projectHistoryRepository).findByIdAndProjectId(historyId, projectId);
     }
 
@@ -140,13 +139,14 @@ class ProjectHistoryQueryServiceTest {
         Long projectId = 100L;
         Long historyId = 200L;
 
-        when(projectRepository.findByIdAndMemberId(projectId, memberId)).thenReturn(Optional.empty());
+        when(projectQueryService.getOwnedProject(projectId, memberId))
+            .thenThrow(new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
 
         ProjectException exception = assertThrows(ProjectException.class,
                 () -> projectHistoryQueryService.getHistoryDetail(projectId, historyId, memberId));
 
         assertEquals(ProjectErrorCode.PROJECT_NOT_FOUND, exception.getCode());
-        verify(projectRepository).findByIdAndMemberId(projectId, memberId);
+        verify(projectQueryService).getOwnedProject(projectId, memberId);
         verify(projectHistoryRepository, never()).findByIdAndProjectId(anyLong(), anyLong());
     }
 
@@ -160,14 +160,14 @@ class ProjectHistoryQueryServiceTest {
         Project project = Project.builder().build();
         ReflectionTestUtils.setField(project, "id", projectId);
 
-        when(projectRepository.findByIdAndMemberId(projectId, memberId)).thenReturn(Optional.of(project));
-        when(projectHistoryRepository.findByIdAndProjectId(historyId, projectId)).thenReturn(Optional.empty());
+        when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(project);
+        when(projectHistoryRepository.findByIdAndProjectId(historyId, projectId)).thenReturn(java.util.Optional.empty());
 
         ProjectHistoryException exception = assertThrows(ProjectHistoryException.class,
                 () -> projectHistoryQueryService.getHistoryDetail(projectId, historyId, memberId));
 
         assertEquals(ProjectHistoryErrorCode.PROJECT_HISTORY_NOT_FOUND, exception.getCode());
-        verify(projectRepository).findByIdAndMemberId(projectId, memberId);
+        verify(projectQueryService).getOwnedProject(projectId, memberId);
         verify(projectHistoryRepository).findByIdAndProjectId(historyId, projectId);
     }
 }

@@ -26,6 +26,9 @@ public class GeneratedFile extends BaseEntity {
     @Column(name = "file_size")
     private Integer fileSize;
 
+    @Column(name = "content", columnDefinition = "LONGTEXT")
+    private String content;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "history_id", nullable = false)
     private ProjectHistory projectHistory;
@@ -35,15 +38,23 @@ public class GeneratedFile extends BaseEntity {
             String fileName,
             String filePath,
             Integer fileSize,
-            ProjectHistory projectHistory
+            ProjectHistory projectHistory,
+            String content
     ) {
         this.fileName = fileName;
         this.filePath = filePath;
         this.fileSize = fileSize;
         this.projectHistory = projectHistory;
+        this.content = content;
     }
 
-    void assignProjectHistory(ProjectHistory projectHistory) {
+    // 프로젝트 히스토리 설정
+    void setProjectHistory(ProjectHistory projectHistory) {
         this.projectHistory = projectHistory;
+    }
+
+    // 생성된 IaC 파일 본문 설정
+    void setContent(String content) {
+        this.content = content;
     }
 }

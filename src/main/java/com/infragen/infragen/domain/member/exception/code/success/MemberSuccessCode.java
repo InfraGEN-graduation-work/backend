@@ -1,4 +1,4 @@
-package com.infragen.infragen.domain.member.exception.code;
+package com.infragen.infragen.domain.member.exception.code.success;
 
 import com.infragen.infragen.global.apiPayload.code.BaseSuccessCode;
 import lombok.AllArgsConstructor;

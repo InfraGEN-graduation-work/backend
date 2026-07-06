@@ -31,12 +31,7 @@ public class ProjectHistoryConverter {
     }
 
     public static GeneratedFileResDTO.FileInfoResDTO toFileInfoResDTO(GeneratedFile file) {
-        return GeneratedFileResDTO.FileInfoResDTO.builder()
-            .fileId(file.getId())
-            .fileName(file.getFileName())
-            .filePath(file.getFilePath())
-            .fileSize(file.getFileSize())
-            .build();
+        return GeneratedFileConverter.toFileInfoResDTO(file);
     }
 
     public static ProjectHistoryResDTO.HistoryDetailResDTO toHistoryDetailResDTO(
@@ -44,7 +39,7 @@ public class ProjectHistoryConverter {
         List<GeneratedFile> files
     ) {
         List<GeneratedFileResDTO.FileInfoResDTO> fileInfoList = files.stream()
-            .map(ProjectHistoryConverter::toFileInfoResDTO)
+            .map(GeneratedFileConverter::toFileInfoResDTO)
             .toList();
 
         return ProjectHistoryResDTO.HistoryDetailResDTO.builder()

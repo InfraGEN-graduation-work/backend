@@ -1,7 +1,7 @@
 package com.infragen.infragen.global.apiPayload.handler;
 
 import com.infragen.infragen.domain.member.exception.MemberException;
-import com.infragen.infragen.domain.member.exception.code.MemberErrorCode;
+import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
 import com.infragen.infragen.global.apiPayload.code.GeneralErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

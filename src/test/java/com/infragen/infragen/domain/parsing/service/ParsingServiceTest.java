@@ -53,7 +53,6 @@ class ParsingServiceTest {
     @DisplayName("노드 없음 — PARSING400_1")
     void parsing_EmptyNodes_Throws() {
         ParsingReqDTO request = new ParsingReqDTO();
-        request.setProjectId(1L);
         request.setNodes(List.of());
 
         ParsingException exception = assertThrows(
@@ -65,24 +64,9 @@ class ParsingServiceTest {
     }
 
     @Test
-    @DisplayName("프로젝트 ID 불일치 — PARSING400_2")
-    void parsing_ProjectIdMismatch_Throws() {
-        ParsingReqDTO request = validRequest();
-        request.setProjectId(99L);
-
-        ParsingException exception = assertThrows(
-            ParsingException.class,
-            () -> parsingService.parsing(request, 1L)
-        );
-
-        assertEquals(ParsingErrorCode.PROJECT_ID_MISMATCH, exception.getCode());
-    }
-
-    @Test
     @DisplayName("포트 중복 — PARSING400_4")
     void parsing_DuplicatePort_Throws() {
         ParsingReqDTO request = new ParsingReqDTO();
-        request.setProjectId(1L);
         request.setNodes(List.of(mysqlNode("node-1", 8080), springBootNode("node-2", 8080)));
         request.setEdges(List.of(edge("node-1", "node-2")));
 
@@ -98,7 +82,6 @@ class ParsingServiceTest {
     @DisplayName("순환 참조 — PARSING400_9")
     void parsing_CycleDetected_Throws() {
         ParsingReqDTO request = new ParsingReqDTO();
-        request.setProjectId(1L);
         request.setNodes(List.of(mysqlNode("node-1", 3306), mysqlNode("node-2", 3307)));
         request.setEdges(List.of(
             edge("node-1", "node-2"),
@@ -115,7 +98,6 @@ class ParsingServiceTest {
 
     private static ParsingReqDTO validRequest() {
         ParsingReqDTO request = new ParsingReqDTO();
-        request.setProjectId(1L);
         request.setNodes(List.of(mysqlNode("node-1", 3306), springBootNode("node-2")));
         request.setEdges(List.of(edge("node-1", "node-2")));
         return request;

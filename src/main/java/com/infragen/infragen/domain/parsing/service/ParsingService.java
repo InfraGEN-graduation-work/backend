@@ -3,7 +3,6 @@ package com.infragen.infragen.domain.parsing.service;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -47,12 +46,7 @@ public class ParsingService {
         validateGraphStructure.validate(requestDTO.getNodes(), requestDTO.getEdges());
 
         ParsingResultDTO result = new ParsingResultDTO();
-
-        if (!Objects.equals(requestDTO.getProjectId(), projectId)) {
-            throw new ParsingException(ParsingErrorCode.PROJECT_ID_MISMATCH);
-        }
-
-        result.setProjectId(requestDTO.getProjectId());
+        result.setProjectId(projectId);
         Set<Integer> usedPorts = new HashSet<>();
 
         requestDTO.getNodes().forEach(node -> {

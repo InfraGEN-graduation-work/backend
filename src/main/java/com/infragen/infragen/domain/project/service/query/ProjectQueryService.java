@@ -31,9 +31,14 @@ public class ProjectQueryService {
         return ProjectConverter.toProjectPreviewListResDTO(projectList);
     }
 
-    public ProjectResDTO.ProjectDetailResDTO getProjectDetail(Long projectId, Long memberId) {
-        Project project = projectRepository.findByIdAndMemberId(projectId, memberId)
+    // 소유권 검증 후 Project 반환 — Command·Query 공통
+    public Project getOwnedProject(Long projectId, Long memberId) {
+        return projectRepository.findByIdAndMemberId(projectId, memberId)
             .orElseThrow(() -> new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
+    }
+
+    public ProjectResDTO.ProjectDetailResDTO getProjectDetail(Long projectId, Long memberId) {
+        Project project = getOwnedProject(projectId, memberId);
 
         List<ProjectNode> nodes = projectNodeRepository.findAllByProjectId(projectId);
         List<ProjectEdge> edges = projectEdgeRepository.findAllByProjectId(projectId);

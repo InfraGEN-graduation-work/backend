@@ -6,7 +6,7 @@ import com.infragen.infragen.domain.member.dto.response.MemberResDTO;
 import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.member.enums.SocialProvider;
 import com.infragen.infragen.domain.member.exception.MemberException;
-import com.infragen.infragen.domain.member.exception.code.MemberErrorCode;
+import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

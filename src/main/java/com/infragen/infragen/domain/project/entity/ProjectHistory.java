@@ -59,7 +59,7 @@ public class ProjectHistory extends BaseEntity {
             throw new ProjectException(ProjectErrorCode.GENERATED_FILE_CANNOT_BE_NULL);
         }
         this.generatedFileList.add(generatedFile);
-        generatedFile.assignProjectHistory(this);
+        generatedFile.setProjectHistory(this);
     }
 
     public void removeGeneratedFile(GeneratedFile generatedFile) {

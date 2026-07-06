@@ -179,6 +179,40 @@ class ProjectQueryServiceTest {
     }
 
     @Test
+    @DisplayName("소유 프로젝트 조회 - 성공")
+    void getOwnedProject_Success() {
+        Long memberId = 1L;
+        Long projectId = 100L;
+
+        Project project = Project.builder()
+            .title("Owned Project")
+            .build();
+        ReflectionTestUtils.setField(project, "id", projectId);
+
+        when(projectRepository.findByIdAndMemberId(projectId, memberId)).thenReturn(Optional.of(project));
+
+        Project result = projectQueryService.getOwnedProject(projectId, memberId);
+
+        assertEquals(projectId, result.getId());
+        verify(projectRepository).findByIdAndMemberId(projectId, memberId);
+    }
+
+    @Test
+    @DisplayName("소유 프로젝트 조회 - 없거나 권한 불일치 시 예외")
+    void getOwnedProject_NotFound_ThrowsException() {
+        Long memberId = 1L;
+        Long projectId = 100L;
+
+        when(projectRepository.findByIdAndMemberId(projectId, memberId)).thenReturn(Optional.empty());
+
+        ProjectException exception = assertThrows(ProjectException.class,
+            () -> projectQueryService.getOwnedProject(projectId, memberId));
+
+        assertEquals(ProjectErrorCode.PROJECT_NOT_FOUND, exception.getCode());
+        verify(projectRepository).findByIdAndMemberId(projectId, memberId);
+    }
+
+    @Test
     @DisplayName("프로젝트 상세 조회 - 존재하지 않거나 타인 프로젝트 조회 시 예외 발생")
     void getProjectDetail_NotFound_ThrowsException() {
         // given

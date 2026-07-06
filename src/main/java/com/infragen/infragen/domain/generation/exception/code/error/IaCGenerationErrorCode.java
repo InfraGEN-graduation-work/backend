@@ -15,6 +15,11 @@ public enum IaCGenerationErrorCode implements BaseErrorCode {
         HttpStatus.BAD_REQUEST,
         "지원하지 않는 출력 형식입니다.",
         "GENERATION400_1"
+    ),
+    INVALID_COMPONENT_STATE(
+        HttpStatus.BAD_REQUEST,
+        "인프라 코드 생성에 필요한 컴포넌트 상태가 올바르지 않습니다.",
+        "GENERATION400_2"
     );
 
     private final HttpStatus httpStatus;

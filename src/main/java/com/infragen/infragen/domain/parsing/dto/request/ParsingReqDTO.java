@@ -6,7 +6,6 @@ import java.util.List;
 @Getter
 @Setter
 public class ParsingReqDTO {
-    private Long projectId;
     private List<NodeDTO> nodes;
     private List<EdgeDTO> edges;
 }

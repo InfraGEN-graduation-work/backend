@@ -23,6 +23,7 @@ import com.infragen.infragen.domain.project.repository.ProjectHistoryRepository;
 import com.infragen.infragen.domain.project.repository.GeneratedFileRepository;
 import com.infragen.infragen.domain.project.exception.ProjectException;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
+import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -36,6 +37,7 @@ public class ProjectCommandService {
     private final ProjectHistoryRepository projectHistoryRepository;
     private final GeneratedFileRepository generatedFileRepository;
     private final MemberQueryService memberQueryService;
+    private final ProjectQueryService projectQueryService;
 
     @Transactional
     public ProjectResDTO.CreateProjectResDTO createProject(
@@ -59,8 +61,7 @@ public class ProjectCommandService {
     ) {
         log.info("프로젝트 수정 요청: id={}, memberId={}", projectId, memberId);
 
-        Project project = projectRepository.findByIdAndMemberId(projectId, memberId)
-            .orElseThrow(() -> new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
+        Project project = projectQueryService.getOwnedProject(projectId, memberId);
 
         // 프로젝트 메타정보 수정
         project.updateInfo(request.title(), request.description());
@@ -95,8 +96,7 @@ public class ProjectCommandService {
     public void deleteProject(Long projectId, Long memberId) {
         log.info("프로젝트 삭제: id={}, memberId={}", projectId, memberId);
 
-        Project project = projectRepository.findByIdAndMemberId(projectId, memberId)
-            .orElseThrow(() -> new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
+        Project project = projectQueryService.getOwnedProject(projectId, memberId);
 
         // 외래키 무결성을 위해 자식 데이터 물리 선삭제 (File -> History -> Edge -> Node)
         generatedFileRepository.deleteByProjectId(projectId);

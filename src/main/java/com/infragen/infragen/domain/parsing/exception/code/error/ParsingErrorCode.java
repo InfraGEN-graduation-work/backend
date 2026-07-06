@@ -14,11 +14,6 @@ public enum ParsingErrorCode implements BaseErrorCode {
             "node가 없습니다.",
             "PARSING400_1"
     ),
-    PROJECT_ID_MISMATCH(
-            HttpStatus.BAD_REQUEST,
-            "프로젝트 id가 다릅니다.",
-            "PARSING400_2"
-    ),
     MISSING_COMPONENT_TYPE(
             HttpStatus.BAD_REQUEST,
             "컴포넌트 설정이 누락되었습니다.",

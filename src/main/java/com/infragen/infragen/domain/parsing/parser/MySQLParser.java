@@ -38,6 +38,15 @@ public class MySQLParser implements ComponentParser {
         if (dbPass == null || dbPass.length() < 8) {
             throw new ParsingException(ParsingErrorCode.INVALID_DB_PASSWORD);
         }
+        if (imageVersion == null || imageVersion.isBlank()) {
+            throw new ParsingException(ParsingErrorCode.MISSING_MYSQL_IMAGE_VERSION);
+        }
+        if (username == null || username.isBlank()) {
+            throw new ParsingException(ParsingErrorCode.MISSING_MYSQL_USERNAME);
+        }
+        if (userPass == null || userPass.isBlank()) {
+            throw new ParsingException(ParsingErrorCode.MISSING_MYSQL_USER_PASSWORD);
+        }
 
         float posX = node.getPositionX() != null ? node.getPositionX() : 0f;
         float posY = node.getPositionY() != null ? node.getPositionY() : 0f;
@@ -53,7 +62,7 @@ public class MySQLParser implements ComponentParser {
             .id(node.getNodeId())
             .posX(posX)
             .posY(posY)
-            .imageVersion(imageVersion != null ? imageVersion : "")
+            .imageVersion(imageVersion)
             .containerName(containerName != null ? containerName : "")
             .env(env)
             .port(port)

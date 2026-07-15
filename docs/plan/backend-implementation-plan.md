@@ -2,7 +2,7 @@
 
 > 기준 문서: `AGENTS.md`, `docs/infra-gen-project-overview.md`, `docs/roadmap/README.md`
 >
-> 이 문서는 `backend-generation-execution-plan.md`와 `backend-implementation-plan.md`의 내용을 통합한 단일 기준 실행 계획이다.
+> 이 문서는 기존 실행 계획을 통합한 단일 기준 실행 계획이다.
 > 로드맵은 상태를, 본 문서는 실제 실행 순서와 기술 계약을 담당한다.
 
 ## 1. 목적
@@ -32,6 +32,7 @@
 - 로컬 개발용 `docker-compose.yml`과 호스트용 `.env` 생성 흐름이 있다.
 - `GeneratedFile.content` 저장과 생성 이력의 원자 저장이 반영되어 있다.
 - Swagger 문서와 MockMvc 기반 정리 작업은 일부 진행 중이다.
+- MySQL 파서의 필수값 검증과 단위 테스트가 보강되었다.
 - ZIP 다운로드는 선택 과제로 남아 있다.
 - Dockerfile과 Terraform 기반 클라우드 배포는 아직 본격 착수 전이다.
 

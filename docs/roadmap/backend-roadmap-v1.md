@@ -133,7 +133,7 @@ IaCGenerationService (OutputFormat)
 ## 5. P0 — Parsing 정합성 검증 현황 (황상임)
 
 프론트 `validation.ts`(git: `a6acb3c`) 기준과 백엔드 구현을 대조한 결과입니다.  
-**요약: 그래프·포트·Spring Boot 핵심 필드는 대부분 구현됨. MySQL 필수 env 일부·파서 단위 테스트가 남음.**
+**요약: 그래프·포트·Spring Boot 핵심 필드는 대부분 구현됨. MySQL 필수 env 검증과 파서 단위 테스트가 보강됨.**
 
 ### 공통 (`ParsingService` · `ValidateGraphStructure`)
 
@@ -166,15 +166,14 @@ IaCGenerationService (OutputFormat)
 |-----------|-----------|------|--------|------|
 | `env.databaseName` 누락·형식 | `PARSING400_6` | ✅ | — | blank도 동일 코드 (누락 전용 코드 없음) |
 | `env.rootPassword` 8자 미만 | `PARSING400_7` | ✅ | — | null·짧은 값 거부 |
-| `env.username` 누락 | — | ❌ | — | 프론트는 필수. **미구현** |
-| `env.userPassword` 누락 | — | ❌ | — | 프론트는 필수. **미구현** |
-| `imageVersion` 누락 | — | ❌ | — | 프론트는 필수. 빈 문자열 통과 |
+| `env.username` 누락 | `PARSING400_18` | ✅ | ✅ `MySQLParserTest` | 누락 시 전용 코드 반환 |
+| `env.userPassword` 누락 | `PARSING400_19` | ✅ | ✅ `MySQLParserTest` | 누락 시 전용 코드 반환 |
+| `imageVersion` 누락 | `PARSING400_17` | ✅ | ✅ `MySQLParserTest` | 빈 문자열도 동일 코드 |
 | `containerName` / `volumeName` | — | ✅ optional | — | null → `""` |
 
 ### P0 남은 작업 (황상임)
 
-- [ ] MySQL `username` · `userPassword` · `imageVersion` 필수 검증 + `ParsingErrorCode` 추가
-- [ ] `SpringBootParserTest` · `MySQLParserTest` (또는 `ParsingServiceTest` 보강) — `400_6~7`, `400_12~13` 단위 테스트
+- [ ] `SpringBootParserTest` 추가 또는 `ParsingServiceTest` 보강 — `400_12~13` 단위 테스트
 - [ ] (선택) 누락 vs 형식 오류 메시지 분리 (`MISSING_*` vs `INVALID_*`)
 
 ### P0 완료된 기반 (B0에 포함됐던 항목)
@@ -615,6 +614,7 @@ B0~B3 완료 후 별도 Phase:
 | 2026-06-21 | 패키지 구조 반영 (`parser/`·`validator/`·`generator/`), `ParsingResultConverter`, 엣지 방향 계약 수정 (MySQL→Spring Boot), `MySQLParser` null 방어 |
 | 2026-06-21 | B0 보강: `PARSING400_14~16`, `ValidateGraphStructureTest`·`ParsingServiceTest` 추가. **B0 PR → B1** |
 | 2026-06-22 | 역할 분담(황상임·P0 / 최유성·B1+) 반영. P0 검증 현황 매트릭스 추가. MySQL username·userPassword·imageVersion 미구현 명시. B4 ZIP 선택 항목 추가 |
+| 2026-07-14 | MySQLParser 필수값 검증 보강: `imageVersion` · `username` · `userPassword` 전용 코드 추가, `MySQLParserTest` 반영 |
 | 2026-06-22 | **B1 목표 변경**: `ComposeServiceRenderer`/`DatabaseEnvContributor` 전략. B1-1~B1-6 단계 표 |
 | 2026-06-22 | 계획 검토 반영: B1 스코프 명시, parsing/generation 미지원 구분, 신규 타입 체크리스트, 다중 Spring·CACHE B1 이후, 채팅별 문서 첨부 가이드, B1-1b ComposeYamlSupport |
 | 2026-06-24 | **생성 목표 확정**: LOCAL_DEV(compose=의존 인프라만, 호스트 `.env`) vs CLOUD_DEPLOY(Dockerfile+TF). B1.5·B-TF Phase 추가. Spring compose 블록·프론트 golden 전체 스택 **목표에서 제외** |

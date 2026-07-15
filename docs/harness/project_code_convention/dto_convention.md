@@ -78,18 +78,11 @@ public record Detail(
         String email,
         String name
 ) {
-    public static Detail from(Member member) {
-        return new Detail(
-                member.getId(),
-                member.getEmail(),
-                member.getName()
-        );
-    }
 }
 ```
 - Controller에서 Entity를 직접 반환하지 않는다.
-- 단순 변환은 응답 record의 `from`, `of` 메서드로 처리할 수 있다.
-- 복잡한 조합은 Service 또는 Mapper에서 변환한다.
+- DTO 내부에 `from`, `of` 등의 변환 메서드를 두지 않는다.
+- Entity와 DTO 사이의 변환 및 응답 조립은 Converter에서 처리한다.
 - 민감 정보와 불필요한 연관관계를 노출하지 않는다.
 
 ## 6. Controller 사용

@@ -83,6 +83,21 @@ public enum ParsingErrorCode implements BaseErrorCode {
             HttpStatus.BAD_REQUEST,
             "연결선의 source 또는 target이 누락되었습니다.",
             "PARSING400_16"
+    ),
+    MISSING_MYSQL_IMAGE_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "MySQL 이미지 버전이 누락되었습니다.",
+            "PARSING400_17"
+    ),
+    MISSING_MYSQL_USERNAME(
+            HttpStatus.BAD_REQUEST,
+            "MySQL 사용자 이름이 누락되었습니다.",
+            "PARSING400_18"
+    ),
+    MISSING_MYSQL_USER_PASSWORD(
+            HttpStatus.BAD_REQUEST,
+            "MySQL 사용자 비밀번호가 누락되었습니다.",
+            "PARSING400_19"
     );
 
     private final HttpStatus httpStatus;

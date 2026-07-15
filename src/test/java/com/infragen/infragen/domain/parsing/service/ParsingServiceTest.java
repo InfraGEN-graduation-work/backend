@@ -40,10 +40,13 @@ class ParsingServiceTest {
     @Test
     @DisplayName("유효한 요청 — 파싱 성공")
     void parsing_ValidRequest_ReturnsComponents() {
+        // given
         ParsingReqDTO request = validRequest();
 
+        // when
         ParsingResultDTO result = parsingService.parsing(request, 1L);
 
+        // then
         assertEquals(1L, result.getProjectId());
         assertEquals(2, result.getComponents().size());
         assertEquals(1, result.getEdges().size());
@@ -52,35 +55,42 @@ class ParsingServiceTest {
     @Test
     @DisplayName("노드 없음 — PARSING400_1")
     void parsing_EmptyNodes_Throws() {
+        // given
         ParsingReqDTO request = new ParsingReqDTO();
         request.setNodes(List.of());
 
+        // when
         ParsingException exception = assertThrows(
             ParsingException.class,
             () -> parsingService.parsing(request, 1L)
         );
 
+        // then
         assertEquals(ParsingErrorCode.EMPTY_NODES, exception.getCode());
     }
 
     @Test
     @DisplayName("포트 중복 — PARSING400_4")
     void parsing_DuplicatePort_Throws() {
+        // given
         ParsingReqDTO request = new ParsingReqDTO();
         request.setNodes(List.of(mysqlNode("node-1", 8080), springBootNode("node-2", 8080)));
         request.setEdges(List.of(edge("node-1", "node-2")));
 
+        // when
         ParsingException exception = assertThrows(
             ParsingException.class,
             () -> parsingService.parsing(request, 1L)
         );
 
+        // then
         assertEquals(ParsingErrorCode.DUPLICATE_PORT, exception.getCode());
     }
 
     @Test
     @DisplayName("순환 참조 — PARSING400_9")
     void parsing_CycleDetected_Throws() {
+        // given
         ParsingReqDTO request = new ParsingReqDTO();
         request.setNodes(List.of(mysqlNode("node-1", 3306), mysqlNode("node-2", 3307)));
         request.setEdges(List.of(
@@ -88,11 +98,13 @@ class ParsingServiceTest {
             edge("node-2", "node-1")
         ));
 
+        // when
         ParsingException exception = assertThrows(
             ParsingException.class,
             () -> parsingService.parsing(request, 1L)
         );
 
+        // then
         assertEquals(ParsingErrorCode.CYCLE_DETECTED, exception.getCode());
     }
 

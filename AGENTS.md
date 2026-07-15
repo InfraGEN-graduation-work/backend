@@ -30,6 +30,7 @@ Use these as the default entry points:
 - `docs/harness/project_code_convention/dto_convention.md` -> request/response DTO layout and naming
 - `docs/harness/project_code_convention/converter_convention.md` -> entity/DTO conversion rules
 - `docs/harness/project_code_convention/exception_convention.md` -> domain error/success code rules
+- `docs/harness/project_code_convention/testing_convention.md` -> test structure, AAA comments, Mockito usage, and test naming rules
 
 `docs/` is the project reference library.
 

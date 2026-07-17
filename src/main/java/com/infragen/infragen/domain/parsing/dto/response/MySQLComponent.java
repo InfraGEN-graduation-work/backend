@@ -1,6 +1,7 @@
 package com.infragen.infragen.domain.parsing.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import com.infragen.infragen.domain.parsing.dto.response.env.MySQLEnvComponent;
 import com.infragen.infragen.global.enums.ComponentType;
 
 import lombok.Builder;

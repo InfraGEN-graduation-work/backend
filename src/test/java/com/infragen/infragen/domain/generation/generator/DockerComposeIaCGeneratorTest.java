@@ -18,7 +18,7 @@ import com.infragen.infragen.domain.generation.generator.compose.MysqlComposeSer
 import com.infragen.infragen.domain.generation.generator.compose.MysqlHostAppEnvContributor;
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
-import com.infragen.infragen.domain.parsing.dto.response.MySQLEnvComponent;
+import com.infragen.infragen.domain.parsing.dto.response.env.MySQLEnvComponent;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.dto.response.SpringBootComponent;
 

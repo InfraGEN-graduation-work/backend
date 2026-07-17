@@ -5,7 +5,7 @@ import org.springframework.stereotype.Component;
 import com.infragen.infragen.domain.parsing.dto.request.NodeDTO;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
-import com.infragen.infragen.domain.parsing.dto.response.MySQLEnvComponent;
+import com.infragen.infragen.domain.parsing.dto.response.env.MySQLEnvComponent;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
 import com.infragen.infragen.global.enums.ComponentType;

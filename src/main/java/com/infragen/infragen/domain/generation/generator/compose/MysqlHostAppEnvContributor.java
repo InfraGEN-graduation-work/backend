@@ -6,7 +6,7 @@ import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
-import com.infragen.infragen.domain.parsing.dto.response.MySQLEnvComponent;
+import com.infragen.infragen.domain.parsing.dto.response.env.MySQLEnvComponent;
 import com.infragen.infragen.global.enums.ComponentType;
 
 @Component

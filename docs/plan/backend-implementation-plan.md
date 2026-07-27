@@ -58,16 +58,62 @@
 
 ### 3.3 CLOUD_DEPLOY 출력
 
-- Dockerfile은 runtime-only 기준으로 설계한다.
-- Terraform은 plan 가능한 스캐폴드 수준에서 시작한다.
-- AWS RDS, ECS, ECR, 네트워크, 실행 역할 등을 단계적으로 분리한다.
-- `apply_ready=false`와 non-runnable 경고를 명시적으로 유지한다.
+- Dockerfile은 최종 실행 이미지가 runtime-only가 되도록 설계한다.
+- Terraform은 AWS EC2와 OCI Compute Instance를 대상으로 하는 plan 가능한 스캐폴드 수준에서 시작한다.
+- 기본 산출물은 인스턴스, 최소 네트워크·보안 규칙, 공인 IP, Docker 설치 및 Compose 실행 bootstrap으로 제한한다.
+- RDS, ECS, ECR, Load Balancer, 고가용성, 자동 확장은 현재 범위에서 제외한다.
+- Terraform 산출물은 기본적으로 `apply_ready=false`와 non-runnable 경고를 명시한다.
+- 실제 서비스 배포는 기존 OCI VM + Docker Compose CD를 기준으로 하며, Terraform apply는 별도 선택 과제로 둔다.
 
 ### 3.4 Redis LOCAL_DEV
 
 - 이미지, 컨테이너, 포트, 볼륨 정도만 모델링한다.
 - password, ACL, TLS는 넣지 않는다.
 - 호스트 앱용 `.env`에 localhost 기반 Redis 값을 생성한다.
+
+### 3.5 CI/CD 파이프라인
+
+- CI/CD는 GitHub Actions를 기준으로 구성한다.
+- 현재 기준선은 `.github/workflows/deploy.yml`의 `develop` push → Gradle test → Docker 이미지 build/push → OCI VM SSH 배포 → `/health` 확인 흐름이다.
+- 기존 흐름은 유지하되, Pull Request 검증과 실제 배포를 논리적으로 분리한다.
+- Pull Request에서는 Java 21 빌드, 단위 테스트, Testcontainers 통합 테스트, Docker 이미지 build 검증, Terraform `fmt`·`validate`를 수행한다.
+- `develop` push에서는 검증을 통과한 이미지를 테스트 환경에 배포한다.
+- `main` 또는 release tag에서는 GitHub Environment 승인 후 배포한다.
+- Docker 이미지는 `latest`를 배포 기준으로 사용하지 않고 commit SHA 또는 digest를 사용한다. 한 번 빌드한 이미지를 검증·배포 단계에서 동일하게 승격한다.
+- 배포 후 `/health`를 호출하고, 실패하면 컨테이너 로그를 남긴 뒤 이전 이미지 tag로 복구할 수 있어야 한다.
+- 동시 배포 방지를 위해 workflow concurrency와 배포 timeout을 설정한다.
+- 프로젝트 백엔드의 CI/CD와 사용자가 생성하는 Terraform 산출물의 apply는 분리한다. CI/CD가 사용자별 생성 인프라를 자동으로 apply하지 않는다.
+
+#### 3.5.1 졸업작품 범위
+
+- 실제 CD 배포 대상은 현재 구성된 OCI Compute VM + Docker Compose를 우선한다.
+- AWS와 OCI는 Compute Instance 기반 Terraform 산출물로만 지원한다.
+- AWS는 EC2, OCI는 Compute Instance를 대상으로 하며, 기본 네트워크·보안 규칙·공인 IP·Docker 설치·Compose 실행 bootstrap까지만 포함한다.
+- RDS, ECS, ECR, Load Balancer, 고가용성, 자동 확장은 범위에서 제외한다.
+- AWS와 OCI 모두 Terraform `fmt`·`validate` 및 생성 결과 golden 검증을 수행한다.
+- 두 클라우드 모두 실제 `apply`하지 않는다. 일정상 필요하면 한 클라우드만 실제 배포까지 검증하고, 다른 클라우드는 plan 가능한 산출물로 검증한다.
+- Compute Instance 내부에서는 Docker Compose로 Spring Boot, MySQL, Redis, Nginx를 실행할 수 있다. 단일 인스턴스 구조는 졸업작품용 단일 노드 배포이며 운영 고가용성 구조가 아님을 문서에 명시한다.
+
+#### 3.5.2 파이프라인 목표 흐름
+
+```text
+Pull Request
+  → build · unit test · Testcontainers integration test · Docker build · Terraform validate
+
+develop push
+  → image build · registry push · OCI staging deploy · health check
+
+main/release tag
+  → environment approval · 동일 image digest 배포 · smoke test · rollback
+```
+
+#### 3.5.3 CI/CD 전제 조건
+
+- GitHub repository branch protection에서 CI 필수 체크 통과를 merge 조건으로 설정한다.
+- GitHub Actions에는 Docker 실행 권한이 필요하며, Testcontainers 통합 테스트가 사용하는 MySQL 이미지와 Redis 테스트 설정을 명시한다.
+- Docker Hub 또는 GitHub Container Registry 인증 정보, OCI SSH 키, 서버 주소, 운영 `.env`는 GitHub Secrets 또는 Environment Secrets로 관리한다.
+- Terraform 코드와 workflow에 클라우드 자격 증명·DB 비밀번호·JWT secret을 직접 저장하지 않는다.
+- 서버 배포용 Compose는 immutable image tag를 주입받고, `latest` 의존을 제거한다.
 
 ## 4. 세부 실행 순서
 
@@ -97,7 +143,7 @@
 
 - `terraform version -json`이 정확히 고정 버전인지 확인한다.
 - no data source, no account lookup, no apply를 유지한다.
-- ECS DB secret/runtime credential은 넣지 않는다.
+- Terraform에 DB 비밀값이나 런타임 자격증명을 넣지 않는다.
 
 ### Gate 3: Redis LOCAL_DEV
 
@@ -159,7 +205,7 @@
 - Java 17/21 이미지 digest는 고정한다.
 - Terraform CLI는 `1.13.5`, AWS provider는 `6.22.0`을 사용한다.
 - `skip_credentials_validation`, `skip_requesting_account_id`, `skip_metadata_api_check`를 활성화한다.
-- `apply_ready=false`를 명시하고, ECS에 DB 비밀값이나 런타임 자격증명을 넣지 않는다.
+- `apply_ready=false`를 명시하고, Terraform에 DB 비밀값이나 런타임 자격증명을 넣지 않는다.
 
 ### 6.4 Redis 계약
 

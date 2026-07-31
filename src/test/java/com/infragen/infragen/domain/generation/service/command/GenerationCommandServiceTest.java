@@ -3,9 +3,8 @@ package com.infragen.infragen.domain.generation.service.command;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -119,11 +118,6 @@ class GenerationCommandServiceTest {
         assertEquals(ParsingErrorCode.EMPTY_NODES, exception.getCode());
         verify(projectQueryService).getOwnedProject(projectId, memberId);
         verify(parsingService).parsing(request, projectId);
-        verify(iaCGenerationService, never()).generateDockerCompose(eq(null));
-        verify(projectHistoryCommandService, never()).saveGeneratedHistory(
-            eq(projectId),
-            eq(memberId),
-            eq(List.of())
-        );
+        verifyNoInteractions(iaCGenerationService, projectHistoryCommandService);
     }
 }

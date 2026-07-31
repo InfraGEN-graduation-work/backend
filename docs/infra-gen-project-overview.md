@@ -32,9 +32,9 @@ InfraGEN은 사용자가 웹 캔버스에서 인프라 노드와 연결 관계�
 - 장기적으로는 Dockerfile과 Terraform 기반의 클라우드 배포 산출물로 확장한다.
 - 다만 현재 기준에서는 로컬 개발용 생성 흐름이 우선이다.
 
-## 5. 백엔드 핵심 역할
+## 5. 서비스 핵심 역할
 
-백엔드는 `parsing -> generation -> project history` 흐름을 담당한다.
+InfraGEN은 다음 흐름으로 사용자의 인프라 설계를 결과물로 연결한다.
 
 - `parsing`: 그래프 구조, 포트, 필수 값, 연결 방향을 검증한다.
 - `generation`: 검증된 입력을 바탕으로 IaC 파일을 생성한다.
@@ -42,21 +42,19 @@ InfraGEN은 사용자가 웹 캔버스에서 인프라 노드와 연결 관계�
 
 ### 주요 책임
 
-- 프로젝트 소유권 확인
 - 입력 그래프 검증
 - 로컬 개발용 compose 및 env 생성
 - 생성 결과 영속화
-- API 응답 표준화
+- 생성 결과와 이력 제공
 
 ## 6. 도메인 범위
 
-### 현재 직접 다루는 요소
+### 주요 개념
 
-- `Project`
-- `ProjectHistory`
-- `GeneratedFile`
-- `ParsingReqDTO` / `ParsingResultDTO`
-- `GenerateResDTO`
+- 프로젝트: 하나의 인프라 설계와 생성 결과를 묶는 단위
+- 생성 이력: 프로젝트에서 생성된 결과의 버전과 메타데이터
+- 생성 파일: 생성 결과를 구성하는 파일과 내용
+- 설계 그래프: 사용자가 배치한 노드와 연결 관계를 표현한 입력
 
 ### 주요 입력 노드
 
@@ -68,41 +66,3 @@ InfraGEN은 사용자가 웹 캔버스에서 인프라 노드와 연결 관계�
 - `docker-compose.yml`
 - `.env`
 - 생성 이력 데이터
-
-## 7. 구현 기준과 제약
-
-- 백엔드 API는 `POST /api/v1/projects/{projectId}/generate` 형태를 사용한다.
-- `projectId`는 path variable만 사용하고, request body에는 넣지 않는다.
-- 생성 실패는 generation 예외로만 처리하고, 파싱 검증은 parsing 계층에서만 담당한다.
-- Swagger 문서는 controller docs 인터페이스에 둔다.
-- Request DTO는 outer class + nested record 형태를 따른다.
-- Converter는 static 메서드 중심으로 유지한다.
-
-## 8. 현재 구현 상태 요약
-
-로드맵 기준으로 다음 상태다.
-
-- Generate API 골격과 패키지 분리는 완료됐다.
-- 로컬 개발용 compose 생성과 호스트 env 생성 흐름은 구현됐다.
-- `GeneratedFile.content` 저장과 생성 이력의 원자적 저장이 반영됐다.
-- Swagger 문서와 MockMvc 테스트는 일부 진행 중이다.
-- ZIP 다운로드는 선택 과제로 남아 있다.
-- Dockerfile 및 Terraform 기반 클라우드 배포는 아직 시작 전이다.
-
-## 9. 앞으로의 작업 방향
-
-우선순위는 다음 순서가 적절하다.
-
-1. Generate API 계약과 Swagger 문서의 정합성을 최종 정리한다.
-2. MockMvc 통합 테스트와 생성 이력 저장 테스트를 보강한다.
-3. 필요 시 ZIP 다운로드를 추가한다.
-4. 이후 클라우드 배포용 Dockerfile/Terraform 작업으로 확장한다.
-
-## 10. 참고 문서
-
-- `docs/roadmap/README.md`
-- `docs/roadmap/backend-roadmap-v2.md`
-- `docs/roadmap/backend-roadmap-v1.md`
-- `docs/plan/backend-implementation-plan.md`
-- `docs/YA3조_최종보고서.md`
-- `backend/AGENTS.md`

@@ -9,6 +9,8 @@ import java.util.Map;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.infragen.infragen.domain.parsing.dto.request.NodeDTO;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
@@ -63,6 +65,27 @@ class MySQLParserTest {
         );
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"", " "})
+    @DisplayName("imageVersion 빈 값 — MISSING_MYSQL_IMAGE_VERSION")
+    void parse_BlankImageVersion_ThrowsParsingException(String imageVersion) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("imageVersion", imageVersion);
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals(
+            ParsingErrorCode.MISSING_MYSQL_IMAGE_VERSION,
+            exception.getCode()
+        );
+    }
+
     @Test
     @DisplayName("username 누락 — MISSING_MYSQL_USERNAME")
     void parse_MissingUsername_ThrowsParsingException() {
@@ -83,12 +106,54 @@ class MySQLParserTest {
         );
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"", " "})
+    @DisplayName("username 빈 값 — MISSING_MYSQL_USERNAME")
+    void parse_BlankUsername_ThrowsParsingException(String username) {
+        // given
+        Map<String, Object> properties = validProperties();
+        env(properties).put("username", username);
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals(
+            ParsingErrorCode.MISSING_MYSQL_USERNAME,
+            exception.getCode()
+        );
+    }
+
     @Test
     @DisplayName("userPassword 누락 — MISSING_MYSQL_USER_PASSWORD")
     void parse_MissingUserPassword_ThrowsParsingException() {
         // given
         Map<String, Object> properties = validProperties();
         env(properties).remove("userPassword");
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals(
+            ParsingErrorCode.MISSING_MYSQL_USER_PASSWORD,
+            exception.getCode()
+        );
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", " "})
+    @DisplayName("userPassword 빈 값 — MISSING_MYSQL_USER_PASSWORD")
+    void parse_BlankUserPassword_ThrowsParsingException(String userPassword) {
+        // given
+        Map<String, Object> properties = validProperties();
+        env(properties).put("userPassword", userPassword);
 
         // when
         ParsingException exception = assertThrows(

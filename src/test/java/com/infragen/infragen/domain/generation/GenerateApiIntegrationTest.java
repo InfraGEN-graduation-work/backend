@@ -3,6 +3,7 @@ package com.infragen.infragen.domain.generation;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -17,9 +18,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -27,6 +26,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.mysql.MySQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
@@ -51,6 +51,7 @@ class GenerateApiIntegrationTest {
     private static final String MYSQL_IMAGE =
         "mysql:8.4.6@sha256:869218921e61d6c3c89820955d63cca42971f0e3e6c1e2792247bbd944ebc6e9";
     private static final String GENERATE_URL = "/api/v1/projects/{projectId}/generate";
+    private static final String REDIS_PASSWORD = "test-redis-password";
     private static final String REQUEST_JSON = """
         {
           "nodes": [
@@ -99,15 +100,20 @@ class GenerateApiIntegrationTest {
         .withUsername("infragen_test")
         .withPassword("infragen_test_password");
 
+    @Container
+    private static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7-alpine")
+        .withExposedPorts(6379)
+        .withCommand("redis-server", "--requirepass", REDIS_PASSWORD, "--appendonly", "yes");
+
     // 테스트 컨테이너의 DB URL, 사용자명, 비밀번호를 Spring Boot에 전달
     @DynamicPropertySource
     static void registerProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
         registry.add("spring.datasource.username", MYSQL::getUsername);
         registry.add("spring.datasource.password", MYSQL::getPassword);
-        registry.add("spring.data.redis.host", () -> "localhost");
-        registry.add("spring.data.redis.port", () -> 6379);
-        registry.add("spring.data.redis.password", () -> "test-redis-password");
+        registry.add("spring.data.redis.host", REDIS::getHost);
+        registry.add("spring.data.redis.port", REDIS::getFirstMappedPort);
+        registry.add("spring.data.redis.password", () -> REDIS_PASSWORD);
         registry.add("jwt.secret", () ->
             "test-jwt-secret-test-jwt-secret-test-jwt-secret-1234567890");
         registry.add("kakao.client-id", () -> "test-kakao-client-id");
@@ -207,6 +213,33 @@ class GenerateApiIntegrationTest {
             .countByProjectId(project.getId()));
     }
 
+    @Test
+    @DisplayName("필수 파싱값 누락 — 400 반환 및 생성 결과 미저장")
+    void generate_MissingMySqlUsername_ReturnsBadRequestWithoutSavingHistory() throws Exception {
+        // given
+        Member owner = saveMember("owner@infragen.test");
+        Project project = saveProject(owner, "invalid-project");
+        String invalidRequest = REQUEST_JSON.replace(
+            "\"username\": \"user\"",
+            "\"username\": \" \""
+        );
+
+        // when
+        ResultActions result = mockMvc.perform(post(GENERATE_URL, project.getId())
+            .with(authenticatedAs(owner))
+            .contentType(APPLICATION_JSON)
+            .content(invalidRequest));
+
+        // then
+        result
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.isSuccess").value(false))
+            .andExpect(jsonPath("$.code").value("PARSING400_18"));
+        assertEquals(0, projectHistoryRepository
+            .countByProjectId(project.getId()));
+        assertEquals(0, generatedFileRepository.count());
+    }
+
     private Member saveMember(String email) {
         return memberRepository.saveAndFlush(Member.builder()
             .email(email)
@@ -240,16 +273,6 @@ class GenerateApiIntegrationTest {
             null,
             userDetails.getAuthorities()
         );
-        SecurityContext context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(authentication);
-
-        return request -> {
-            SecurityContextHolder.setContext(context);
-            request.setAttribute(
-                RequestAttributeSecurityContextRepository.DEFAULT_REQUEST_ATTR_NAME,
-                context
-            );
-            return request;
-        };
+        return authentication(authentication);
     }
 }

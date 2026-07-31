@@ -41,3 +41,7 @@ out/
 .env
 
 .gjc
+
+docs/plan/
+docs/harness/personal_convention/
+docs/handoff/

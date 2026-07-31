@@ -25,6 +25,7 @@ Use these as the default entry points:
 - `docs/roadmap/backend-roadmap-v1.md` -> archive of current state and history
 - `docs/infra-gen-project-overview.md` -> project goal and product context
 - `docs/harness/personal_convention/work_scope_convention.md` -> work scope limits
+- `docs/harness/personal_convention/comment-style.md` -> comment and Javadoc style rules
 - `docs/harness/project_code_convention/controller_convention.md` -> controller, response, validation, and Swagger rules
 - `docs/harness/project_code_convention/service_convention.md` -> CQRS, transactions, service responsibilities, and exceptions
 - `docs/harness/project_code_convention/dto_convention.md` -> request/response DTO layout and naming

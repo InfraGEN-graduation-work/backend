@@ -18,27 +18,26 @@ Read only the documents relevant to the task before making substantial changes.
 
 Use these as the default entry points:
 
-- `docs/plan/README.md` -> execution plan index
 - `docs/plan/backend-implementation-plan.md` -> single source of truth for execution order and technical contracts
-- `docs/roadmap/README.md` -> roadmap index
-- `docs/roadmap/backend-roadmap-v2.md` -> active roadmap and remaining priorities
-- `docs/roadmap/backend-roadmap-v1.md` -> archive of current state and history
+- `docs/handoff/backend-context-handoff.md` -> cross-session context and current work state
 - `docs/infra-gen-project-overview.md` -> project goal and product context
 - `docs/harness/personal_convention/work_scope_convention.md` -> work scope limits
+- `docs/harness/personal_convention/comment-style.md` -> comment and Javadoc style rules
 - `docs/harness/project_code_convention/controller_convention.md` -> controller, response, validation, and Swagger rules
 - `docs/harness/project_code_convention/service_convention.md` -> CQRS, transactions, service responsibilities, and exceptions
 - `docs/harness/project_code_convention/dto_convention.md` -> request/response DTO layout and naming
 - `docs/harness/project_code_convention/converter_convention.md` -> entity/DTO conversion rules
 - `docs/harness/project_code_convention/exception_convention.md` -> domain error/success code rules
+- `docs/harness/project_code_convention/testing_convention.md` -> test structure, AAA comments, Mockito usage, and test naming rules
 
 `docs/` is the project reference library.
 
 - `plan/` covers execution details and technical contracts.
-- `roadmap/` covers status and priorities.
+- `handoff/` covers cross-session context and current work state.
 - `harness/` covers work boundaries and coding conventions.
 - `infra-gen-project-overview.md` provides the project-level summary.
 
-Start from the relevant index instead of reading everything. For planning work, go `docs/plan/README.md` -> `docs/plan/backend-implementation-plan.md`. For status work, go `docs/roadmap/README.md` -> `docs/roadmap/backend-roadmap-v2.md`.
+Start from the relevant document instead of reading everything. For planning work, read `docs/plan/backend-implementation-plan.md`. For cross-session status, read `docs/handoff/backend-context-handoff.md`.
 
 For authentication work, inspect the existing JWT utility, security filters, exception codes, and member entity/repository together. JWT subjects currently represent member IDs; inactive or soft-deleted members must not be authenticated.
 

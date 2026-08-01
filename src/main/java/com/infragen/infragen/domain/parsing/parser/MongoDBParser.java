@@ -4,8 +4,8 @@ import org.springframework.stereotype.Component;
 
 import com.infragen.infragen.domain.parsing.dto.request.NodeDTO;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
-import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
-import com.infragen.infragen.domain.parsing.dto.response.env.MySQLEnvComponent;
+import com.infragen.infragen.domain.parsing.dto.response.MongoDBComponent;
+import com.infragen.infragen.domain.parsing.dto.response.env.MongoDBEnvComponent;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
 import com.infragen.infragen.global.enums.ComponentType;
@@ -13,11 +13,11 @@ import com.infragen.infragen.global.enums.ComponentType;
 import tools.jackson.databind.JsonNode;
 
 @Component
-public class MySQLParser implements ComponentParser {
+public class MongoDBParser implements ComponentParser {
 
     @Override
     public ComponentType getSupportedType() {
-        return ComponentType.MYSQL;
+        return ComponentType.MONGODB;
     }
 
     @Override
@@ -27,38 +27,33 @@ public class MySQLParser implements ComponentParser {
         String volumeName = props.path("volumeName").asString();
 
         JsonNode envNode = props.path("env");
-        String dbName = envNode.path("databaseName").asString();
-        String dbPass = envNode.path("rootPassword").asString();
-        String userPass = envNode.path("userPassword").asString();
-        String username = envNode.path("username").asString();
+        String rootUsername = envNode.path("rootUsername").asString();
+        String rootPassword = envNode.path("rootPassword").asString();
+        String databaseName = envNode.path("databaseName").asString();
 
-        if (dbName == null || dbName.isBlank() || !dbName.matches("^[a-zA-Z0-9_]+$")) {
+        if (databaseName == null || databaseName.isBlank() || !databaseName.matches("^[a-zA-Z0-9_]+$")) {
             throw new ParsingException(ParsingErrorCode.INVALID_DB_NAME);
         }
-        if (dbPass == null || dbPass.length() < 8) {
+        if (rootPassword == null || rootPassword.length() < 8) {
             throw new ParsingException(ParsingErrorCode.INVALID_DB_PASSWORD);
         }
         if (imageVersion == null || imageVersion.isBlank()) {
-            throw new ParsingException(ParsingErrorCode.MISSING_MYSQL_IMAGE_VERSION);
+            throw new ParsingException(ParsingErrorCode.MISSING_MONGODB_IMAGE_VERSION);
         }
-        if (username == null || username.isBlank()) {
-            throw new ParsingException(ParsingErrorCode.MISSING_MYSQL_USERNAME);
-        }
-        if (userPass == null || userPass.isBlank()) {
-            throw new ParsingException(ParsingErrorCode.MISSING_MYSQL_USER_PASSWORD);
+        if (rootUsername == null || rootUsername.isBlank()) {
+            throw new ParsingException(ParsingErrorCode.MISSING_MONGODB_ROOT_USERNAME);
         }
 
         float posX = node.getPositionX() != null ? node.getPositionX() : 0f;
         float posY = node.getPositionY() != null ? node.getPositionY() : 0f;
 
-        MySQLEnvComponent env = MySQLEnvComponent.builder()
-                .databaseName(dbName)
-                .rootPassword(dbPass)
-                .userPassword(userPass)
-                .username(username)
+        MongoDBEnvComponent env = MongoDBEnvComponent.builder()
+                .rootUsername(rootUsername)
+                .rootPassword(rootPassword)
+                .databaseName(databaseName)
                 .build();
 
-        return MySQLComponent.builder()
+        return MongoDBComponent.builder()
                 .id(node.getNodeId())
                 .posX(posX)
                 .posY(posY)

@@ -14,9 +14,7 @@ import tools.jackson.databind.JsonNode;
 @Component
 public class SpringBootParser implements ComponentParser {
     @Override
-    public ComponentType getSupportedType() {
-        return ComponentType.SPRING_BOOT;
-    }
+    public ComponentType getSupportedType() { return ComponentType.SPRING_BOOT; }
 
     @Override
     public BaseComponent parse(NodeDTO node, JsonNode props, int port) {

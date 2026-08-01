@@ -36,7 +36,7 @@ public enum ParsingErrorCode implements BaseErrorCode {
     ),
     INVALID_DB_PASSWORD(
             HttpStatus.BAD_REQUEST,
-            "MySQL 루트 비밀번호는 최소 8자리 이상이어야 합니다.",
+            "데이터베이스 비밀번호는 최소 8자리 이상이어야 합니다.",
             "PARSING400_7"
     ),
     INVALID_EDGE_NODE(
@@ -83,8 +83,57 @@ public enum ParsingErrorCode implements BaseErrorCode {
             HttpStatus.BAD_REQUEST,
             "연결선의 source 또는 target이 누락되었습니다.",
             "PARSING400_16"
+    ),
+    MISSING_MYSQL_IMAGE_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "MySQL 이미지 버전이 누락되었습니다.",
+            "PARSING400_17"
+    ),
+    MISSING_MYSQL_USERNAME(
+            HttpStatus.BAD_REQUEST,
+            "MySQL 사용자 이름이 누락되었습니다.",
+            "PARSING400_18"
+    ),
+    MISSING_MYSQL_USER_PASSWORD(
+            HttpStatus.BAD_REQUEST,
+            "MySQL 사용자 비밀번호가 누락되었습니다.",
+            "PARSING400_19"
+    ),
+    MISSING_POSTGRESQL_IMAGE_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "PostgreSQL 이미지 버전이 누락되었습니다.",
+            "PARSING400_20"
+    ),
+    MISSING_POSTGRESQL_USERNAME(
+            HttpStatus.BAD_REQUEST,
+            "PostgreSQL 사용자 이름이 누락되었습니다.",
+            "PARSING400_21"
+    ),
+    MISSING_MONGODB_IMAGE_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "MongoDB 이미지 버전이 누락되었습니다.",
+            "PARSING400_22"
+    ),
+    MISSING_MONGODB_ROOT_USERNAME(
+            HttpStatus.BAD_REQUEST,
+            "MongoDB root 사용자명이 누락되었습니다.",
+            "PARSING400_23"
+    ),
+    MISSING_REDIS_IMAGE_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "Redis 이미지 버전이 누락되었습니다.",
+            "PARSING400_24"
+    ),
+    MISSING_NGINX_IMAGE_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "Nginx 이미지 버전이 누락되었습니다.",
+            "PARSING400_25"
+    ),
+    MISSING_APACHE_IMAGE_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "Apache 이미지 버전이 누락되었습니다.",
+            "PARSING400_26"
     );
-
     private final HttpStatus httpStatus;
     private final String message;
     private final String code;

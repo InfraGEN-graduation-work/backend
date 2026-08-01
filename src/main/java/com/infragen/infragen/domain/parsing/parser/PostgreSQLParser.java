@@ -1,11 +1,10 @@
 package com.infragen.infragen.domain.parsing.parser;
-
 import org.springframework.stereotype.Component;
 
 import com.infragen.infragen.domain.parsing.dto.request.NodeDTO;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
-import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
-import com.infragen.infragen.domain.parsing.dto.response.env.MySQLEnvComponent;
+import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLComponent;
+import com.infragen.infragen.domain.parsing.dto.response.env.PostgreSQLEnvComponent;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
 import com.infragen.infragen.global.enums.ComponentType;
@@ -13,11 +12,11 @@ import com.infragen.infragen.global.enums.ComponentType;
 import tools.jackson.databind.JsonNode;
 
 @Component
-public class MySQLParser implements ComponentParser {
+public class PostgreSQLParser implements ComponentParser {
 
     @Override
     public ComponentType getSupportedType() {
-        return ComponentType.MYSQL;
+        return ComponentType.POSTGRESQL;
     }
 
     @Override
@@ -27,38 +26,34 @@ public class MySQLParser implements ComponentParser {
         String volumeName = props.path("volumeName").asString();
 
         JsonNode envNode = props.path("env");
-        String dbName = envNode.path("databaseName").asString();
-        String dbPass = envNode.path("rootPassword").asString();
-        String userPass = envNode.path("userPassword").asString();
+        String databaseName = envNode.path("databaseName").asString();
         String username = envNode.path("username").asString();
+        String password = envNode.path("password").asString();
 
-        if (dbName == null || dbName.isBlank() || !dbName.matches("^[a-zA-Z0-9_]+$")) {
+        if (databaseName == null || databaseName.isBlank() || !databaseName.matches("^[a-zA-Z0-9_]+$")) {
             throw new ParsingException(ParsingErrorCode.INVALID_DB_NAME);
         }
-        if (dbPass == null || dbPass.length() < 8) {
+        if (password == null || password.length() < 8) {
             throw new ParsingException(ParsingErrorCode.INVALID_DB_PASSWORD);
         }
         if (imageVersion == null || imageVersion.isBlank()) {
-            throw new ParsingException(ParsingErrorCode.MISSING_MYSQL_IMAGE_VERSION);
+            throw new ParsingException(ParsingErrorCode.MISSING_POSTGRESQL_IMAGE_VERSION);
         }
         if (username == null || username.isBlank()) {
-            throw new ParsingException(ParsingErrorCode.MISSING_MYSQL_USERNAME);
-        }
-        if (userPass == null || userPass.isBlank()) {
-            throw new ParsingException(ParsingErrorCode.MISSING_MYSQL_USER_PASSWORD);
+            throw new ParsingException(ParsingErrorCode.MISSING_POSTGRESQL_USERNAME);
         }
 
         float posX = node.getPositionX() != null ? node.getPositionX() : 0f;
+
         float posY = node.getPositionY() != null ? node.getPositionY() : 0f;
 
-        MySQLEnvComponent env = MySQLEnvComponent.builder()
-                .databaseName(dbName)
-                .rootPassword(dbPass)
-                .userPassword(userPass)
+        PostgreSQLEnvComponent env = PostgreSQLEnvComponent.builder()
+                .databaseName(databaseName)
                 .username(username)
+                .password(password)
                 .build();
 
-        return MySQLComponent.builder()
+        return PostgreSQLComponent.builder()
                 .id(node.getNodeId())
                 .posX(posX)
                 .posY(posY)

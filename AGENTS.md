@@ -18,8 +18,7 @@ Read only the documents relevant to the task before making substantial changes.
 
 Use these as the default entry points:
 
-- `docs/plan/backend-implementation-plan.md` -> single source of truth for execution order and technical contracts
-- `docs/handoff/backend-context-handoff.md` -> cross-session context and current work state
+- `docs/handoff/backend-context-handoff.md` -> single source of truth for execution order, technical contracts, cross-session context, and current work state
 - `docs/infra-gen-project-overview.md` -> project goal and product context
 - `docs/harness/personal_convention/work_scope_convention.md` -> work scope limits
 - `docs/harness/personal_convention/comment-style.md` -> comment and Javadoc style rules
@@ -32,12 +31,11 @@ Use these as the default entry points:
 
 `docs/` is the project reference library.
 
-- `plan/` covers execution details and technical contracts.
-- `handoff/` covers cross-session context and current work state.
+- `handoff/` covers execution details, technical contracts, cross-session context, and current work state.
 - `harness/` covers work boundaries and coding conventions.
 - `infra-gen-project-overview.md` provides the project-level summary.
 
-Start from the relevant document instead of reading everything. For planning work, read `docs/plan/backend-implementation-plan.md`. For cross-session status, read `docs/handoff/backend-context-handoff.md`.
+Start from the relevant document instead of reading everything. For planning work and cross-session status, read `docs/handoff/backend-context-handoff.md`.
 
 For authentication work, inspect the existing JWT utility, security filters, exception codes, and member entity/repository together. JWT subjects currently represent member IDs; inactive or soft-deleted members must not be authenticated.
 

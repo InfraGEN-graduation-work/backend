@@ -18,6 +18,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.infragen.infragen.domain.generation.dto.response.GenerateResDTO;
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
+import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
+import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.generation.service.IaCGenerationService;
 import com.infragen.infragen.domain.parsing.dto.request.ParsingReqDTO;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
@@ -119,5 +121,36 @@ class GenerationCommandServiceTest {
         verify(projectQueryService).getOwnedProject(projectId, memberId);
         verify(parsingService).parsing(request, projectId);
         verifyNoInteractions(iaCGenerationService, projectHistoryCommandService);
+    }
+
+    @Test
+    @DisplayName("IaC 생성 실패 — 이력 저장을 호출하지 않음")
+    void generate_GenerationFailure_DoesNotSaveHistory() {
+        // given
+        Long projectId = 1L;
+        Long memberId = 2L;
+        ParsingReqDTO request = new ParsingReqDTO();
+        ParsingResultDTO parsingResult = new ParsingResultDTO();
+        IaCGenerationException generationException = new IaCGenerationException(
+            IaCGenerationErrorCode.INVALID_COMPONENT_STATE
+        );
+
+        when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(null);
+        when(parsingService.parsing(request, projectId)).thenReturn(parsingResult);
+        when(iaCGenerationService.generateDockerCompose(parsingResult))
+            .thenThrow(generationException);
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> generationCommandService.generate(projectId, request, memberId)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
+        verify(projectQueryService).getOwnedProject(projectId, memberId);
+        verify(parsingService).parsing(request, projectId);
+        verify(iaCGenerationService).generateDockerCompose(parsingResult);
+        verifyNoInteractions(projectHistoryCommandService);
     }
 }

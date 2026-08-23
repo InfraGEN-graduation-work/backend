@@ -35,16 +35,22 @@ import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import com.infragen.infragen.domain.generation.dto.response.GenerateResDTO;
+import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
+import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.generation.service.command.GenerationCommandService;
 import com.infragen.infragen.domain.member.dto.response.MemberResDTO;
 import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.parsing.dto.request.ParsingReqDTO;
+import com.infragen.infragen.domain.parsing.exception.ParsingException;
+import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
 import com.infragen.infragen.global.auth.CustomUserDetails;
+import com.infragen.infragen.global.apiPayload.handler.GeneralExceptionAdvice;
 
 @WebMvcTest(ParsingController.class)
 @ContextConfiguration(classes = {
     ParsingControllerWebTest.ControllerWebTestApplication.class,
-    ParsingController.class
+    ParsingController.class,
+    GeneralExceptionAdvice.class
 })
 @AutoConfigureMockMvc(addFilters = false)
 @DisplayName("ParsingController Web 테스트")
@@ -118,6 +124,7 @@ class ParsingControllerWebTest {
     @Test
     @DisplayName("POST /generate — 성공 시 GENERATION200_1·files·historyId 반환")
     void generate_Success() throws Exception {
+        // given
         GenerateResDTO.GenerateResultResDTO result = GenerateResDTO.GenerateResultResDTO.builder()
             .files(List.of(
                 GenerateResDTO.GeneratedFileResDTO.builder()
@@ -135,6 +142,7 @@ class ParsingControllerWebTest {
         when(generationCommandService.generate(eq(1L), any(ParsingReqDTO.class), eq(1L)))
             .thenReturn(result);
 
+        // when
         mockMvc.perform(post(GENERATE_URL, 1L)
                 .with(authenticatedAs(1L))
                 .contentType(APPLICATION_JSON)
@@ -146,7 +154,55 @@ class ParsingControllerWebTest {
             .andExpect(jsonPath("$.result.historyId").value(42))
             .andExpect(jsonPath("$.result.files.length()").value(2))
             .andExpect(jsonPath("$.result.files[0].fileName").value("docker-compose.yml"))
-            .andExpect(jsonPath("$.result.files[1].fileName").value(".env"));
+            .andExpect(jsonPath("$.result.files[0].content")
+                .value("services:\n  mysql:\n    image: mysql:8.0\n"))
+            .andExpect(jsonPath("$.result.files[1].fileName").value(".env"))
+            .andExpect(jsonPath("$.result.files[1].content")
+                .value("SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/appdb\n"));
+
+        // then
+        verify(generationCommandService).generate(eq(1L), any(ParsingReqDTO.class), eq(1L));
+    }
+
+    @Test
+    @DisplayName("POST /generate — 파싱 실패 시 PARSING400_1·400 반환")
+    void generate_ParsingFailure_ReturnsBadRequest() throws Exception {
+        // given
+        when(generationCommandService.generate(eq(1L), any(ParsingReqDTO.class), eq(1L)))
+            .thenThrow(new ParsingException(ParsingErrorCode.EMPTY_NODES));
+
+        // when
+        mockMvc.perform(post(GENERATE_URL, 1L)
+                .with(authenticatedAs(1L))
+                .contentType(APPLICATION_JSON)
+                .content(REQUEST_JSON))
+            // then
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.isSuccess").value(false))
+            .andExpect(jsonPath("$.code").value("PARSING400_1"))
+            .andExpect(jsonPath("$.message").value("node가 없습니다."));
+
+        verify(generationCommandService).generate(eq(1L), any(ParsingReqDTO.class), eq(1L));
+    }
+
+    @Test
+    @DisplayName("POST /generate — 생성 실패 시 GENERATION400_2·400 반환")
+    void generate_GenerationFailure_ReturnsBadRequest() throws Exception {
+        // given
+        when(generationCommandService.generate(eq(1L), any(ParsingReqDTO.class), eq(1L)))
+            .thenThrow(new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE));
+
+        // when
+        mockMvc.perform(post(GENERATE_URL, 1L)
+                .with(authenticatedAs(1L))
+                .contentType(APPLICATION_JSON)
+                .content(REQUEST_JSON))
+            // then
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.isSuccess").value(false))
+            .andExpect(jsonPath("$.code").value("GENERATION400_2"))
+            .andExpect(jsonPath("$.message")
+                .value("인프라 코드 생성에 필요한 컴포넌트 상태가 올바르지 않습니다."));
 
         verify(generationCommandService).generate(eq(1L), any(ParsingReqDTO.class), eq(1L));
     }

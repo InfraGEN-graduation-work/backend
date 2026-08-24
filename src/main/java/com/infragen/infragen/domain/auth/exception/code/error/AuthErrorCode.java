@@ -10,14 +10,14 @@ import org.springframework.http.HttpStatus;
 @AllArgsConstructor
 public enum AuthErrorCode implements BaseErrorCode {
     TOKEN_INVALID(
-            HttpStatus.UNAUTHORIZED,
-            "유효하지 않은 토큰입니다.",
-            "AUTH401_1"
+        HttpStatus.UNAUTHORIZED,
+        "유효하지 않은 토큰입니다.",
+        "AUTH401_1"
     ),
     TOKEN_BLACKLIST(
-            HttpStatus.UNAUTHORIZED,
-            "로그아웃된 토큰입니다.",
-            "AUTH401_2"
+        HttpStatus.UNAUTHORIZED,
+        "로그아웃된 토큰입니다.",
+        "AUTH401_2"
     ),
     TOKEN_EXPIRED(
             HttpStatus.UNAUTHORIZED,
@@ -25,19 +25,24 @@ public enum AuthErrorCode implements BaseErrorCode {
             "AUTH401_3"
     ),
     INVALID_SOCIAL_TOKEN(
-            HttpStatus.UNAUTHORIZED,
-            "유효하지 않은 소셜 토큰입니다.",
-            "AUTH401_4"
+        HttpStatus.UNAUTHORIZED,
+        "유효하지 않은 소셜 토큰입니다.",
+        "AUTH401_4"
     ),
     UNSUPPORTED_PROVIDER(
-            HttpStatus.BAD_REQUEST,
-            "지원하지 않는 소셜 로그인 제공자입니다.",
-            "AUTH400_1"
+        HttpStatus.BAD_REQUEST,
+        "지원하지 않는 소셜 로그인 제공자입니다.",
+        "AUTH400_1"
     ),
     SOCIAL_COMMUNICATION_ERROR(
             HttpStatus.INTERNAL_SERVER_ERROR,
             "소셜 서버와의 통신에 실패했습니다.",
             "AUTH500_1"
+    ),
+    UNMATCHED_EMAIL_OR_PASSWORD(
+        HttpStatus.BAD_REQUEST,
+        "이메일이나 패스워드가 틀렸습니다.",
+        "AUTH400_2"
     ),
     ;
 

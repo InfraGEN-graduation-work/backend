@@ -18,7 +18,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import java.util.List;
+
+import java.util.Arrays;
 
 @Configuration
 @EnableWebSecurity
@@ -28,20 +29,23 @@ public class SecurityConfig {
     private final JwtExceptionFilter jwtExceptionFilter;
     private final AuthenticationEntryPointImpl authenticationEntryPointImpl;
 
-    @Value("${cors.allowed-origins}")
-    private List<String> allowedOrigins;
-
     private final String[] allowUris = {
             "/swagger-ui/**",
             "/v3/api-docs/**",
-            "/api/v1/auth/**",
-            "/health" // 인증 관련해서는 jwt 토큰 인증 없이도 요청을 보낼 수 있어야 함
+            "/api/v1/auth/signup",
+            "/api/v1/auth/login",
+            "/api/v1/auth/login/**",
+            "/api/v1/auth/reissue",
+            "/health",
     };
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+        HttpSecurity http,
+        CorsConfigurationSource corsConfigurationSource
+    ) throws Exception {
         http
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .csrf(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
@@ -62,16 +66,21 @@ public class SecurityConfig {
     }
 
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource(
+            @Value("${ALLOWED_ORIGINS:http://localhost:5173}") String allowedOrigins
+    ) {
+        // CORS 설정 객체 생성
         CorsConfiguration configuration = new CorsConfiguration();
-
-        configuration.setAllowedOriginPatterns(allowedOrigins);
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
+        Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .forEach(configuration::addAllowedOriginPattern);
+        configuration.addAllowedMethod("*");
+        configuration.addAllowedHeader("*");
         configuration.setAllowCredentials(true);
-        configuration.setExposedHeaders(List.of("Authorization", "Set-Cookie"));
         configuration.setMaxAge(3600L);
-
+        
+        // CORS 설정을 적용할 URL 패턴 등록
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;

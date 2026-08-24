@@ -7,7 +7,7 @@ import com.infragen.infragen.domain.member.enums.Role;
 import lombok.Builder;
 
 public class MemberResDTO {
-  @Builder
+    @Builder
     public record MemberResultDTO(
             Long id,
             String email,

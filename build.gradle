@@ -34,6 +34,7 @@ dependencies {
 
     // redis
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.apache.commons:commons-pool2'
 
     // QueryDSL : OpenFeign
     implementation "io.github.openfeign.querydsl:querydsl-jpa:7.0"
@@ -53,6 +54,9 @@ dependencies {
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
+	testImplementation 'org.testcontainers:testcontainers-mysql:2.0.5'
+	testImplementation 'org.testcontainers:testcontainers-junit-jupiter:2.0.5'
 	testCompileOnly 'org.projectlombok:lombok'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testAnnotationProcessor 'org.projectlombok:lombok'
@@ -60,4 +64,14 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+// plain.jar 생성 방지
+jar {
+    enabled = false
+}
+
+// 빌드 결과물 이름을 app.jar로 고정
+bootJar {
+    archiveFileName = 'app.jar'
 }

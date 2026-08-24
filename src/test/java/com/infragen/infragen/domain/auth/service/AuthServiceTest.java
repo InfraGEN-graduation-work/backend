@@ -13,6 +13,8 @@ import com.infragen.infragen.domain.member.enums.SocialProvider;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
 import com.infragen.infragen.domain.member.service.command.MemberCommandService;
 import com.infragen.infragen.domain.member.service.query.MemberQueryService;
+import com.infragen.infragen.domain.member.exception.MemberException;
+import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
 import com.infragen.infragen.global.util.JwtUtil;
 import com.infragen.infragen.global.util.RedisUtil;
 import io.jsonwebtoken.Claims;
@@ -52,7 +54,7 @@ class AuthServiceTest {
     private AuthService authService;
 
     @Test
-    @DisplayName("일반 회원가입 - 성공 시 토큰 반환 검증")
+    @DisplayName("일반 회원가입 - 성공 시 회원만 생성하고 토큰은 발급하지 않음")
     void signup_Success() {
         // given
         AuthReqDTO.SignupDTO request = AuthReqDTO.SignupDTO.builder()
@@ -61,17 +63,37 @@ class AuthServiceTest {
                 .id(1L).email("test@test.com").role(Role.ROLE_USER).build();
 
         when(memberCommandService.createMember(any())).thenReturn(memberDTO);
-        when(jwtUtil.createAccessToken(anyLong(), any())).thenReturn("access_token");
-        when(jwtUtil.createRefreshToken(anyLong())).thenReturn("refresh_token");
-        when(jwtUtil.getExpirationTime(anyString())).thenReturn(1000L);
 
         // when
-        AuthResDTO.TokenResultDTO result = authService.signup(request);
+        authService.signup(request);
 
         // then
-        assertNotNull(result);
-        assertEquals("access_token", result.getAccessToken());
-        verify(redisUtil).set(eq("RT:1"), eq("refresh_token"), any());
+        verify(memberCommandService).createMember(request);
+        verify(jwtUtil, never()).createAccessToken(anyLong(), any());
+        verify(jwtUtil, never()).createRefreshToken(anyLong());
+        verify(redisUtil, never()).set(anyString(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("일반 회원가입 - 이메일 중복 시 예외 발생 검증")
+    void signup_Fail_DuplicateEmail() {
+        // given
+        AuthReqDTO.SignupDTO request = AuthReqDTO.SignupDTO.builder()
+                .email("duplicate@test.com")
+                .password("password")
+                .nickname("Tester")
+                .build();
+
+        when(memberCommandService.createMember(any()))
+                .thenThrow(new MemberException(MemberErrorCode.DUPLICATE_EMAIL));
+
+        // when & then
+        assertThrows(MemberException.class, 
+                () -> authService.signup(request));
+        
+        // 토큰 발급 및 레디스 저장이 호출되지 않아야 함
+        verify(jwtUtil, never()).createAccessToken(anyLong(), any());
+        verify(redisUtil, never()).set(anyString(), anyString(), any());
     }
 
     @Test

@@ -26,6 +26,13 @@ spring:
       ddl-auto: update
 
     show-sql: true
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100
+        jdbc.batch_size: 50
+        order_inserts: true
+        order_updates: true
+        jdbc.batch_versioned_data: true
 
   servlet:
     encoding:
@@ -43,14 +50,12 @@ jwt:
   issuer: infra-gen
 
 cors:
-  allowed-origins:
-    - http://localhost:3000
-    - http://localhost:5173
-    - https://*.vercel.app
+  allowed-origins: http://localhost:3000,http://localhost:5173,https://*.vercel.app
 
 # kakao 설정 관련
 kakao:
   client-id: ${KAKAO_CLIENT_ID}
+  client-secret: ${KAKAO_CLIENT_SECRET}
   redirect-uri: ${KAKAO_REDIRECT_URI}
   authorization-uri: https://kauth.kakao.com/oauth/authorize
   token-uri: https://kauth.kakao.com/oauth/token

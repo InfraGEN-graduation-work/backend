@@ -1,11 +1,11 @@
 package com.infragen.infragen.domain.member.service.query;
 
-import com.infragen.infragen.domain.auth.exception.AuthException;
-import com.infragen.infragen.domain.auth.exception.code.error.AuthErrorCode;
 import com.infragen.infragen.domain.member.converter.MemberConverter;
 import com.infragen.infragen.domain.member.dto.response.MemberResDTO;
 import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.member.enums.SocialProvider;
+import com.infragen.infragen.domain.member.exception.MemberException;
+import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -26,11 +26,15 @@ public class MemberQueryService {
 
     public Member findByEmail(String email) {
         return memberRepository.findByEmail(email)
-                .orElseThrow(() -> new AuthException(AuthErrorCode.TOKEN_INVALID));
+                .orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
     }
 
     public Member findById(Long id) {
         return memberRepository.findById(id)
-                .orElseThrow(() -> new AuthException(AuthErrorCode.TOKEN_INVALID));
+                .orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
+    }
+
+    public MemberResDTO.MemberResultDTO getMe(Long memberId) {
+        return MemberConverter.toResultDTO(findById(memberId));
     }
 }

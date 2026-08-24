@@ -13,6 +13,7 @@ public class MemberConverter {
                 .email(member.getEmail())
                 .nickname(member.getNickname())
                 .role(member.getRole())
+                .isActive(member.getIsActive())
                 .createdAt(member.getCreatedAt())
                 .build();
     }

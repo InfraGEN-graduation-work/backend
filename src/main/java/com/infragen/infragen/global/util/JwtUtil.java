@@ -11,7 +11,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.ExpiredJwtException;
 import com.infragen.infragen.domain.member.enums.Role;
-import com.infragen.infragen.global.config.JwtProperties;
+import com.infragen.infragen.global.properties.JwtProperties;
 
 @Slf4j
 @Component

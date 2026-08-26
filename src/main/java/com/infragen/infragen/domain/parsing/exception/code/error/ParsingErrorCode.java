@@ -98,6 +98,16 @@ public enum ParsingErrorCode implements BaseErrorCode {
             HttpStatus.BAD_REQUEST,
             "MySQL 사용자 비밀번호가 누락되었습니다.",
             "PARSING400_19"
+    ),
+    MISSING_REDIS_IMAGE_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "Redis 이미지 버전이 누락되었습니다.",
+            "PARSING400_20"
+    ),
+    INVALID_JAVA_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "Java 버전은 숫자 형식이어야 합니다.",
+            "PARSING400_21"
     );
 
     private final HttpStatus httpStatus;

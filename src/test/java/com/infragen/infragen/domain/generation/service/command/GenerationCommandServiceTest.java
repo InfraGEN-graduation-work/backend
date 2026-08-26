@@ -18,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.infragen.infragen.domain.generation.dto.response.GenerateResDTO;
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
+import com.infragen.infragen.domain.generation.enums.OutputFormat;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.generation.service.IaCGenerationService;
@@ -72,7 +73,8 @@ class GenerationCommandServiceTest {
 
         when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(null);
         when(parsingService.parsing(request, projectId)).thenReturn(parsingResult);
-        when(iaCGenerationService.generateDockerCompose(parsingResult)).thenReturn(bundle);
+        when(iaCGenerationService.generate(parsingResult, OutputFormat.DOCKER_COMPOSE))
+            .thenReturn(bundle);
         when(projectHistoryCommandService.saveGeneratedHistory(projectId, memberId, files))
             .thenReturn(42L);
 
@@ -80,7 +82,8 @@ class GenerationCommandServiceTest {
         GenerateResDTO.GenerateResultResDTO result = generationCommandService.generate(
             projectId,
             request,
-            memberId
+            memberId,
+            OutputFormat.DOCKER_COMPOSE
         );
 
         // then
@@ -94,8 +97,75 @@ class GenerationCommandServiceTest {
         );
         verify(projectQueryService).getOwnedProject(projectId, memberId);
         verify(parsingService).parsing(request, projectId);
-        verify(iaCGenerationService).generateDockerCompose(parsingResult);
+        verify(iaCGenerationService).generate(parsingResult, OutputFormat.DOCKER_COMPOSE);
         verify(projectHistoryCommandService).saveGeneratedHistory(projectId, memberId, files);
+    }
+
+    @Test
+    @DisplayName("TERRAFORM 형식 — Terraform generator로 라우팅하고 history 저장")
+    void generate_TerraformFormat_RoutesToTerraformGenerator() {
+        // given
+        Long projectId = 1L;
+        Long memberId = 2L;
+        ParsingReqDTO request = new ParsingReqDTO();
+        ParsingResultDTO parsingResult = new ParsingResultDTO();
+        List<IaCFileDTO.FileContentResDTO> files = List.of(
+            IaCFileDTO.FileContentResDTO.builder()
+                .fileName("Dockerfile")
+                .content("FROM eclipse-temurin:17-jre\n")
+                .build()
+        );
+        IaCFileDTO.BundleResDTO bundle = IaCFileDTO.BundleResDTO.builder()
+            .files(files)
+            .build();
+
+        when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(null);
+        when(parsingService.parsing(request, projectId)).thenReturn(parsingResult);
+        when(iaCGenerationService.generate(parsingResult, OutputFormat.TERRAFORM))
+            .thenReturn(bundle);
+        when(projectHistoryCommandService.saveGeneratedHistory(projectId, memberId, files))
+            .thenReturn(43L);
+
+        // when
+        GenerateResDTO.GenerateResultResDTO result = generationCommandService.generate(
+            projectId,
+            request,
+            memberId,
+            OutputFormat.TERRAFORM
+        );
+
+        // then
+        assertAll(
+            () -> assertEquals(43L, result.historyId()),
+            () -> assertEquals("Dockerfile", result.files().get(0).fileName()),
+            () -> assertEquals(files.get(0).content(), result.files().get(0).content())
+        );
+        verify(projectQueryService).getOwnedProject(projectId, memberId);
+        verify(parsingService).parsing(request, projectId);
+        verify(iaCGenerationService).generate(parsingResult, OutputFormat.TERRAFORM);
+        verify(projectHistoryCommandService).saveGeneratedHistory(projectId, memberId, files);
+    }
+
+    @Test
+    @DisplayName("지원하지 않는 출력 형식 — GENERATION400_1")
+    void generate_UnsupportedFormat_ThrowsGenerationException() {
+        // given
+        ParsingReqDTO request = new ParsingReqDTO();
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> generationCommandService.generate(1L, request, 2L, null)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.UNSUPPORTED_OUTPUT_FORMAT, exception.getCode());
+        verifyNoInteractions(
+            projectQueryService,
+            parsingService,
+            iaCGenerationService,
+            projectHistoryCommandService
+        );
     }
 
     @Test
@@ -113,7 +183,12 @@ class GenerationCommandServiceTest {
         // when
         ParsingException exception = assertThrows(
             ParsingException.class,
-            () -> generationCommandService.generate(projectId, request, memberId)
+            () -> generationCommandService.generate(
+                projectId,
+                request,
+                memberId,
+                OutputFormat.DOCKER_COMPOSE
+            )
         );
 
         // then
@@ -137,20 +212,25 @@ class GenerationCommandServiceTest {
 
         when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(null);
         when(parsingService.parsing(request, projectId)).thenReturn(parsingResult);
-        when(iaCGenerationService.generateDockerCompose(parsingResult))
+        when(iaCGenerationService.generate(parsingResult, OutputFormat.DOCKER_COMPOSE))
             .thenThrow(generationException);
 
         // when
         IaCGenerationException exception = assertThrows(
             IaCGenerationException.class,
-            () -> generationCommandService.generate(projectId, request, memberId)
+            () -> generationCommandService.generate(
+                projectId,
+                request,
+                memberId,
+                OutputFormat.DOCKER_COMPOSE
+            )
         );
 
         // then
         assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
         verify(projectQueryService).getOwnedProject(projectId, memberId);
         verify(parsingService).parsing(request, projectId);
-        verify(iaCGenerationService).generateDockerCompose(parsingResult);
+        verify(iaCGenerationService).generate(parsingResult, OutputFormat.DOCKER_COMPOSE);
         verifyNoInteractions(projectHistoryCommandService);
     }
 }

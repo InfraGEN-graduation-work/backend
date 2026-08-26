@@ -9,6 +9,8 @@ import java.util.Map;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.infragen.infragen.domain.parsing.dto.request.NodeDTO;
 import com.infragen.infragen.domain.parsing.dto.response.SpringBootComponent;
@@ -81,6 +83,24 @@ class SpringBootParserTest {
             ParsingErrorCode.MISSING_JAVA_VERSION,
             exception.getCode()
         );
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"17.0", "17-beta"})
+    @DisplayName("Java version 형식 오류 — INVALID_JAVA_VERSION")
+    void parse_InvalidJavaVersion_ThrowsParsingException(String javaVersion) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("javaVersion", javaVersion);
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.INVALID_JAVA_VERSION, exception.getCode());
     }
 
     private SpringBootComponent parse(Map<String, Object> properties) {

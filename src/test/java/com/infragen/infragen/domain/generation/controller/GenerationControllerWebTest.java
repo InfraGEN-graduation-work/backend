@@ -1,8 +1,9 @@
-package com.infragen.infragen.domain.parsing.controller;
+package com.infragen.infragen.domain.generation.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -35,6 +36,7 @@ import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import com.infragen.infragen.domain.generation.dto.response.GenerateResDTO;
+import com.infragen.infragen.domain.generation.enums.OutputFormat;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.generation.service.command.GenerationCommandService;
@@ -46,15 +48,15 @@ import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCod
 import com.infragen.infragen.global.auth.CustomUserDetails;
 import com.infragen.infragen.global.apiPayload.handler.GeneralExceptionAdvice;
 
-@WebMvcTest(ParsingController.class)
+@WebMvcTest(GenerationController.class)
 @ContextConfiguration(classes = {
-    ParsingControllerWebTest.ControllerWebTestApplication.class,
-    ParsingController.class,
+    GenerationControllerWebTest.ControllerWebTestApplication.class,
+    GenerationController.class,
     GeneralExceptionAdvice.class
 })
 @AutoConfigureMockMvc(addFilters = false)
-@DisplayName("ParsingController Web 테스트")
-class ParsingControllerWebTest {
+@DisplayName("GenerationController Web 테스트")
+class GenerationControllerWebTest {
     private static final String GENERATE_URL = "/api/v1/projects/{projectId}/generate";
     private static final String REQUEST_JSON = """
         {
@@ -104,7 +106,7 @@ class ParsingControllerWebTest {
 
     @SpringBootConfiguration
     @EnableAutoConfiguration
-    @Import(ParsingControllerWebTest.WebMvcTestConfig.class)
+    @Import(GenerationControllerWebTest.WebMvcTestConfig.class)
     static class ControllerWebTestApplication {
     }
 
@@ -139,7 +141,8 @@ class ParsingControllerWebTest {
             .historyId(42L)
             .build();
 
-        when(generationCommandService.generate(eq(1L), any(ParsingReqDTO.class), eq(1L)))
+        when(generationCommandService.generate(
+            eq(1L), any(ParsingReqDTO.class), eq(1L), eq(OutputFormat.DOCKER_COMPOSE)))
             .thenReturn(result);
 
         // when
@@ -161,14 +164,76 @@ class ParsingControllerWebTest {
                 .value("SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/appdb\n"));
 
         // then
-        verify(generationCommandService).generate(eq(1L), any(ParsingReqDTO.class), eq(1L));
+        verify(generationCommandService).generate(
+            eq(1L), any(ParsingReqDTO.class), eq(1L), eq(OutputFormat.DOCKER_COMPOSE));
+    }
+
+    @Test
+    @DisplayName("POST /generate?outputFormat=TERRAFORM — Terraform 파일 응답")
+    void generate_TerraformFormat_ReturnsTerraformFiles() throws Exception {
+        // given
+        GenerateResDTO.GenerateResultResDTO result = GenerateResDTO.GenerateResultResDTO.builder()
+            .files(List.of(
+                GenerateResDTO.GeneratedFileResDTO.builder()
+                    .fileName("Dockerfile")
+                    .content("FROM eclipse-temurin:17-jre\n")
+                    .build()
+            ))
+            .historyId(43L)
+            .build();
+
+        when(generationCommandService.generate(
+            eq(1L),
+            any(ParsingReqDTO.class),
+            eq(1L),
+            eq(OutputFormat.TERRAFORM)
+        )).thenReturn(result);
+
+        // when
+        mockMvc.perform(post(GENERATE_URL, 1L)
+                .queryParam("outputFormat", "TERRAFORM")
+                .with(authenticatedAs(1L))
+                .contentType(APPLICATION_JSON)
+                .content(REQUEST_JSON))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.result.historyId").value(43))
+            .andExpect(jsonPath("$.result.files.length()").value(1))
+            .andExpect(jsonPath("$.result.files[0].fileName").value("Dockerfile"));
+
+        // then
+        verify(generationCommandService).generate(
+            eq(1L),
+            any(ParsingReqDTO.class),
+            eq(1L),
+            eq(OutputFormat.TERRAFORM)
+        );
+    }
+
+    @Test
+    @DisplayName("POST /generate?outputFormat=YAML — GENERATION400_1·400 반환")
+    void generate_UnsupportedFormat_ReturnsBadRequest() throws Exception {
+        // given
+        // when
+        mockMvc.perform(post(GENERATE_URL, 1L)
+                .queryParam("outputFormat", "YAML")
+                .with(authenticatedAs(1L))
+                .contentType(APPLICATION_JSON)
+                .content(REQUEST_JSON))
+            // then
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.isSuccess").value(false))
+            .andExpect(jsonPath("$.code").value("GENERATION400_1"))
+            .andExpect(jsonPath("$.message").value("지원하지 않는 출력 형식입니다."));
+
+        verifyNoInteractions(generationCommandService);
     }
 
     @Test
     @DisplayName("POST /generate — 파싱 실패 시 PARSING400_1·400 반환")
     void generate_ParsingFailure_ReturnsBadRequest() throws Exception {
         // given
-        when(generationCommandService.generate(eq(1L), any(ParsingReqDTO.class), eq(1L)))
+        when(generationCommandService.generate(
+            eq(1L), any(ParsingReqDTO.class), eq(1L), eq(OutputFormat.DOCKER_COMPOSE)))
             .thenThrow(new ParsingException(ParsingErrorCode.EMPTY_NODES));
 
         // when
@@ -182,14 +247,16 @@ class ParsingControllerWebTest {
             .andExpect(jsonPath("$.code").value("PARSING400_1"))
             .andExpect(jsonPath("$.message").value("node가 없습니다."));
 
-        verify(generationCommandService).generate(eq(1L), any(ParsingReqDTO.class), eq(1L));
+        verify(generationCommandService).generate(
+            eq(1L), any(ParsingReqDTO.class), eq(1L), eq(OutputFormat.DOCKER_COMPOSE));
     }
 
     @Test
     @DisplayName("POST /generate — 생성 실패 시 GENERATION400_2·400 반환")
     void generate_GenerationFailure_ReturnsBadRequest() throws Exception {
         // given
-        when(generationCommandService.generate(eq(1L), any(ParsingReqDTO.class), eq(1L)))
+        when(generationCommandService.generate(
+            eq(1L), any(ParsingReqDTO.class), eq(1L), eq(OutputFormat.DOCKER_COMPOSE)))
             .thenThrow(new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE));
 
         // when
@@ -204,7 +271,8 @@ class ParsingControllerWebTest {
             .andExpect(jsonPath("$.message")
                 .value("인프라 코드 생성에 필요한 컴포넌트 상태가 올바르지 않습니다."));
 
-        verify(generationCommandService).generate(eq(1L), any(ParsingReqDTO.class), eq(1L));
+        verify(generationCommandService).generate(
+            eq(1L), any(ParsingReqDTO.class), eq(1L), eq(OutputFormat.DOCKER_COMPOSE));
     }
 
     private static RequestPostProcessor authenticatedAs(Long memberId) {

@@ -45,3 +45,4 @@ out/
 docs/harness/personal_convention/
 # Personal handoff documents: keep local and never publish to GitHub
 docs/handoff/
+docs/explain

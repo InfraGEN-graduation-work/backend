@@ -39,6 +39,7 @@ class RedisParserTest {
             () -> assertEquals("redis:7.4", component.getImageVersion()),
             () -> assertEquals("redis", component.getContainerName()),
             () -> assertEquals("redis_data", component.getVolumeName()),
+            () -> assertEquals("redis-password", component.getPassword()),
             () -> assertEquals(6379, component.getPort())
         );
     }
@@ -58,6 +59,23 @@ class RedisParserTest {
 
         // then
         assertEquals(ParsingErrorCode.MISSING_REDIS_IMAGE_VERSION, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("password 누락 — MISSING_REDIS_PASSWORD")
+    void parse_MissingPassword_ThrowsParsingException() {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.remove("password");
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.MISSING_REDIS_PASSWORD, exception.getCode());
     }
 
     private RedisComponent parse(Map<String, Object> properties) {
@@ -81,6 +99,7 @@ class RedisParserTest {
         properties.put("imageVersion", "redis:7.4");
         properties.put("containerName", "redis");
         properties.put("volumeName", "redis_data");
+        properties.put("password", "redis-password");
         return properties;
     }
 }

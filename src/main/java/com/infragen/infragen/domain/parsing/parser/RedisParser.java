@@ -24,9 +24,13 @@ public class RedisParser implements ComponentParser {
         String imageVersion = props.path("imageVersion").asString();
         String containerName = props.path("containerName").asString();
         String volumeName = props.path("volumeName").asString();
+        String password = props.path("password").asString();
 
         if (imageVersion == null || imageVersion.isBlank()) {
             throw new ParsingException(ParsingErrorCode.MISSING_REDIS_IMAGE_VERSION);
+        }
+        if (password == null || password.isBlank()) {
+            throw new ParsingException(ParsingErrorCode.MISSING_REDIS_PASSWORD);
         }
 
         float posX = node.getPositionX() != null ? node.getPositionX() : 0f;
@@ -40,6 +44,7 @@ public class RedisParser implements ComponentParser {
             .containerName(containerName != null ? containerName : "")
             .port(port)
             .volumeName(volumeName != null ? volumeName : "")
+            .password(password != null ? password : "")
             .build();
     }
 }

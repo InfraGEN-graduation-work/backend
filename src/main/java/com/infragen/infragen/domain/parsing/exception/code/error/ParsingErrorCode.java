@@ -104,6 +104,11 @@ public enum ParsingErrorCode implements BaseErrorCode {
             "Redis 이미지 버전이 누락되었습니다.",
             "PARSING400_20"
     ),
+    MISSING_REDIS_PASSWORD(
+            HttpStatus.BAD_REQUEST,
+            "Redis password가 누락되었습니다.",
+            "PARSING400_22"
+    ),
     INVALID_JAVA_VERSION(
             HttpStatus.BAD_REQUEST,
             "Java 버전은 숫자 형식이어야 합니다.",

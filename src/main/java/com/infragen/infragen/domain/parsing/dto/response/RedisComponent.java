@@ -9,13 +9,14 @@ import lombok.Getter;
 @Getter
 @JsonPropertyOrder({
     "nodeId", "positionX", "positionY", "componentType", "imageVersion",
-    "containerName", "port", "volumeName"
+    "containerName", "port", "volumeName", "password"
 })
-public class RedisComponent extends BaseComponent {
+public class RedisComponent extends BaseComponent implements VolumeComponent {
     private String imageVersion;
     private String containerName;
     private int port;
     private String volumeName;
+    private String password;
 
     @Builder
     public RedisComponent(
@@ -25,12 +26,14 @@ public class RedisComponent extends BaseComponent {
         String imageVersion,
         String containerName,
         int port,
-        String volumeName
+        String volumeName,
+        String password
     ) {
         super(id, posX, posY, ComponentType.REDIS);
         this.imageVersion = imageVersion;
         this.containerName = containerName;
         this.port = port;
         this.volumeName = volumeName;
+        this.password = password;
     }
 }

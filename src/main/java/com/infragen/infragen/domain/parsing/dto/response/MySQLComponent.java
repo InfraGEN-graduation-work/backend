@@ -11,7 +11,7 @@ import lombok.Getter;
     "nodeId", "positionX", "positionY", "componentType", "imageVersion",
     "containerName", "env", "port", "volumeName"
 })
-public class MySQLComponent extends BaseComponent {
+public class MySQLComponent extends BaseComponent implements VolumeComponent {
     private String imageVersion;
     private String containerName;
     private MySQLEnvComponent env;

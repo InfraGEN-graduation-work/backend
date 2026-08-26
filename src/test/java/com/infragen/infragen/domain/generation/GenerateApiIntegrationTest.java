@@ -91,6 +91,59 @@ class GenerateApiIntegrationTest {
           ]
         }
         """;
+    private static final String MYSQL_REDIS_REQUEST_JSON = """
+        {
+          "nodes": [
+            {
+              "nodeId": "node-1",
+              "componentType": "MYSQL",
+              "positionX": 100,
+              "positionY": 200,
+              "properties": {
+                "imageVersion": "mysql:8.0",
+                "containerName": "mysql",
+                "volumeName": "mysql_data",
+                "port": 3306,
+                "env": {
+                  "databaseName": "appdb",
+                  "username": "user",
+                  "userPassword": "userpass12",
+                  "rootPassword": "rootpass12"
+                }
+              }
+            },
+            {
+              "nodeId": "node-2",
+              "componentType": "REDIS",
+              "positionX": 250,
+              "positionY": 200,
+              "properties": {
+                "imageVersion": "redis:7.4",
+                "containerName": "redis",
+                "volumeName": "redis_data",
+                "port": 6379,
+                "password": "test-redis-password"
+              }
+            },
+            {
+              "nodeId": "node-3",
+              "componentType": "SPRING_BOOT",
+              "positionX": 400,
+              "positionY": 200,
+              "properties": {
+                "name": "app",
+                "port": 8080,
+                "javaVersion": "17",
+                "containerName": "spring-app"
+              }
+            }
+          ],
+          "edges": [
+            { "sourceNodeId": "node-1", "targetNodeId": "node-3" },
+            { "sourceNodeId": "node-2", "targetNodeId": "node-3" }
+          ]
+        }
+        """;
 
     @Container
     private static final MySQLContainer MYSQL = new MySQLContainer(
@@ -186,6 +239,44 @@ class GenerateApiIntegrationTest {
         assertTrue(generatedFiles.stream().anyMatch(file ->
             ".env".equals(file.getFileName())
                 && file.getContent().contains("localhost")));
+    }
+
+    @Test
+    @DisplayName("MySQL + Redis 프로젝트 생성 — Compose·.env·history 저장")
+    void generate_MysqlAndRedisProject_SavesAllGeneratedContracts() throws Exception {
+        // given
+        Member owner = saveMember("redis-owner@infragen.test");
+        Project project = saveProject(owner, "mysql-redis-project");
+
+        // when
+        ResultActions result = mockMvc.perform(post(GENERATE_URL, project.getId())
+            .with(authenticatedAs(owner))
+            .contentType(APPLICATION_JSON)
+            .content(MYSQL_REDIS_REQUEST_JSON));
+
+        // then
+        result
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.isSuccess").value(true))
+            .andExpect(jsonPath("$.code").value("GENERATION200_1"))
+            .andExpect(jsonPath("$.result.historyId").isNumber())
+            .andExpect(jsonPath("$.result.files.length()").value(2));
+
+        ProjectHistory history = projectHistoryRepository
+            .findAllByProjectIdOrderByCreatedAtDesc(project.getId())
+            .getFirst();
+        List<GeneratedFile> generatedFiles = generatedFileRepository
+            .findAllByProjectHistoryId(history.getId());
+
+        assertTrue(generatedFiles.stream().anyMatch(file ->
+            "docker-compose.yml".equals(file.getFileName())
+                && file.getContent().contains("redis_data:/data")
+                && file.getContent().contains("  redis_data:\n")));
+        assertTrue(generatedFiles.stream().anyMatch(file ->
+            ".env".equals(file.getFileName())
+                && file.getContent().contains("REDIS_HOST=localhost")
+                && file.getContent().contains("REDIS_PORT=6379")
+                && file.getContent().contains("REDIS_PASSWORD=test-redis-password")));
     }
 
     @Test

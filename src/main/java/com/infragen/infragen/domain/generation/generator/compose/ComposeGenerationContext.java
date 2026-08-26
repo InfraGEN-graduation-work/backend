@@ -10,7 +10,6 @@ import java.util.stream.Collectors;
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
-import com.infragen.infragen.global.enums.ComponentType.ComponentCategory;
 
 // Compose 생성 세션의 공유 상태 (파싱 결과 기반, 검증 재수행 없음)
 public class ComposeGenerationContext {
@@ -32,9 +31,9 @@ public class ComposeGenerationContext {
             : List.of();
     }
 
-    // target으로 들어오는 엣지의 source 중 category에 해당하는 컴포넌트 (source -> target = 먼저 기동 -> 나중 기동)
-    public List<BaseComponent> findIncomingDependencies(String targetNodeId, ComponentCategory category) {
-        if (targetNodeId == null || category == null) {
+    // source -> target 방향의 edge에서 target으로 들어오는 모든 dependency
+    public List<BaseComponent> findIncomingDependencies(String targetNodeId) {
+        if (targetNodeId == null) {
             return List.of();
         }
 
@@ -49,9 +48,7 @@ public class ComposeGenerationContext {
                 continue;
             }
 
-            if (source.getComponentType().getCategory() == category) {
-                dependencies.add(source);
-            }
+            dependencies.add(source);
         }
         return Collections.unmodifiableList(dependencies);
     }

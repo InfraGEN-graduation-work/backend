@@ -9,31 +9,31 @@ import lombok.Getter;
 @Getter
 @JsonPropertyOrder({
     "nodeId", "positionX", "positionY", "componentType", "imageVersion",
-    "containerName", "env", "port", "volumeName"
+    "containerName", "port", "volumeName", "password"
 })
-public class MySQLComponent extends BaseComponent implements VolumeComponent {
+public class RedisComponent extends BaseComponent implements VolumeComponent {
     private String imageVersion;
     private String containerName;
-    private MySQLEnvComponent env;
     private int port;
     private String volumeName;
+    private String password;
 
     @Builder
-    public MySQLComponent(
+    public RedisComponent(
         String id,
         float posX,
         float posY,
         String imageVersion,
         String containerName,
-        MySQLEnvComponent env,
         int port,
-        String volumeName
+        String volumeName,
+        String password
     ) {
-        super(id, posX, posY, ComponentType.MYSQL);
+        super(id, posX, posY, ComponentType.REDIS);
         this.imageVersion = imageVersion;
         this.containerName = containerName;
-        this.env = env;
         this.port = port;
         this.volumeName = volumeName;
+        this.password = password;
     }
 }

@@ -24,7 +24,7 @@ InfraGEN은 사용자가 웹 캔버스에서 인프라 노드와 연결 관계�
 ### 4.1 로컬 개발 중심
 
 - 현재 핵심 산출물은 `docker-compose.yml`과 호스트 실행용 `.env`다.
-- 로컬에서는 Spring Boot 앱 자체를 compose 서비스로 띄우지 않고, DB·Redis 같은 의존 인프라만 compose로 만든다.
+- 로컬에서는 Spring Boot 앱 자체를 compose 서비스로 띄우지 않고, 캔버스에 배치된 지원 대상 의존 인프라만 compose로 만든다. 현재 생성 지원은 MySQL이며, 최종 LOCAL_DEV 목표는 Redis도 선택적으로 추가·제거할 수 있도록 지원하는 것이다.
 - Spring Boot 앱은 호스트에서 실행하고, 백엔드는 이를 위한 연결 정보를 `.env`로 제공한다.
 
 ### 4.2 향후 클라우드 배포 확장
@@ -60,6 +60,10 @@ InfraGEN은 다음 흐름으로 사용자의 인프라 설계를 결과물로 �
 
 - `SPRING_BOOT`
 - `MYSQL`
+
+`REDIS`는 백엔드 인증 런타임에서 이미 사용하며, 캔버스 그래프용 `RedisComponent`·`RedisParser`까지 부분 구현되어 있다. Redis LOCAL_DEV 생성은 Gate 3의 필수 범위이며, Redis 노드가 있을 때만 Compose와 호스트 `.env`에 반영하고 없으면 생성하지 않는다.
+
+현재 지원 범위와 최종 목표를 구분한다. 현재는 Spring Boot + MySQL LOCAL_DEV가 동작 기준이며, 최종 LOCAL_DEV는 캔버스에 배치된 MySQL·Redis 의존 인프라만 선택적으로 Compose에 포함하고 Spring Boot는 계속 호스트에서 실행한다.
 
 ### 주요 산출물
 

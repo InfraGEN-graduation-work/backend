@@ -2,8 +2,10 @@ package com.infragen.infragen.domain.generation.generator;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
@@ -16,6 +18,7 @@ import com.infragen.infragen.domain.generation.generator.compose.ComposeYamlSupp
 import com.infragen.infragen.domain.generation.generator.compose.HostAppEnvContributor;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
+import com.infragen.infragen.domain.parsing.dto.response.VolumeComponent;
 import com.infragen.infragen.global.enums.ComponentType;
 import com.infragen.infragen.global.enums.ComponentType.ComponentCategory;
 
@@ -62,6 +65,7 @@ public class DockerComposeIaCGenerator implements IaCGenerator {
         // 렌더러 Map에서 지원하는 컴포넌트 타입을 찾음
         ComposeGenerationContext context = new ComposeGenerationContext(parsingResult);
         List<String> serviceBlocks = new ArrayList<>();
+        Set<String> rootVolumeNames = new LinkedHashSet<>();
         /**
          * 컴포넌트를 시작 우선순위 순으로 정렬
          * 의존 관계를 고려하여 컴포넌트를 정렬하기 위함
@@ -86,13 +90,18 @@ public class DockerComposeIaCGenerator implements IaCGenerator {
                 continue;
             }
             serviceBlocks.add(renderer.render(component, context));
+            if (component instanceof VolumeComponent volumeComponent
+                && volumeComponent.getVolumeName() != null
+                && !volumeComponent.getVolumeName().isBlank()) {
+                rootVolumeNames.add(volumeComponent.getVolumeName().trim());
+            }
         }
 
         // LOCAL_DEV — 호스트에서 실행할 애플리케이션용 .env 키와 값을 context에 추가
         contributeHostAppEnv(sortedComponents, context);
 
         // 렌더링된 결과를 조립하여 Docker Compose 파일을 생성
-        String dockerComposeContent = assembleDockerCompose(serviceBlocks);
+        String dockerComposeContent = assembleDockerCompose(serviceBlocks, rootVolumeNames);
         // .env 파일을 생성
         String envContent = ComposeYamlSupport.formatEnvFile(context.getEnvVars());
 
@@ -118,32 +127,35 @@ public class DockerComposeIaCGenerator implements IaCGenerator {
             .build();
     }
 
-    // LOCAL_DEV — 애플리케이션별 incoming DB 의존에 대해 HostAppEnvContributor 호출
+    // LOCAL_DEV — 애플리케이션별 incoming dependency에 대해 HostAppEnvContributor 호출
     private void contributeHostAppEnv(List<BaseComponent> components, ComposeGenerationContext context) {
         for (BaseComponent component : components) {
             if (component.getComponentType().getCategory() != ComponentCategory.APPLICATION) {
                 continue;
             }
 
-            List<BaseComponent> databases = context.findIncomingDependencies(
-                component.getNodeId(), ComponentCategory.DATABASE);
+            List<BaseComponent> dependencies = context.findIncomingDependencies(component.getNodeId());
 
-            for (BaseComponent database : databases) {
-                HostAppEnvContributor contributor = hostAppEnvContributorMap.get(database.getComponentType());
+            for (BaseComponent dependency : dependencies) {
+                HostAppEnvContributor contributor = hostAppEnvContributorMap.get(
+                    dependency.getComponentType());
                 if (contributor == null) {
                     log.warn(
-                        "HostAppEnvContributor 없음: dbType={}, appNodeId={}",
-                        database.getComponentType(),
+                        "HostAppEnvContributor 없음: dependencyType={}, appNodeId={}",
+                        dependency.getComponentType(),
                         component.getNodeId()
                     );
                     continue;
                 }
-                contributor.contributeHostAppEnv(database, component, context);
+                contributor.contributeHostAppEnv(dependency, component, context);
             }
         }
     }
 
-    private String assembleDockerCompose(List<String> serviceBlocks) {
+    private String assembleDockerCompose(
+        List<String> serviceBlocks,
+        Set<String> rootVolumeNames
+    ) {
         if (serviceBlocks.isEmpty()) {
             return "# 노드가 할당되지 않았습니다.\n";
         }
@@ -152,6 +164,12 @@ public class DockerComposeIaCGenerator implements IaCGenerator {
         content.append("services:\n");
         for (String block : serviceBlocks) {
             content.append(block);
+        }
+        if (!rootVolumeNames.isEmpty()) {
+            content.append("\nvolumes:\n");
+            for (String volumeName : rootVolumeNames) {
+                content.append("  ").append(volumeName).append(":\n");
+            }
         }
 
         return content.toString();

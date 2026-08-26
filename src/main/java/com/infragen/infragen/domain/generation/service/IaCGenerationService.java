@@ -31,7 +31,4 @@ public class IaCGenerationService {
         return generator.generate(parsingResult);
     }
 
-    public IaCFileDTO.BundleResDTO generateDockerCompose(ParsingResultDTO parsingResult) {
-        return generate(parsingResult, OutputFormat.DOCKER_COMPOSE);
-    }
 }

@@ -88,6 +88,24 @@ class ParsingServiceTest {
     }
 
     @Test
+    @DisplayName("포트 범위 초과 — PARSING400_3")
+    void parsing_InvalidPortRange_Throws() {
+        // given
+        ParsingReqDTO request = new ParsingReqDTO();
+        request.setNodes(List.of(springBootNode("node-1", 1023)));
+        request.setEdges(List.of());
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parsingService.parsing(request, 1L)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.INVALID_PORT_RANGE, exception.getCode());
+    }
+
+    @Test
     @DisplayName("순환 참조 — PARSING400_9")
     void parsing_CycleDetected_Throws() {
         // given

@@ -16,10 +16,13 @@ import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.generation.generator.compose.MysqlComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.compose.MysqlHostAppEnvContributor;
+import com.infragen.infragen.domain.generation.generator.compose.RedisComposeServiceRenderer;
+import com.infragen.infragen.domain.generation.generator.compose.RedisHostAppEnvContributor;
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLEnvComponent;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
+import com.infragen.infragen.domain.parsing.dto.response.RedisComponent;
 import com.infragen.infragen.domain.parsing.dto.response.SpringBootComponent;
 
 @DisplayName("Docker Compose IaC 생성기")
@@ -41,6 +44,9 @@ class DockerComposeIaCGeneratorTest {
               MYSQL_PASSWORD: ${MYSQL_PASSWORD}
               MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
               TZ: Asia/Seoul
+
+        volumes:
+          mysql_data:
         """;
 
     private static final String EXPECTED_ENV = """
@@ -63,8 +69,8 @@ class DockerComposeIaCGeneratorTest {
     @BeforeEach
     void setUp() {
         generator = new DockerComposeIaCGenerator(
-            List.of(new MysqlComposeServiceRenderer()),
-            List.of(new MysqlHostAppEnvContributor())
+            List.of(new MysqlComposeServiceRenderer(), new RedisComposeServiceRenderer()),
+            List.of(new MysqlHostAppEnvContributor(), new RedisHostAppEnvContributor())
         );
     }
 
@@ -98,6 +104,43 @@ class DockerComposeIaCGeneratorTest {
         );
 
         assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("LOCAL_DEV golden — Redis와 .env localhost password 생성")
+    void generate_LocalDevRedisAndSpringBoot_MatchesGolden() {
+        // given
+        ParsingResultDTO parsingResult = redisLocalDevParsingResult();
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult);
+
+        // then
+        assertEquals(2, bundle.files().size());
+        assertEquals("""
+            services:
+              redis:
+                image: redis:7.4
+                container_name: redis
+                ports:
+                  - "6379:6379"
+                volumes:
+                  - redis_data:/data
+                env_file:
+                  - .env
+                command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+
+            volumes:
+              redis_data:
+            """, fileContent(bundle, "docker-compose.yml"));
+        assertEquals("""
+            # InfraGEN generated environment variables
+            # 민감한 정보는 이 파일에만 저장하세요. 버전 관리에 커밋하지 마세요.
+
+            REDIS_HOST=localhost
+            REDIS_PORT=6379
+            REDIS_PASSWORD=redis-password
+            """, fileContent(bundle, ".env"));
     }
 
     private static ParsingResultDTO localDevParsingResult() {
@@ -138,6 +181,39 @@ class DockerComposeIaCGeneratorTest {
         ParsingResultDTO parsingResult = new ParsingResultDTO();
         parsingResult.setProjectId(1L);
         parsingResult.setComponents(List.of(mysql, springBoot));
+        parsingResult.setEdges(List.of(edge));
+        return parsingResult;
+    }
+
+    private static ParsingResultDTO redisLocalDevParsingResult() {
+        RedisComponent redis = RedisComponent.builder()
+            .id("redis-1")
+            .posX(100f)
+            .posY(200f)
+            .imageVersion("redis:7.4")
+            .containerName("redis")
+            .volumeName("redis_data")
+            .port(6379)
+            .password("redis-password")
+            .build();
+
+        SpringBootComponent springBoot = SpringBootComponent.builder()
+            .id("node-2")
+            .posX(400f)
+            .posY(200f)
+            .name("app")
+            .port(8080)
+            .javaVersion("17")
+            .containerName("spring-app")
+            .build();
+
+        EdgeDTO edge = new EdgeDTO();
+        edge.setSourceNodeId("redis-1");
+        edge.setTargetNodeId("node-2");
+
+        ParsingResultDTO parsingResult = new ParsingResultDTO();
+        parsingResult.setProjectId(1L);
+        parsingResult.setComponents(List.of(redis, springBoot));
         parsingResult.setEdges(List.of(edge));
         return parsingResult;
     }

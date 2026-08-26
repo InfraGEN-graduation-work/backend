@@ -6,6 +6,8 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
+import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
+import com.infragen.infragen.global.enums.ComponentType;
 
 /** CLOUD_DEPLOY에서 애플리케이션과 선택된 의존 인프라의 Compose bootstrap을 생성한다. */
 @Component
@@ -63,10 +65,21 @@ public class CloudComposeRenderer {
         for (String serviceBlock : serviceBlocks) {
             content.append(serviceBlock);
         }
+        appendRootVolumes(content, context);
 
         return IaCFileDTO.FileContentResDTO.builder()
             .fileName("docker-compose.cloud.yml")
             .content(content.toString())
             .build();
+    }
+
+    private void appendRootVolumes(StringBuilder content, CloudDeployContext context) {
+        MySQLComponent mysql = context.firstComponent(ComponentType.MYSQL, MySQLComponent.class);
+        if (mysql == null || mysql.getVolumeName() == null || mysql.getVolumeName().isBlank()) {
+            return;
+        }
+
+        content.append("\nvolumes:\n")
+            .append("  ").append(mysql.getVolumeName().trim()).append(":\n");
     }
 }

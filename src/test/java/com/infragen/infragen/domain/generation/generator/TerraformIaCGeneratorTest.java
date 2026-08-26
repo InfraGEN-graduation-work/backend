@@ -139,6 +139,8 @@ class TerraformIaCGeneratorTest {
             () -> assertTrue(compose.contains("image: mysql:8.4")),
             () -> assertFalse(compose.contains("image: mysql:8.0")),
             () -> assertTrue(compose.contains("MYSQL_DATABASE")),
+            () -> assertTrue(compose.contains("      - mysql_data:/var/lib/mysql")),
+            () -> assertTrue(compose.contains("\nvolumes:\n  mysql_data:\n")),
             () -> assertTrue(compose.contains("depends_on:")),
             () -> assertTrue(compose.contains("      - mysql")),
             () -> assertFalse(compose.contains("redis:")),

@@ -27,6 +27,14 @@ public class MysqlCloudComposeServiceRenderer implements CloudComposeServiceRend
     @Override
     public String render(CloudDeployContext context) {
         MySQLComponent mysql = context.firstComponent(ComponentType.MYSQL, MySQLComponent.class);
+        String volumeName = mysql.getVolumeName();
+        String volumeMount = volumeName == null || volumeName.isBlank()
+            ? ""
+            : """
+            volumes:
+              - %s:/var/lib/mysql
+        """.formatted(volumeName.trim());
+
         return """
 
           mysql:
@@ -38,6 +46,6 @@ public class MysqlCloudComposeServiceRenderer implements CloudComposeServiceRend
               MYSQL_USER: ${MYSQL_USER:?외부 .env에 설정 필요}
               MYSQL_PASSWORD: ${MYSQL_PASSWORD:?외부 .env에 설정 필요}
               MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?외부 .env에 설정 필요}
-        """.formatted(mysql.getImageVersion());
+        %s""".formatted(mysql.getImageVersion(), volumeMount);
     }
 }

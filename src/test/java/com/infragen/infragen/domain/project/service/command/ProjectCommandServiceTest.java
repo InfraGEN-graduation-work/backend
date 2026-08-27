@@ -143,11 +143,11 @@ class ProjectCommandServiceTest {
         ReflectionTestUtils.setField(project, "id", projectId);
 
         ProjectNodeReqDTO.NodeInfoReqDTO nodeReq = new ProjectNodeReqDTO.NodeInfoReqDTO(
-                "Web Server", "NGINX", BigDecimal.valueOf(100.0), BigDecimal.valueOf(200.0), Map.of("port", 80)
+                "node-1", "Web Server", "NGINX", BigDecimal.valueOf(100.0), BigDecimal.valueOf(200.0), Map.of("port", 80)
         );
 
         ProjectEdgeReqDTO.EdgeInfoReqDTO edgeReq = new ProjectEdgeReqDTO.EdgeInfoReqDTO(
-                "Web Server", "Web Server"
+                "node-1", "node-1"
         );
 
         ProjectReqDTO.UpdateProjectReqDTO updateRequest = new ProjectReqDTO.UpdateProjectReqDTO(
@@ -166,13 +166,52 @@ class ProjectCommandServiceTest {
         assertEquals("New Title", result.title());
         assertEquals("New Desc", result.description());
         assertEquals(1, result.nodes().size());
+        assertEquals("node-1", result.nodes().get(0).nodeId());
         assertEquals(1, result.edges().size());
+        assertEquals("node-1", result.edges().get(0).sourceNodeId());
+        assertEquals("node-1", result.edges().get(0).targetNodeId());
 
         verify(projectQueryService).getOwnedProject(projectId, memberId);
         verify(projectEdgeRepository).deleteByProjectId(projectId);
         verify(projectNodeRepository).deleteByProjectId(projectId);
         verify(projectNodeRepository).saveAll(anyList());
         verify(projectEdgeRepository).saveAll(anyList());
+    }
+
+    @Test
+    @DisplayName("프로젝트 수정 - nodeId가 중복되면 전용 예외 발생")
+    void updateProject_DuplicateNodeId_ThrowsException() {
+        // given
+        Long memberId = 1L;
+        Long projectId = 100L;
+
+        Project project = Project.builder()
+                .title("Project")
+                .status(ProjectStatus.DRAFT)
+                .build();
+        ReflectionTestUtils.setField(project, "id", projectId);
+
+        ProjectNodeReqDTO.NodeInfoReqDTO firstNode = new ProjectNodeReqDTO.NodeInfoReqDTO(
+                "node-1", "MySQL", "MYSQL", BigDecimal.valueOf(100.0), BigDecimal.valueOf(200.0), Map.of()
+        );
+        ProjectNodeReqDTO.NodeInfoReqDTO secondNode = new ProjectNodeReqDTO.NodeInfoReqDTO(
+                "node-1", "Database", "MYSQL", BigDecimal.valueOf(300.0), BigDecimal.valueOf(400.0), Map.of()
+        );
+        ProjectReqDTO.UpdateProjectReqDTO updateRequest = new ProjectReqDTO.UpdateProjectReqDTO(
+                "Project", "Description", List.of(firstNode, secondNode), Collections.emptyList()
+        );
+
+        when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(project);
+        when(projectNodeRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        ProjectException exception = assertThrows(ProjectException.class,
+                () -> projectCommandService.updateProject(projectId, updateRequest, memberId));
+
+        // then
+        assertEquals(ProjectErrorCode.DUPLICATE_NODE_ID, exception.getCode());
+        verify(projectNodeRepository).saveAll(anyList());
+        verify(projectEdgeRepository, never()).saveAll(anyList());
     }
 
     @Test

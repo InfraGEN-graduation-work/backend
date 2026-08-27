@@ -6,7 +6,7 @@ public class ProjectEdgeResDTO {
     @Builder
     public record EdgeInfoResDTO(
         Long id,
-        Long sourceNodeId,
-        Long targetNodeId
+        String sourceNodeId,
+        String targetNodeId
     ) {}
 }

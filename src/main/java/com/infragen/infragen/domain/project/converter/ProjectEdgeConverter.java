@@ -15,8 +15,8 @@ public class ProjectEdgeConverter {
     public static ProjectEdgeResDTO.EdgeInfoResDTO toEdgeInfoResDTO(ProjectEdge edge) {
         return ProjectEdgeResDTO.EdgeInfoResDTO.builder()
             .id(edge.getId())
-            .sourceNodeId(edge.getSourceNode().getId())
-            .targetNodeId(edge.getTargetNode().getId())
+            .sourceNodeId(edge.getSourceNode().getNodeId())
+            .targetNodeId(edge.getTargetNode().getNodeId())
             .build();
     }
 
@@ -30,8 +30,8 @@ public class ProjectEdgeConverter {
         }
         return edgeReqs.stream()
             .map(edgeReq -> {
-                ProjectNode sourceNode = nodeMap.get(edgeReq.sourceNodeName());
-                ProjectNode targetNode = nodeMap.get(edgeReq.targetNodeName());
+                ProjectNode sourceNode = nodeMap.get(edgeReq.sourceNodeId());
+                ProjectNode targetNode = nodeMap.get(edgeReq.targetNodeId());
 
                 if (sourceNode == null || targetNode == null) {
                     throw new ProjectException(ProjectErrorCode.DEPENDENCY_MISSING_ERROR);

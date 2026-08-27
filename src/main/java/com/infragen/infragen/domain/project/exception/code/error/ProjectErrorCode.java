@@ -42,6 +42,11 @@ public enum ProjectErrorCode implements BaseErrorCode {
             "중복된 노드 이름이 존재합니다.",
             "PROJECT400_4"
     ),
+    DUPLICATE_NODE_ID(
+            HttpStatus.BAD_REQUEST,
+            "중복된 nodeId가 존재합니다.",
+            "PROJECT400_5"
+    ),
     ;
     private final HttpStatus httpStatus;
     private final String message;

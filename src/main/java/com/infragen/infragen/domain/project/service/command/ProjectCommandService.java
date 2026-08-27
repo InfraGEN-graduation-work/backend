@@ -74,13 +74,13 @@ public class ProjectCommandService {
         List<ProjectNode> newNodes = ProjectNodeConverter.toEntityList(request.nodes(), project);
         List<ProjectNode> savedNodes = projectNodeRepository.saveAll(newNodes);
 
-        // Edge 매핑을 위한 Node Map 구성 (중복 키 발생 시 예외 처리)
+        // Edge 매핑을 위한 Node ID Map 구성 (중복 키 발생 시 예외 처리)
         Map<String, ProjectNode> nodeMap = savedNodes.stream()
             .collect(Collectors.toMap(
-                ProjectNode::getNodeName,
+                ProjectNode::getNodeId,
                 node -> node,
                 (existing, replacement) -> {
-                    throw new ProjectException(ProjectErrorCode.DUPLICATE_NODE_NAME);
+                    throw new ProjectException(ProjectErrorCode.DUPLICATE_NODE_ID);
                 }
             ));
 

@@ -12,6 +12,7 @@ public class ProjectNodeConverter {
     
     public static ProjectNodeResDTO.NodeInfoResDTO toNodeInfoResDTO(ProjectNode node) {
         return ProjectNodeResDTO.NodeInfoResDTO.builder()
+            .nodeId(node.getNodeId())
             .id(node.getId())
             .nodeName(node.getNodeName())
             .componentType(node.getComponentType().name())
@@ -31,6 +32,7 @@ public class ProjectNodeConverter {
         return nodeReqs.stream()
             .map(nodeReq -> ProjectNode.builder()
                 .nodeName(nodeReq.nodeName())
+                .nodeId(nodeReq.nodeId())
                 .componentType(ComponentType.valueOf(nodeReq.componentType()))
                 .positionX(nodeReq.positionX())
                 .positionY(nodeReq.positionY())

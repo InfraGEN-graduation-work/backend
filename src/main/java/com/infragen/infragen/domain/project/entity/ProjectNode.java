@@ -16,7 +16,15 @@ import lombok.NoArgsConstructor;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@Table(name = "project_node")
+@Table(
+        name = "project_node",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_project_node_project_node_id",
+                        columnNames = {"project_id", "node_id"}
+                )
+        }
+)
 public class ProjectNode extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "project_node_seq_gen")
@@ -34,6 +42,9 @@ public class ProjectNode extends BaseEntity {
 
     @Column(name = "node_name", nullable = false)
     private String nodeName;
+
+    @Column(name = "node_id", nullable = false)
+    private String nodeId;
 
     @Column(name = "position_x", precision = 10, scale = 3)
     private BigDecimal positionX;
@@ -53,6 +64,7 @@ public class ProjectNode extends BaseEntity {
     public ProjectNode(
             ComponentType componentType,
             String nodeName,
+            String nodeId,
             BigDecimal positionX,
             BigDecimal positionY,
             Map<String, Object> properties,
@@ -60,6 +72,7 @@ public class ProjectNode extends BaseEntity {
     ) {
         this.componentType = componentType;
         this.nodeName = nodeName;
+        this.nodeId = nodeId;
         this.positionX = positionX;
         this.positionY = positionY;
         this.properties = (properties != null) ? properties : new HashMap<>();

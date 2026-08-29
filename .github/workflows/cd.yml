@@ -6,6 +6,9 @@ on:
 
 jobs:
   build-and-push:
+    permissions:
+      actions: write
+      contents: read
     runs-on: ubuntu-latest
     steps:
       # 소스 코드 가져오기
@@ -38,6 +41,8 @@ jobs:
 
   deploy:
     needs: build-and-push # 빌드/푸시가 성공해야 실행
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/develop'
     steps:

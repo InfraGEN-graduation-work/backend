@@ -22,6 +22,7 @@ Use these as the default entry points:
 - `docs/infra-gen-project-overview.md` -> project goal and product context
 - `docs/harness/personal_convention/work_scope_convention.md` -> work scope limits
 - `docs/harness/personal_convention/comment-style.md` -> comment and Javadoc style rules
+- `docs/harness/project_code_convention/architecture_convention.md` -> package structure, responsibility boundaries, and dependency direction
 - `docs/harness/project_code_convention/controller_convention.md` -> controller, response, validation, and Swagger rules
 - `docs/harness/project_code_convention/service_convention.md` -> CQRS, transactions, service responsibilities, and exceptions
 - `docs/harness/project_code_convention/dto_convention.md` -> request/response DTO layout and naming

@@ -142,9 +142,9 @@ Parsing은 그래프의 정합성을 판단하지만 Docker Compose나 Terraform
 
 다음은 현재 코드의 사실이며, 목표 계약으로 추정해 변경하지 않는다.
 
-1. Parsing component DTO는 문자열 `nodeId`를 사용하지만, 현재 Project 저장 request는 `nodeName`을 사용한다.
-   `ProjectNode`에는 별도 canvas `nodeId` field가 없고, `ProjectEdgeConverter`는 `sourceNodeName`·`targetNodeName`으로 map을 조회하며
-   response에는 DB `Long id`를 반환한다.
+1. Parsing component DTO와 Project 저장 request, `ProjectNode` Entity는 문자열 `nodeId`를 사용한다.
+   `nodeName`은 표시용 값으로 분리되어 있으며, `ProjectEdgeConverter`는 `sourceNodeId`·`targetNodeId`로 map을 조회한다.
+   Project node response는 canvas `nodeId`와 내부 DB `Long id`를 함께 제공하고, edge response의 endpoint는 문자열 nodeId를 반환한다.
 2. `ComponentType`에는 PostgreSQL, MongoDB, NGINX, Apache가 있지만 현재 parser·generator 구현은 MySQL·Redis·Spring Boot 중심이다.
 3. Project graph 수정은 patch merge가 아니라 기존 edge·node를 삭제한 뒤 전체 graph를 교체하는 방식이다.
 4. LOCAL_DEV는 Spring Boot를 호스트에서 실행하고 MySQL·Redis 같은 dependency만 Compose service로 생성한다.

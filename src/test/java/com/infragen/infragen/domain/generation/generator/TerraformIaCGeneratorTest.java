@@ -279,11 +279,12 @@ class TerraformIaCGeneratorTest {
 
     private static void runTerraform(Path moduleDirectory, String... arguments)
         throws IOException, InterruptedException {
+        Path logFile = Files.createTempFile(moduleDirectory, "terraform-", ".log");
         ProcessBuilder processBuilder = new ProcessBuilder(buildTerraformCommand(arguments))
             .directory(moduleDirectory.toFile())
-            .redirectErrorStream(true);
+            .redirectErrorStream(true)
+            .redirectOutput(logFile.toFile());
         Process process = processBuilder.start();
-        String output = new String(process.getInputStream().readAllBytes());
         boolean completed = process.waitFor(3, TimeUnit.MINUTES);
 
         if (!completed) {
@@ -291,6 +292,7 @@ class TerraformIaCGeneratorTest {
             throw new AssertionError("Terraform command timed out: " + String.join(" ", arguments));
         }
 
+        String output = Files.readString(logFile);
         assertEquals(0, process.exitValue(), output);
     }
 

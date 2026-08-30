@@ -49,7 +49,7 @@ services:
 
   # spring boot 설정
   infragen-app:
-    image: ${DOCKERHUB_USERNAME}/infragen-app:latest
+    image: ${DOCKERHUB_USERNAME}/infragen-app@${IMAGE_DIGEST:?IMAGE_DIGEST is required}
     container_name: infragen-app
     restart: always
     ports:

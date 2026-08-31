@@ -37,8 +37,9 @@ prepare_rollback() {
         fi
     done
 
+    current_image_id="$(docker inspect --format '{{.Image}}' infragen-app 2>/dev/null || true)"
     current_image_reference="$(
-        docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' infragen-app 2>/dev/null \
+        docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$current_image_id" 2>/dev/null \
             | awk '/@sha256:/ {print; exit}' \
             || true
     )"
@@ -80,7 +81,7 @@ wait_for_health() {
 print_safe_logs() {
     # 장애 원인 확인에 필요한 범위만 남기고 일반적인 credential 키의 값을 가린다.
     run_compose logs --tail=100 infragen-app 2>&1 \
-        | sed -E 's/((password|secret|token|authorization|cookie)[[:space:]]*[=:])[[:space:]]*[^[:space:]]+/\1[REDACTED]/Ig'
+        | sed -E 's/((password|secret|token|authorization|cookie)[[:space:]]*[=:])[[:space:]]*(Bearer[[:space:]]+)?[^[:space:]]+/\1[REDACTED]/Ig'
 }
 
 restore_rollback_files() {

@@ -48,7 +48,7 @@ public class JwtUtil {
             getClaims(token);
             return true;
         } catch (Exception e) {
-            log.warn("Invalid token: {}", token);
+            log.warn("Invalid token: signature or format validation failed");
             return false;
         }
     }
@@ -88,7 +88,7 @@ public class JwtUtil {
             return e.getClaims();
         } catch (Exception e) {
             // 서명이 조작되었거나 형식이 깨진 경우는 로그아웃조차 시켜주지 않음
-            log.warn("Invalid token for logout: {}", token);
+            log.warn("Invalid token for logout: signature or format validation failed");
             throw new IllegalArgumentException("유효하지 않은 토큰입니다.");
         }
     }

@@ -10,14 +10,10 @@ import com.infragen.infragen.domain.member.dto.response.MemberResDTO;
 import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.enums.SocialProvider;
-import com.infragen.infragen.domain.member.repository.MemberRepository;
 import com.infragen.infragen.domain.member.service.command.MemberCommandService;
 import com.infragen.infragen.domain.member.service.query.MemberQueryService;
 import com.infragen.infragen.domain.member.exception.MemberException;
 import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
-import com.infragen.infragen.global.util.JwtUtil;
-import com.infragen.infragen.global.util.RedisUtil;
-import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,15 +36,11 @@ class AuthServiceTest {
     @Mock
     private MemberCommandService memberCommandService;
     @Mock
-    private MemberRepository memberRepository;
-    @Mock
-    private JwtUtil jwtUtil;
-    @Mock
-    private RedisUtil redisUtil;
-    @Mock
     private KakaoOAuthClient kakaoOAuthClient;
     @Mock
     private PasswordEncoder passwordEncoder;
+    @Mock
+    private TokenService tokenService;
 
     @InjectMocks
     private AuthService authService;
@@ -69,9 +61,7 @@ class AuthServiceTest {
 
         // then
         verify(memberCommandService).createMember(request);
-        verify(jwtUtil, never()).createAccessToken(anyLong(), any());
-        verify(jwtUtil, never()).createRefreshToken(anyLong());
-        verify(redisUtil, never()).set(anyString(), anyString(), any());
+        verify(tokenService, never()).issueTokens(anyLong(), any());
     }
 
     @Test
@@ -91,9 +81,7 @@ class AuthServiceTest {
         assertThrows(MemberException.class, 
                 () -> authService.signup(request));
         
-        // 토큰 발급 및 레디스 저장이 호출되지 않아야 함
-        verify(jwtUtil, never()).createAccessToken(anyLong(), any());
-        verify(redisUtil, never()).set(anyString(), anyString(), any());
+        verify(tokenService, never()).issueTokens(anyLong(), any());
     }
 
     @Test
@@ -108,9 +96,11 @@ class AuthServiceTest {
 
         when(memberQueryService.findByEmail(anyString())).thenReturn(member);
         when(passwordEncoder.matches(anyString(), anyString())).thenReturn(true);
-        when(jwtUtil.createAccessToken(anyLong(), any())).thenReturn("access_token");
-        when(jwtUtil.createRefreshToken(anyLong())).thenReturn("refresh_token");
-        when(jwtUtil.getExpirationTime(anyString())).thenReturn(1000L);
+        AuthResDTO.TokenResultDTO tokens = new AuthResDTO.TokenResultDTO(
+                "access_token",
+                "refresh_token"
+        );
+        when(tokenService.issueTokens(1L, Role.ROLE_USER)).thenReturn(tokens);
 
         // when
         AuthResDTO.TokenResultDTO result = authService.login(request);
@@ -118,6 +108,7 @@ class AuthServiceTest {
         // then
         assertNotNull(result);
         assertEquals("access_token", result.getAccessToken());
+        verify(tokenService).issueTokens(1L, Role.ROLE_USER);
     }
 
     @Test
@@ -138,9 +129,11 @@ class AuthServiceTest {
         when(kakaoOAuthClient.fetchKakaoUserInfo(anyString())).thenReturn(userInfo);
         when(memberQueryService.findBySocialIdAndProvider(anyString(), any())).thenReturn(Optional.empty());
         when(memberCommandService.createSocialMember(any(), any(), anyString(), any())).thenReturn(memberDTO);
-        when(jwtUtil.createAccessToken(anyLong(), any())).thenReturn("app_access");
-        when(jwtUtil.createRefreshToken(anyLong())).thenReturn("app_refresh_token");
-        when(jwtUtil.getExpirationTime(anyString())).thenReturn(10000L);
+        AuthResDTO.TokenResultDTO tokens = new AuthResDTO.TokenResultDTO(
+                "app_access",
+                "app_refresh_token"
+        );
+        when(tokenService.issueTokens(1L, Role.ROLE_USER)).thenReturn(tokens);
 
         AuthResDTO.TokenResultDTO result = authService.socialLogin(provider, request);
 
@@ -148,27 +141,25 @@ class AuthServiceTest {
         assertNotNull(result);
         assertEquals("app_access", result.getAccessToken());
         verify(memberCommandService).createSocialMember(any(), any(), eq("12345"), eq(SocialProvider.KAKAO));
-        verify(redisUtil).set(eq("RT:1"), eq("app_refresh_token"), any());
+        verify(tokenService).issueTokens(1L, Role.ROLE_USER);
     }
 
     @Test
-    @DisplayName("로그아웃 - 만료된 토큰 로그아웃 성공 검증")
-    void logout_ExpiredToken_Success() {
+    @DisplayName("로그아웃 - 토큰 처리를 TokenService에 위임")
+    void logout_ValidToken_DelegatesToTokenService() {
         // given
-        String accessToken = "Bearer expired_token";
-        Claims claims = mock(Claims.class);
-        when(claims.getSubject()).thenReturn("1");
-
-        when(jwtUtil.getClaimsForLogout(anyString())).thenReturn(claims);
-        when(redisUtil.hasKey("RT:1")).thenReturn(true);
-        when(jwtUtil.getExpirationTime(anyString())).thenReturn(0L);
+        String accessToken = "Bearer access_token";
+        when(tokenService.resolveToken(accessToken)).thenReturn("access_token");
+        when(tokenService.extractMemberIdForLogout("access_token")).thenReturn(1L);
 
         // when
         authService.logout(accessToken);
 
         // then
-        verify(redisUtil).delete("RT:1");
-        verify(redisUtil).setBlackList(anyString(), eq(0L));
+        verify(tokenService).resolveToken(accessToken);
+        verify(tokenService).extractMemberIdForLogout("access_token");
+        verify(tokenService).deleteRefreshToken(1L);
+        verify(tokenService).blacklistAccessToken("access_token");
     }
 
     @Test
@@ -176,29 +167,25 @@ class AuthServiceTest {
     void reissueToken_Concurrency_Fail() {
         // given
         String refreshToken = "Bearer valid_refresh";
-        Claims claims = mock(Claims.class);
-
-        // when
-        when(claims.getSubject()).thenReturn("1");
-        when(claims.get("category", String.class)).thenReturn("refresh");
-
-        when(jwtUtil.validateToken(anyString())).thenReturn(true);
-        when(jwtUtil.getClaims(anyString())).thenReturn(claims);
-
-        when(redisUtil.getAndDelete("RT:1"))
-                .thenReturn("valid_refresh")
-                .thenReturn(null);
+        when(tokenService.consumeRefreshToken(refreshToken))
+                .thenReturn(1L)
+                .thenThrow(new AuthException(com.infragen.infragen.domain.auth.exception.code.error.AuthErrorCode.TOKEN_INVALID));
 
         Member member = Member.builder().role(Role.ROLE_USER).build();
         ReflectionTestUtils.setField(member, "id", 1L);
 
         when(memberQueryService.findById(1L)).thenReturn(member);
-        when(jwtUtil.createAccessToken(anyLong(), any())).thenReturn("new_access");
-        when(jwtUtil.createRefreshToken(anyLong())).thenReturn("new_refresh");
-        when(jwtUtil.getExpirationTime(anyString())).thenReturn(10000L);
+        when(tokenService.issueTokens(1L, Role.ROLE_USER))
+                .thenReturn(new AuthResDTO.TokenResultDTO("new_access", "new_refresh"));
+
+        // when
+        AuthResDTO.TokenResultDTO result = authService.reissueToken(refreshToken);
 
         // then
-        assertNotNull(authService.reissueToken(refreshToken));
+        assertNotNull(result);
+        assertEquals("new_access", result.getAccessToken());
+        verify(tokenService).consumeRefreshToken(refreshToken);
+
         assertThrows(AuthException.class, () -> authService.reissueToken(refreshToken));
     }
 }

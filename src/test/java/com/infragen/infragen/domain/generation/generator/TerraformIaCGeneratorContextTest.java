@@ -58,8 +58,8 @@ class TerraformIaCGeneratorContextTest {
         IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, target);
 
         // then
-        assertTrue(fileNames(bundle).contains("cloud/terraform/aws/main.tf"));
-        assertFalse(fileNames(bundle).contains("cloud/terraform/oci/main.tf"));
+        assertTrue(fileNames(bundle).contains("cloud/aws/terraform/main.tf"));
+        assertFalse(fileNames(bundle).contains("cloud/oci/terraform/main.tf"));
     }
 
     private static ParsingResultDTO validParsingResult() {

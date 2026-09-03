@@ -9,14 +9,21 @@ import com.infragen.infragen.global.enums.ComponentType;
 @Component
 public class RedisCloudComposeServiceRenderer implements CloudComposeServiceRenderer {
 
+    /** @return 이 renderer가 담당하는 Redis component type */
+    @Override
+    public ComponentType getSupportedType() {
+        return ComponentType.REDIS;
+    }
+
     @Override
     public String getServiceName() {
         return "redis";
     }
 
+    /** 그래프에서 애플리케이션으로 연결된 Redis만 Cloud Compose에 포함한다. */
     @Override
     public boolean isEnabled(CloudDeployContext context) {
-        return context.hasComponent(ComponentType.REDIS);
+        return context.hasIncomingDependency(ComponentType.REDIS);
     }
 
     @Override
@@ -26,7 +33,7 @@ public class RedisCloudComposeServiceRenderer implements CloudComposeServiceRend
 
     @Override
     public String render(CloudDeployContext context) {
-        RedisComponent redis = context.firstComponent(ComponentType.REDIS, RedisComponent.class);
+        RedisComponent redis = context.dependencyComponent(ComponentType.REDIS, RedisComponent.class);
         String volumeName = redis.getVolumeName();
         String volumeMount = volumeName == null || volumeName.isBlank()
             ? ""

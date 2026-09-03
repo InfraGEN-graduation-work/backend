@@ -17,6 +17,7 @@ import com.infragen.infragen.domain.generation.enums.OutputFormat;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.generation.service.IaCGenerationService;
+import com.infragen.infragen.domain.generation.validator.DeploymentTargetValidator;
 import com.infragen.infragen.domain.parsing.dto.request.ParsingReqDTO;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.service.ParsingService;
@@ -34,6 +35,7 @@ public class GenerationCommandService {
     private final ParsingService parsingService;
     private final IaCGenerationService iaCGenerationService;
     private final ProjectHistoryCommandService projectHistoryCommandService;
+    private final DeploymentTargetValidator deploymentTargetValidator;
 
     /**
      * 배포 옵션에 따라 Local 또는 선택한 Cloud provider 산출물을 생성하고 하나의 history에 저장한다.
@@ -59,19 +61,11 @@ public class GenerationCommandService {
         ParsingResultDTO parsingResult
     ) {
         DeploymentOption deploymentOption = request.deploymentOption();
-        if (deploymentOption == null) {
-            throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
-        }
 
         if (deploymentOption == DeploymentOption.LOCAL) {
-            if (Boolean.TRUE.equals(request.includeLocalSpec())
-                || request.deploymentTarget() != null) {
-                throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
-            }
             return iaCGenerationService.generate(parsingResult, OutputFormat.DOCKER_COMPOSE);
         }
 
-        validateCloudTarget(deploymentOption, request.deploymentTarget());
         IaCFileDTO.BundleResDTO cloudBundle = iaCGenerationService.generate(
             parsingResult,
             OutputFormat.TERRAFORM,
@@ -94,8 +88,25 @@ public class GenerationCommandService {
 
     private void validateRequest(GenerateReqDTO.Request request) {
         if (request == null) {
-            throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
+            throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_GENERATION_REQUEST);
         }
+
+        DeploymentOption deploymentOption = request.deploymentOption();
+
+        if (deploymentOption == null) {
+            throw new IaCGenerationException(IaCGenerationErrorCode.MISSING_DEPLOYMENT_OPTION);
+        }
+
+        if (deploymentOption == DeploymentOption.LOCAL) {
+            if (!Boolean.FALSE.equals(request.includeLocalSpec()) // canonical Local 요청은 false만 허용
+                || request.deploymentTarget() != null) {
+                throw new IaCGenerationException(
+                    IaCGenerationErrorCode.INVALID_LOCAL_DEPLOYMENT_CONFIGURATION);
+            }
+            return;
+        }
+
+        validateCloudTarget(deploymentOption, request.deploymentTarget());
     }
 
     private GenerateResDTO.GenerateResultResDTO generateAndSave(
@@ -118,13 +129,16 @@ public class GenerationCommandService {
         DeploymentTargetReqDTO.Target deploymentTarget
     ) {
         if (deploymentTarget == null) {
-            throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
+            throw new IaCGenerationException(IaCGenerationErrorCode.MISSING_DEPLOYMENT_TARGET);
         }
 
         boolean validTarget = deploymentTarget.provider() == deploymentOption;
+
         if (!validTarget) {
-            throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
+            throw new IaCGenerationException(
+                IaCGenerationErrorCode.DEPLOYMENT_TARGET_PROVIDER_MISMATCH);
         }
+        deploymentTargetValidator.validate(deploymentTarget);
     }
 
     private GenerateResDTO.GenerateResultResDTO saveGeneratedResult(

@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 
 import com.infragen.infragen.domain.generation.dto.request.DeploymentTargetReqDTO;
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
+import com.infragen.infragen.domain.generation.enums.DeploymentOption;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 
@@ -14,8 +15,8 @@ import com.infragen.infragen.domain.generation.exception.code.error.IaCGeneratio
 public class AwsTerraformRenderer implements CloudTerraformRenderer {
 
     @Override
-    public Provider getProvider() {
-        return Provider.AWS;
+    public DeploymentOption getProvider() {
+        return DeploymentOption.AWS;
     }
 
     @Override
@@ -25,9 +26,9 @@ public class AwsTerraformRenderer implements CloudTerraformRenderer {
     ) {
         DeploymentTargetReqDTO.AwsDeploymentTarget target = requireTarget(deploymentTarget);
         return List.of(
-            file("terraform/aws/main.tf", mainTerraform()),
-            file("terraform/aws/variables.tf", variablesTerraform(context.applicationPort())),
-            file("terraform/aws/terraform.tfvars.example", tfvarsExample(
+            file("aws/terraform/main.tf", mainTerraform()),
+            file("aws/terraform/variables.tf", variablesTerraform(context.applicationPort())),
+            file("aws/terraform/terraform.tfvars.example", tfvarsExample(
                 context.applicationPort(), target))
         );
     }

@@ -9,23 +9,8 @@ import com.infragen.infragen.domain.generation.enums.DeploymentOption;
 /** 하나의 cloud provider Terraform 산출물을 생성하는 계약이다. */
 public interface CloudTerraformRenderer {
 
-    enum Provider {
-        AWS(DeploymentOption.AWS),
-        OCI(DeploymentOption.OCI);
-
-        private final DeploymentOption deploymentOption;
-
-        Provider(DeploymentOption deploymentOption) {
-            this.deploymentOption = deploymentOption;
-        }
-
-        public DeploymentOption deploymentOption() {
-            return deploymentOption;
-        }
-    }
-
     /** @return 이 renderer가 지원하는 cloud provider */
-    Provider getProvider();
+    DeploymentOption getProvider();
 
     /**
      * provider별 Terraform 파일을 생성한다.

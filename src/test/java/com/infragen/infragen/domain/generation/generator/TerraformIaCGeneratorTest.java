@@ -64,7 +64,7 @@ class TerraformIaCGeneratorTest {
         // given
         List<IaCFileDTO.FileContentResDTO> files = List.of(
             IaCFileDTO.FileContentResDTO.builder()
-                .fileName("terraform/aws/main.tf")
+                .fileName("aws/terraform/main.tf")
                 .content("aws")
                 .build(),
             IaCFileDTO.FileContentResDTO.builder()
@@ -77,7 +77,7 @@ class TerraformIaCGeneratorTest {
         IaCFileDTO.BundleResDTO bundle = fileAssembler.assemble(files);
 
         // then
-        assertEquals("cloud/terraform/aws/main.tf", bundle.files().get(0).fileName());
+        assertEquals("cloud/aws/terraform/main.tf", bundle.files().get(0).fileName());
         assertEquals("cloud/Dockerfile", bundle.files().get(1).fileName());
         assertEquals(files.get(0).content(), bundle.files().get(0).content());
         assertEquals(files.get(1).content(), bundle.files().get(1).content());
@@ -97,24 +97,24 @@ class TerraformIaCGeneratorTest {
         assertAll(
             () -> assertEquals(6, first.files().size()),
             () -> assertEquals(first.files(), second.files()),
-            () -> assertTerraformContract(first, "terraform/aws/main.tf", "aws",
+            () -> assertTerraformContract(first, "aws/terraform/main.tf", "aws",
                 AWS_PROVIDER_SOURCE, AWS_PROVIDER_VERSION),
             () -> assertTrue(fileContent(first, "Dockerfile").contains("FROM eclipse-temurin:17-jre")),
             () -> assertTrue(fileContent(first, "Dockerfile").contains("EXPOSE 9090")),
-            () -> assertTrue(fileContent(first, "terraform/aws/main.tf").contains("from_port   = var.app_port")),
-            () -> assertTrue(fileContent(first, "terraform/aws/main.tf")
+            () -> assertTrue(fileContent(first, "aws/terraform/main.tf").contains("from_port   = var.app_port")),
+            () -> assertTrue(fileContent(first, "aws/terraform/main.tf")
                 .contains("Name = var.aws_instance_name")),
-            () -> assertTrue(fileContent(first, "terraform/aws/main.tf")
+            () -> assertTrue(fileContent(first, "aws/terraform/main.tf")
                 .contains("cidr_blocks = [var.aws_app_cidr]")),
-            () -> assertTrue(fileContent(first, "terraform/aws/variables.tf")
+            () -> assertTrue(fileContent(first, "aws/terraform/variables.tf")
                 .contains("variable \"aws_internet_gateway_name\"")),
-            () -> assertTrue(fileContent(first, "terraform/aws/terraform.tfvars.example")
+            () -> assertTrue(fileContent(first, "aws/terraform/terraform.tfvars.example")
                 .contains("aws_region = \"ap-northeast-2\"")),
-            () -> assertTrue(fileContent(first, "terraform/aws/terraform.tfvars.example")
+            () -> assertTrue(fileContent(first, "aws/terraform/terraform.tfvars.example")
                 .contains("aws_vpc_name = \"infragen-vpc\"")),
-            () -> assertTrue(fileContent(first, "terraform/aws/terraform.tfvars.example")
+            () -> assertTrue(fileContent(first, "aws/terraform/terraform.tfvars.example")
                 .contains("aws_ami_id = \"ami-xxxxxxxx\"")),
-            () -> assertTrue(fileContent(first, "terraform/aws/variables.tf").contains("default     = 9090")),
+            () -> assertTrue(fileContent(first, "aws/terraform/variables.tf").contains("default     = 9090")),
             () -> assertTrue(fileContent(first, "docker-compose.cloud.yml")
                 .contains("${APP_PORT:-9090}:9090")),
             () -> assertFalse(fileContent(first, "docker-compose.cloud.yml").contains("mysql:")),
@@ -148,9 +148,9 @@ class TerraformIaCGeneratorTest {
 
         // then
         assertAll(
-            () -> assertTrue(fileContent(bundle, "terraform/aws/main.tf").contains("provider \"aws\"")),
+            () -> assertTrue(fileContent(bundle, "aws/terraform/main.tf").contains("provider \"aws\"")),
             () -> assertFalse(bundle.files().stream()
-                .anyMatch(file -> file.fileName().equals("terraform/oci/main.tf")))
+                .anyMatch(file -> file.fileName().equals("cloud/oci/terraform/main.tf")))
         );
     }
 
@@ -165,11 +165,11 @@ class TerraformIaCGeneratorTest {
 
         // then
         assertAll(
-            () -> assertTrue(fileContent(bundle, "terraform/oci/main.tf").contains("provider \"oci\"")),
-            () -> assertTrue(fileContent(bundle, "terraform/oci/terraform.tfvars.example")
+            () -> assertTrue(fileContent(bundle, "oci/terraform/main.tf").contains("provider \"oci\"")),
+            () -> assertTrue(fileContent(bundle, "oci/terraform/terraform.tfvars.example")
                 .contains("oci_compartment_id = \"ocid1.compartment.oc1..aaaa\"")),
             () -> assertFalse(bundle.files().stream()
-                .anyMatch(file -> file.fileName().equals("terraform/aws/main.tf")))
+                .anyMatch(file -> file.fileName().equals("cloud/aws/terraform/main.tf")))
         );
     }
 
@@ -199,15 +199,15 @@ class TerraformIaCGeneratorTest {
         writeTerraformFiles(ociBundle);
 
         // when
-        validateTerraformModule(terraformValidationDirectory.resolve("cloud/terraform/aws"));
-        validateTerraformModule(terraformValidationDirectory.resolve("cloud/terraform/oci"));
+        validateTerraformModule(terraformValidationDirectory.resolve("cloud/aws/terraform"));
+        validateTerraformModule(terraformValidationDirectory.resolve("cloud/oci/terraform"));
 
         // then
         assertAll(
             () -> assertTrue(Files.exists(
-                terraformValidationDirectory.resolve("cloud/terraform/aws/.terraform.lock.hcl"))),
+                terraformValidationDirectory.resolve("cloud/aws/terraform/.terraform.lock.hcl"))),
             () -> assertTrue(Files.exists(
-                terraformValidationDirectory.resolve("cloud/terraform/oci/.terraform.lock.hcl")))
+                terraformValidationDirectory.resolve("cloud/oci/terraform/.terraform.lock.hcl")))
         );
     }
 
@@ -301,6 +301,51 @@ class TerraformIaCGeneratorTest {
             () -> assertTrue(compose.contains("      - redis\n")),
             () -> assertTrue(compose.contains("  mysql_data:\n")),
             () -> assertTrue(compose.contains("  redis_data:\n"))
+        );
+    }
+
+    @Test
+    @DisplayName("동일한 연결 MySQL 중복 — AMBIGUOUS_DEPENDENCY_CONFIGURATION")
+    void generate_DuplicateConnectedMysql_ThrowsAmbiguousDependencyConfiguration() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        MySQLComponent firstMysql = MySQLComponent.builder()
+            .id("mysql-1")
+            .posX(0f)
+            .posY(0f)
+            .imageVersion("mysql:8.4")
+            .containerName("mysql-primary")
+            .port(3306)
+            .volumeName("mysql_primary_data")
+            .build();
+        MySQLComponent secondMysql = MySQLComponent.builder()
+            .id("mysql-2")
+            .posX(0f)
+            .posY(100f)
+            .imageVersion("mysql:8.4")
+            .containerName("mysql-secondary")
+            .port(3307)
+            .volumeName("mysql_secondary_data")
+            .build();
+        EdgeDTO firstEdge = new EdgeDTO();
+        firstEdge.setSourceNodeId("mysql-1");
+        firstEdge.setTargetNodeId("node-1");
+        EdgeDTO secondEdge = new EdgeDTO();
+        secondEdge.setSourceNodeId("mysql-2");
+        secondEdge.setTargetNodeId("node-1");
+        parsingResult.setComponents(List.of(parsingResult.getComponents().get(0), firstMysql, secondMysql));
+        parsingResult.setEdges(List.of(firstEdge, secondEdge));
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> generator.generate(parsingResult, awsTarget())
+        );
+
+        // then
+        assertEquals(
+            IaCGenerationErrorCode.AMBIGUOUS_DEPENDENCY_CONFIGURATION,
+            exception.getCode()
         );
     }
 
@@ -420,7 +465,8 @@ class TerraformIaCGeneratorTest {
 
     private void writeTerraformFiles(IaCFileDTO.BundleResDTO bundle) throws IOException {
         for (IaCFileDTO.FileContentResDTO file : bundle.files()) {
-            if (!file.fileName().startsWith("cloud/terraform/")) {
+            if (!file.fileName().startsWith("cloud/aws/terraform/")
+                && !file.fileName().startsWith("cloud/oci/terraform/")) {
                 continue;
             }
 

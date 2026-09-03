@@ -38,6 +38,13 @@ public class TerraformIaCGenerator implements TargetAwareIaCGenerator {
     private final CloudDeployFileAssembler cloudDeployFileAssembler =
         new CloudDeployFileAssembler();
 
+    /**
+     * provider key를 기준으로 Terraform renderer registry를 구성한다.
+     *
+     * @param cloudComposeRenderer Cloud runtime Compose renderer
+     * @param terraformRenderers provider별 Terraform renderer 목록
+     * @throws IllegalStateException 같은 provider renderer가 중복 등록된 경우
+     */
     public TerraformIaCGenerator(
         CloudComposeRenderer cloudComposeRenderer,
         List<CloudTerraformRenderer> terraformRenderers
@@ -46,7 +53,7 @@ public class TerraformIaCGenerator implements TargetAwareIaCGenerator {
         this.terraformRendererMap = new EnumMap<>(DeploymentOption.class);
         for (CloudTerraformRenderer renderer : terraformRenderers) {
             CloudTerraformRenderer previous = terraformRendererMap.put(
-                renderer.getProvider().deploymentOption(), renderer);
+                renderer.getProvider(), renderer);
 
             if (previous != null) {
                 throw new IllegalStateException(
@@ -55,11 +62,20 @@ public class TerraformIaCGenerator implements TargetAwareIaCGenerator {
         }
     }
 
+    /** @return 내부 generator 분류용 Terraform 출력 형식 */
     @Override
     public OutputFormat getOutputFormat() {
         return OutputFormat.TERRAFORM;
     }
 
+    /**
+     * deployment target의 provider renderer만 선택해 Cloud bundle을 생성한다.
+     *
+     * @param parsingResult 파싱된 runtime graph
+     * @param deploymentTarget 선택한 Cloud provider 배포 설정
+     * @return Cloud scope가 적용된 생성 파일 bundle
+     * @throws IaCGenerationException target이 없거나 지원 renderer가 없는 경우
+     */
     @Override
     public IaCFileDTO.BundleResDTO generate(
         ParsingResultDTO parsingResult,

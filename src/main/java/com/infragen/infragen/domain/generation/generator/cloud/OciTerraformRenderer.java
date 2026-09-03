@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 
 import com.infragen.infragen.domain.generation.dto.request.DeploymentTargetReqDTO;
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
+import com.infragen.infragen.domain.generation.enums.DeploymentOption;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 
@@ -14,8 +15,8 @@ import com.infragen.infragen.domain.generation.exception.code.error.IaCGeneratio
 public class OciTerraformRenderer implements CloudTerraformRenderer {
 
     @Override
-    public Provider getProvider() {
-        return Provider.OCI;
+    public DeploymentOption getProvider() {
+        return DeploymentOption.OCI;
     }
 
     @Override
@@ -25,9 +26,9 @@ public class OciTerraformRenderer implements CloudTerraformRenderer {
     ) {
         DeploymentTargetReqDTO.OciDeploymentTarget target = requireTarget(deploymentTarget);
         return List.of(
-            file("terraform/oci/main.tf", mainTerraform()),
-            file("terraform/oci/variables.tf", variablesTerraform(context.applicationPort())),
-            file("terraform/oci/terraform.tfvars.example", tfvarsExample(
+            file("oci/terraform/main.tf", mainTerraform()),
+            file("oci/terraform/variables.tf", variablesTerraform(context.applicationPort())),
+            file("oci/terraform/terraform.tfvars.example", tfvarsExample(
                 context.applicationPort(), target))
         );
     }

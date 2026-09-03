@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -29,6 +30,7 @@ import com.infragen.infragen.domain.generation.enums.OutputFormat;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.generation.service.IaCGenerationService;
+import com.infragen.infragen.domain.generation.validator.DeploymentTargetValidator;
 import com.infragen.infragen.domain.parsing.dto.request.ParsingReqDTO;
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
 import com.infragen.infragen.domain.parsing.dto.request.NodeDTO;
@@ -56,6 +58,9 @@ class GenerationCommandServiceTest {
 
     @Mock
     private ProjectHistoryCommandService projectHistoryCommandService;
+
+    @Mock
+    private DeploymentTargetValidator deploymentTargetValidator;
 
     @InjectMocks
     private GenerationCommandService generationCommandService;
@@ -167,8 +172,8 @@ class GenerationCommandServiceTest {
     }
 
     @Test
-    @DisplayName("OCI 배포 옵션과 AWS target — 잘못된 target 오류 반환")
-    void generate_OciOptionWithAwsTarget_ThrowsInvalidComponentState() {
+    @DisplayName("OCI 배포 옵션과 AWS target — provider 불일치 오류 반환")
+    void generate_OciOptionWithAwsTarget_ThrowsProviderMismatch() {
         // given
         Long projectId = 1L;
         Long memberId = 2L;
@@ -181,10 +186,6 @@ class GenerationCommandServiceTest {
         );
         ParsingResultDTO parsingResult = new ParsingResultDTO();
 
-        when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(null);
-        when(parsingService.parsing(any(ParsingReqDTO.class), eq(projectId)))
-            .thenReturn(parsingResult);
-
         // when
         IaCGenerationException exception = assertThrows(
             IaCGenerationException.class,
@@ -192,10 +193,168 @@ class GenerationCommandServiceTest {
         );
 
         // then
-        assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
-        verify(projectQueryService).getOwnedProject(projectId, memberId);
-        verify(parsingService).parsing(any(ParsingReqDTO.class), eq(projectId));
-        verifyNoInteractions(iaCGenerationService, projectHistoryCommandService);
+        assertEquals(
+            IaCGenerationErrorCode.DEPLOYMENT_TARGET_PROVIDER_MISMATCH,
+            exception.getCode()
+        );
+        verifyNoInteractions(
+            projectQueryService,
+            parsingService,
+            iaCGenerationService,
+            projectHistoryCommandService
+        );
+    }
+
+    @Test
+    @DisplayName("AWS target 필수값 누락 — 생성 전에 예외 발생")
+    void generate_AwsTargetMissingRequiredValue_ThrowsBeforeGeneration() {
+        // given
+        DeploymentTargetReqDTO.Target target = new DeploymentTargetReqDTO.AwsDeploymentTarget(
+            "ap-northeast-2",
+            "",
+            "infragen-subnet",
+            "infragen-igw",
+            "infragen-public-route",
+            "infragen-sg",
+            "infragen-app",
+            "10.0.0.0/16",
+            "10.0.1.0/24",
+            "ami-xxxxxxxx",
+            "t3.micro",
+            "203.0.113.10/32",
+            "0.0.0.0/0"
+        );
+        GenerateReqDTO.Request request = new GenerateReqDTO.Request(
+            List.of(),
+            List.of(),
+            DeploymentOption.AWS,
+            false,
+            target
+        );
+        doThrow(new IaCGenerationException(IaCGenerationErrorCode.INVALID_DEPLOYMENT_TARGET))
+            .when(deploymentTargetValidator).validate(target);
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> generationCommandService.generate(1L, request, 2L)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.INVALID_DEPLOYMENT_TARGET, exception.getCode());
+        verify(deploymentTargetValidator).validate(target);
+        verifyNoInteractions(
+            projectQueryService,
+            parsingService,
+            iaCGenerationService,
+            projectHistoryCommandService
+        );
+    }
+
+    @Test
+    @DisplayName("Local includeLocalSpec null — 생성 전에 예외 발생")
+    void generate_LocalWithoutExplicitIncludeFlag_ThrowsBeforeGeneration() {
+        // given
+        GenerateReqDTO.Request request = new GenerateReqDTO.Request(
+            List.of(),
+            List.of(),
+            DeploymentOption.LOCAL,
+            null,
+            null
+        );
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> generationCommandService.generate(1L, request, 2L)
+        );
+
+        // then
+        assertEquals(
+            IaCGenerationErrorCode.INVALID_LOCAL_DEPLOYMENT_CONFIGURATION,
+            exception.getCode()
+        );
+        verifyNoInteractions(
+            projectQueryService,
+            parsingService,
+            iaCGenerationService,
+            projectHistoryCommandService
+        );
+    }
+
+    @Test
+    @DisplayName("요청 객체 누락 — 생성 전에 요청 오류 반환")
+    void generate_NullRequest_ThrowsInvalidGenerationRequest() {
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> generationCommandService.generate(1L, null, 2L)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.INVALID_GENERATION_REQUEST, exception.getCode());
+        verifyNoInteractions(
+            projectQueryService,
+            parsingService,
+            iaCGenerationService,
+            projectHistoryCommandService
+        );
+    }
+
+    @Test
+    @DisplayName("배포 옵션 누락 — 생성 전에 배포 옵션 오류 반환")
+    void generate_MissingDeploymentOption_ThrowsMissingDeploymentOption() {
+        // given
+        GenerateReqDTO.Request request = new GenerateReqDTO.Request(
+            List.of(),
+            List.of(),
+            null,
+            false,
+            null
+        );
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> generationCommandService.generate(1L, request, 2L)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.MISSING_DEPLOYMENT_OPTION, exception.getCode());
+        verifyNoInteractions(
+            projectQueryService,
+            parsingService,
+            iaCGenerationService,
+            projectHistoryCommandService
+        );
+    }
+
+    @Test
+    @DisplayName("Cloud target 누락 — 생성 전에 target 오류 반환")
+    void generate_MissingCloudTarget_ThrowsMissingDeploymentTarget() {
+        // given
+        GenerateReqDTO.Request request = new GenerateReqDTO.Request(
+            List.of(),
+            List.of(),
+            DeploymentOption.AWS,
+            false,
+            null
+        );
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> generationCommandService.generate(1L, request, 2L)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.MISSING_DEPLOYMENT_TARGET, exception.getCode());
+        verifyNoInteractions(
+            projectQueryService,
+            parsingService,
+            iaCGenerationService,
+            projectHistoryCommandService
+        );
     }
 
     @Test

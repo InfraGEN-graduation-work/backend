@@ -274,7 +274,9 @@ class GenerationControllerWebTest {
             // then
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.isSuccess").value(false))
-            .andExpect(jsonPath("$.code").value("COMMON400_1"));
+            .andExpect(jsonPath("$.code").value("COMMON400_1"))
+            .andExpect(jsonPath("$.result")
+                .value("[deploymentTarget.vpcName] AWS VPC 이름은 필수입니다."));
     }
 
     @Test

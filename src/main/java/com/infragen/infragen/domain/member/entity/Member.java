@@ -81,6 +81,11 @@ public class Member extends BaseEntity {
         this.isActive = false;
     }
 
+    public void updateProfile(String nickname, String encodedPassword) {
+        this.nickname = nickname;
+        this.password = encodedPassword;
+    }
+
     private static String createMaskedEmail(Long memberId) {
         String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         return "withdrawn_" + memberId + "_" + suffix + "@deleted.infragen.local";

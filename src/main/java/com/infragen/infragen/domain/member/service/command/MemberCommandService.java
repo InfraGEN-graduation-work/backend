@@ -2,6 +2,7 @@ package com.infragen.infragen.domain.member.service.command;
 
 import com.infragen.infragen.domain.auth.dto.request.AuthReqDTO;
 import com.infragen.infragen.domain.member.converter.MemberConverter;
+import com.infragen.infragen.domain.member.dto.request.MemberReqDTO;
 import com.infragen.infragen.domain.member.dto.response.MemberResDTO;
 import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.member.enums.SocialProvider;
@@ -56,5 +57,25 @@ public class MemberCommandService {
                     return MemberConverter.toResultDTO(memberRepository.save(newMember));
                 }
             );
+    }
+
+    public MemberResDTO.MemberResultDTO updateMember(Long memberId, MemberReqDTO.UpdateMember request) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
+        if (member.getSocialProvider() != null && request.password() != null) {
+            throw new MemberException(MemberErrorCode.CANNOT_CHANGE_SOCIAL_PASSWORD);
+        }
+        String nickname = request.nickname() != null ? request.nickname() : member.getNickname();
+        String password = request.password() != null
+                ? passwordEncoder.encode(request.password())
+                : member.getPassword();
+        member.updateProfile(nickname, password);
+        return MemberConverter.toResultDTO(member);
+    }
+
+    public void withdrawMember(Long memberId) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
+        member.withdraw();
     }
 }

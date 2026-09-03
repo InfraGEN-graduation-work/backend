@@ -219,8 +219,11 @@ class DockerComposeIaCGeneratorTest {
     }
 
     private static String fileContent(IaCFileDTO.BundleResDTO bundle, String fileName) {
+        String scopedFileName = fileName.startsWith("local/")
+            ? fileName
+            : "local/" + fileName;
         return bundle.files().stream()
-            .filter(file -> fileName.equals(file.fileName()))
+            .filter(file -> scopedFileName.equals(file.fileName()))
             .findFirst()
             .orElseThrow()
             .content();

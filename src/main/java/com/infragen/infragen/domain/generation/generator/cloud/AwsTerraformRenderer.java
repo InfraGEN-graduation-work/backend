@@ -2,22 +2,43 @@ package com.infragen.infragen.domain.generation.generator.cloud;
 
 import java.util.List;
 
+import org.springframework.stereotype.Component;
+
+import com.infragen.infragen.domain.generation.dto.request.DeploymentTargetReqDTO;
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
+import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
+import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 
 /** AWS 단일 인스턴스 scaffold의 provider-specific Terraform 파일을 생성한다. */
-public class AwsTerraformRenderer {
+@Component
+public class AwsTerraformRenderer implements CloudTerraformRenderer {
 
-    /**
-     * 파싱된 애플리케이션 포트를 AWS security group 변수의 기본값으로 반영한다.
-     *
-     * @param applicationPort parsing 결과의 애플리케이션 포트
-     * @return AWS Terraform 파일 목록
-     */
-    public List<IaCFileDTO.FileContentResDTO> render(int applicationPort) {
+    @Override
+    public Provider getProvider() {
+        return Provider.AWS;
+    }
+
+    @Override
+    public List<IaCFileDTO.FileContentResDTO> render(
+        CloudDeployContext context,
+        DeploymentTargetReqDTO.Target deploymentTarget
+    ) {
+        DeploymentTargetReqDTO.AwsDeploymentTarget target = requireTarget(deploymentTarget);
         return List.of(
             file("terraform/aws/main.tf", mainTerraform()),
-            file("terraform/aws/variables.tf", variablesTerraform(applicationPort))
+            file("terraform/aws/variables.tf", variablesTerraform(context.applicationPort())),
+            file("terraform/aws/terraform.tfvars.example", tfvarsExample(
+                context.applicationPort(), target))
         );
+    }
+
+    private DeploymentTargetReqDTO.AwsDeploymentTarget requireTarget(
+        DeploymentTargetReqDTO.Target deploymentTarget
+    ) {
+        if (!(deploymentTarget instanceof DeploymentTargetReqDTO.AwsDeploymentTarget target)) {
+            throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
+        }
+        return target;
     }
 
     private IaCFileDTO.FileContentResDTO file(String fileName, String content) {
@@ -225,5 +246,59 @@ public class AwsTerraformRenderer {
               default     = %d
             }
             """.formatted(applicationPort);
+    }
+
+    private String tfvarsExample(
+        int applicationPort,
+        DeploymentTargetReqDTO.AwsDeploymentTarget target
+    ) {
+        return """
+            # InfraGEN이 생성한 AWS target 예시입니다. 실제 credential은 포함하지 않습니다.
+            aws_region = %s
+            aws_vpc_name = %s
+            aws_subnet_name = %s
+            aws_internet_gateway_name = %s
+            aws_route_table_name = %s
+            aws_security_group_name = %s
+            aws_instance_name = %s
+            aws_vpc_cidr = %s
+            aws_subnet_cidr = %s
+            aws_ami_id = %s
+            aws_instance_type = %s
+            aws_admin_cidr = %s
+            aws_app_cidr = %s
+            app_port = %d
+            """.formatted(
+                hcl(valueOrDefault(target.region(), "ap-northeast-2")),
+                hcl(target.vpcName()),
+                hcl(target.subnetName()),
+                hcl(target.internetGatewayName()),
+                hcl(target.routeTableName()),
+                hcl(target.securityGroupName()),
+                hcl(target.instanceName()),
+                hcl(valueOrDefault(target.vpcCidr(), "10.0.0.0/16")),
+                hcl(valueOrDefault(target.subnetCidr(), "10.0.1.0/24")),
+                hcl(target.amiId()),
+                hcl(valueOrDefault(target.instanceType(), "t3.micro")),
+                hcl(target.adminCidr()),
+                hcl(target.appCidr()),
+                applicationPort
+            );
+    }
+
+    private String valueOrDefault(String value, String defaultValue) {
+        return value == null || value.isBlank() ? defaultValue : value;
+    }
+
+    private String hcl(String value) {
+        if (value == null) {
+            throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
+        }
+        return "\"" + value
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            + "\"";
     }
 }

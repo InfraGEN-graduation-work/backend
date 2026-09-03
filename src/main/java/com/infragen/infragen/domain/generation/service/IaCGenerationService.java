@@ -5,9 +5,12 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
+import com.infragen.infragen.domain.generation.dto.request.DeploymentTargetReqDTO;
 import com.infragen.infragen.domain.generation.enums.OutputFormat;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.generator.IaCGenerator;
+import com.infragen.infragen.domain.generation.generator.LocalIaCGenerator;
+import com.infragen.infragen.domain.generation.generator.TargetAwareIaCGenerator;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 
@@ -28,7 +31,25 @@ public class IaCGenerationService {
         if (generator == null) {
             throw new IaCGenerationException(IaCGenerationErrorCode.UNSUPPORTED_OUTPUT_FORMAT);
         }
-        return generator.generate(parsingResult);
+        if (!(generator instanceof LocalIaCGenerator localGenerator)) {
+            throw new IaCGenerationException(IaCGenerationErrorCode.UNSUPPORTED_OUTPUT_FORMAT);
+        }
+        return localGenerator.generate(parsingResult);
+    }
+
+    public IaCFileDTO.BundleResDTO generate(
+        ParsingResultDTO parsingResult,
+        OutputFormat outputFormat,
+        DeploymentTargetReqDTO.Target deploymentTarget
+    ) {
+        IaCGenerator generator = generatorMap.get(outputFormat);
+        if (generator == null) {
+            throw new IaCGenerationException(IaCGenerationErrorCode.UNSUPPORTED_OUTPUT_FORMAT);
+        }
+        if (!(generator instanceof TargetAwareIaCGenerator targetAwareGenerator)) {
+            throw new IaCGenerationException(IaCGenerationErrorCode.UNSUPPORTED_OUTPUT_FORMAT);
+        }
+        return targetAwareGenerator.generate(parsingResult, deploymentTarget);
     }
 
 }

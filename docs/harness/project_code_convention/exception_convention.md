@@ -148,7 +148,7 @@ MEMBER409_1
 
 - Service는 비즈니스 상황에 맞는 ErrorCode로 예외를 발생시킨다.
 - Controller는 정상 응답에 맞는 SuccessCode를 선택한다.
-- `GlobalExceptionHandler`가 예외를 공통 오류 응답으로 변환한다.
+- `GeneralExceptionAdvice`가 예외를 공통 오류 응답으로 변환한다.
 - Converter와 DTO는 Exception 및 Code enum에 의존하지 않는다.
 
 ```java

@@ -54,6 +54,9 @@ class GenerateApiIntegrationTest {
     private static final String REDIS_PASSWORD = "test-redis-password";
     private static final String REQUEST_JSON = """
         {
+          "deploymentOption": "LOCAL",
+          "includeLocalSpec": false,
+          "deploymentTarget": null,
           "nodes": [
             {
               "nodeId": "node-1",
@@ -93,6 +96,9 @@ class GenerateApiIntegrationTest {
         """;
     private static final String MYSQL_REDIS_REQUEST_JSON = """
         {
+          "deploymentOption": "LOCAL",
+          "includeLocalSpec": false,
+          "deploymentTarget": null,
           "nodes": [
             {
               "nodeId": "node-1",
@@ -234,10 +240,10 @@ class GenerateApiIntegrationTest {
             .findAllByProjectHistoryId(history.getId());
         assertEquals(2, generatedFiles.size());
         assertTrue(generatedFiles.stream().anyMatch(file ->
-            "docker-compose.yml".equals(file.getFileName())
+            "local/docker-compose.yml".equals(file.getFileName())
                 && file.getContent().contains("services:")));
         assertTrue(generatedFiles.stream().anyMatch(file ->
-            ".env".equals(file.getFileName())
+            "local/.env".equals(file.getFileName())
                 && file.getContent().contains("localhost")));
     }
 
@@ -269,11 +275,11 @@ class GenerateApiIntegrationTest {
             .findAllByProjectHistoryId(history.getId());
 
         assertTrue(generatedFiles.stream().anyMatch(file ->
-            "docker-compose.yml".equals(file.getFileName())
+            "local/docker-compose.yml".equals(file.getFileName())
                 && file.getContent().contains("redis_data:/data")
                 && file.getContent().contains("  redis_data:\n")));
         assertTrue(generatedFiles.stream().anyMatch(file ->
-            ".env".equals(file.getFileName())
+            "local/.env".equals(file.getFileName())
                 && file.getContent().contains("REDIS_HOST=localhost")
                 && file.getContent().contains("REDIS_PORT=6379")
                 && file.getContent().contains("REDIS_PASSWORD=test-redis-password")));

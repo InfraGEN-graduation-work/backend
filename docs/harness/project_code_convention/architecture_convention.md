@@ -133,7 +133,7 @@ Parsing은 그래프의 정합성을 판단하지만 Docker Compose나 Terraform
 - `JwtUtil`은 JWT 생성·서명·claim 검증을 담당하고, token lifecycle 정책은 `AuthService`가 담당한다.
 - `RedisUtil`은 Redis CRUD·blacklist 저장 동작을 제공하고, key 의미·TTL 정책은 호출 domain이 결정한다.
 - `BaseEntity`는 공통 `createdAt`·`updatedAt` audit field를 제공한다.
-- MySQL·Redis가 필요한 integration test는 Testcontainers를 사용하며 H2를 전제로 하지 않는다.
+- MySQL·Redis가 필요한 integration test는 문서화된 로컬 Docker 서비스 또는 명시적으로 구성한 container-based 환경을 사용하며 H2를 전제로 하지 않는다.
 - 순수 parser·validator·converter·generator는 Spring context 없이 테스트할 수 있는 구조를 우선한다.
 
 세부 응답, 예외, transaction, 테스트 규칙은 각각의 전용 convention 문서를 우선한다. 이 문서에서 다시 정의하지 않는다.
@@ -162,4 +162,5 @@ Parsing은 그래프의 정합성을 판단하지만 Docker Compose나 Terraform
 - [ ] domain 간 호출이 유스케이스 조정 범위를 넘지 않는지 확인한다.
 - [ ] 현재 구현 사실과 future plan을 구분한다.
 - [ ] 관련 unit/web/integration test 경계를 선택한다.
-- [ ] `./gradlew test`와 `git diff --check`를 실행한다.
+- [ ] 기본값으로 Docker·외부 인프라가 필요 없는 관련 focused test와 `git diff --check`를 실행한다.
+- [ ] 전체 `./gradlew test` 또는 외부 인프라 의존 테스트는 사용자 명시 요청이 있을 때만 실행한다.

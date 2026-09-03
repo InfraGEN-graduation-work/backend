@@ -8,7 +8,7 @@ Start with referenced files, nearby code, and relevant tests instead of loading 
 
 ## Project Structure & Architecture
 
-Application code lives in `src/main/java/com/lirouti`. Features are grouped under `domain/<feature>` and follow `controller -> service -> repository`. Keep controllers thin, business rules in services, persistence in repositories, and shared infrastructure in `global/`.
+Application code lives in `src/main/java/com/infragen/infragen`. Features are grouped under `domain/<feature>` and follow `controller -> service -> repository`. Keep controllers thin, business rules in services, persistence in repositories, and shared infrastructure in `global/`.
 
 Tests mirror production packages under `src/test/java`. Runtime configuration is in `src/main/resources/application.yaml` and documentation is in `docs/`.
 
@@ -18,7 +18,7 @@ Read only the documents relevant to the task before making substantial changes.
 
 Use these as the default entry points:
 
-- `docs/handoff/backend-context-handoff.md` -> single source of truth for execution order, technical contracts, cross-session context, and current work state
+- `docs/handoff/issue-{number}-handoff.md` -> issue scope, technical contracts, current work state, and verification results
 - `docs/infra-gen-project-overview.md` -> project goal and product context
 - `docs/harness/personal_convention/work_scope_convention.md` -> work scope limits
 - `docs/harness/personal_convention/comment-style.md` -> comment and Javadoc style rules
@@ -37,7 +37,8 @@ Use these as the default entry points:
 - `harness/` covers work boundaries and coding conventions.
 - `infra-gen-project-overview.md` provides the project-level summary.
 
-Start from the relevant document instead of reading everything. For planning work and cross-session status, read `docs/handoff/backend-context-handoff.md`.
+Start from the relevant document instead of reading everything. For issue work, read the matching
+`docs/handoff/issue-{number}-handoff.md`; use `docs/handoff/plan/backend-future-plan.md` for project-wide order and future scope.
 
 For authentication work, inspect the existing JWT utility, security filters, exception codes, and member entity/repository together. JWT subjects currently represent member IDs; inactive or soft-deleted members must not be authenticated.
 
@@ -47,13 +48,15 @@ After every code implementation, perform a focused re-verification pass. Check t
 
 Use the Gradle Wrapper with Java 21:
 
-- `./gradlew test` — run all JUnit tests.
-- `./gradlew test --tests "*MemberQueryServiceTest"` — run one test class.
-- `./gradlew clean build` — compile, test, generate QueryDSL sources, and create the application JAR.
+- `./gradlew test` — run all JUnit tests; use only when the user explicitly requests the full suite.
+- `./gradlew test --tests "*MemberQueryServiceTest"` — run one test class when it does not require external infrastructure.
+- `./gradlew clean build` — compile, test, generate QueryDSL sources, and create the application JAR; use only when the user explicitly requests a broad build.
 - `./gradlew bootRun` — run the API using `application.yaml` values and local environment overrides.
-- `docker compose up -d mysql redis` — start MySQL 8 and Redis.
+- `docker compose up -d mysql redis` — start MySQL 8 and Redis only for explicitly requested infrastructure-dependent tests.
 
-The current test setup connects to the configured database; start local MySQL when a context-loading test requires it. Do not describe the test environment as H2 unless an H2 test profile and dependency have been added.
+The current test setup connects to the configured database; start local MySQL only when the user
+explicitly requests a Docker- or database-dependent test. Do not describe the test environment as
+H2 unless an H2 test profile and dependency have been added.
 
 Never commit or expose secrets or `.env` values. Do not edit `build/generated/querydsl`; change its source entity or query.
 
@@ -67,7 +70,10 @@ Use method-level transactions only where needed and `readOnly = true` for approp
 
 Tests use JUnit 5, Mockito, and Spring Test. Name classes `<Subject>Test`; use descriptive methods such as `createMember_Success`. Cover success, validation, ownership, repository interactions, and edge cases.
 
-Run the relevant test after editing and the full suite before handoff. Use `clean build` for broad changes. If validation cannot run, report why and state the remaining risk.
+By default, run only focused relevant tests that do not require Docker, MySQL, Redis, Terraform CLI,
+or other external infrastructure. Run the full suite or `clean build` only when the user explicitly
+requests it. If a relevant test requires external infrastructure and is not run, report why and state
+the remaining risk.
 
 ## Commits, Pull Requests, and Handoff
 

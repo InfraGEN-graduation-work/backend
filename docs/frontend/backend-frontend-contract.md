@@ -2,7 +2,7 @@
 
 > 프론트엔드가 사용자 흐름에 따라 API를 연동할 때 사용하는 기준 문서다.
 >
-> 최종 갱신일: 2026-08-27
+> 최종 갱신일: 2026-09-03
 >
 > 상태: 현재는 현재 코드에 구현된 계약, 예정은 설계만 있고 아직 구현되지 않은 계약, 진행 중은 Issue #31 등에서 변경 중인 계약이다.
 
@@ -414,11 +414,25 @@ Generate graph edge 구조:
 
     POST /api/v1/projects/{projectId}/generate
 
-현재 query parameter:
+query parameter는 사용하지 않는다. 배포 범위와 target은 request body의 canonical 필드로 전달한다.
 
-- 생략 또는 outputFormat=DOCKER_COMPOSE: LOCAL_DEV
-- outputFormat=TERRAFORM: CLOUD_DEPLOY
-- 지원하지 않는 값: HTTP 400, GENERATION400_1
+요청 구조:
+
+    {
+      "nodes": [],
+      "edges": [],
+      "deploymentOption": "LOCAL",
+      "includeLocalSpec": false,
+      "deploymentTarget": null
+    }
+
+규칙:
+
+- `deploymentOption`은 `LOCAL`, `AWS`, `OCI` 중 하나이며 target 역직렬화의 단일 discriminator다.
+- `LOCAL`은 `includeLocalSpec=false`, `deploymentTarget=null`이어야 한다. JSON에는 `deploymentTarget: null`을 명시한다.
+- `AWS`·`OCI`는 선택 provider의 typed target을 `deploymentTarget` 바로 아래에 전달한다. `aws`·`oci` wrapper나 별도 `provider` 필드는 사용하지 않는다.
+- Cloud에서 `includeLocalSpec=true`이면 선택 Cloud 산출물과 Local 산출물을 하나의 응답·history로 생성한다.
+- 잘못된 JSON·enum·target 조합은 `COMMON400_1` HTTP 400으로 응답한다.
 
 생성에 실패하면 history를 저장하지 않는다.
 
@@ -426,8 +440,8 @@ Generate graph edge 구조:
 
 생성 결과:
 
-- docker-compose.yml
-- .env
+- `local/docker-compose.yml`
+- `local/.env`
 - historyId
 
 실행 방식:
@@ -445,49 +459,49 @@ UX:
 
 ### 6.3 CLOUD_DEPLOY 생성
 
-outputFormat=TERRAFORM일 때 현재 생성 결과:
+`deploymentOption=AWS` 또는 `deploymentOption=OCI`일 때 현재 생성 결과:
 
-- AWS Terraform
-- OCI Terraform
-- Dockerfile
-- docker-compose.cloud.yml
-- CLOUD_DEPLOY_WARNING.md
+- `cloud/aws/terraform/main.tf`
+- `cloud/aws/terraform/variables.tf`
+- `cloud/aws/terraform/terraform.tfvars.example`
+- `cloud/oci/terraform/main.tf`
+- `cloud/oci/terraform/variables.tf`
+- `cloud/oci/terraform/terraform.tfvars.example`
+- `cloud/Dockerfile`
+- `cloud/docker-compose.cloud.yml`
+- `cloud/CLOUD_DEPLOY_WARNING.md`
 
-현재 Terraform generator는 AWS와 OCI scaffold를 모두 생성한다. 사용자가 캔버스에서 AWS 또는 OCI node를 선택하는 계약은 아직 구현되지 않았다.
+선택한 provider의 Terraform만 생성한다. AWS·OCI는 runtime graph node가 아니라 `deploymentTarget` metadata다.
+
+Cloud Compose에는 graph에 연결된 MySQL·Redis dependency만 포함하며, 애플리케이션 container는 `mysql`·`redis` service DNS로 연결한다.
 
 CLOUD_DEPLOY는 plan-only scaffold이며 자동 terraform apply를 제공하지 않는다.
 
-### 6.4 통합 출력 예정
+### 6.4 통합 출력 계약 (Issue #39)
 
-현재는 LOCAL_DEV와 CLOUD_DEPLOY를 한 번의 요청으로 함께 생성할 수 없다.
+LOCAL_DEV와 CLOUD_DEPLOY를 한 번의 요청으로 생성할 수 있다.
 
-예정 계약:
+Cloud 선택 예시:
 
     {
-      "outputs": [
-        "LOCAL_DEV",
-        "CLOUD_DEPLOY"
-      ],
+      "nodes": [],
+      "edges": [],
+      "deploymentOption": "AWS",
+      "includeLocalSpec": true,
       "deploymentTarget": {
-        "provider": "AWS",
         "region": "ap-northeast-2",
         "instanceType": "t3.micro",
         "instanceName": "infragen-app"
-      },
-      "graph": {
-        "nodes": [],
-        "edges": []
       }
     }
 
-예정 UX:
+실행 결과:
 
-- DeploymentTarget이 없으면 LOCAL_DEV를 기본 선택
-- DeploymentTarget이 있으면 LOCAL_DEV와 CLOUD_DEPLOY를 기본 선택
-- 사용자가 생성 범위를 변경할 수 있음
-- 결과를 LOCAL_DEV와 CLOUD_DEPLOY 탭으로 분리
+- `includeLocalSpec=false`: 선택 Cloud 결과만 반환
+- `includeLocalSpec=true`: 선택 Cloud 결과와 Local 결과를 함께 반환
+- 응답 `files`는 flat 목록이며 `local/`·`cloud/` prefix로 output group을 구분한다.
+- 성공 결과는 하나의 `historyId`로 저장한다.
 
-위 요청·응답은 아직 백엔드에 구현되지 않았으므로 현재 프론트 요청에 사용하지 않는다.
 
 ## 7. 생성 이력 정책
 
@@ -498,11 +512,11 @@ Generate 성공 시 생성 결과가 자동으로 history에 저장된다.
     {
       "files": [
         {
-          "fileName": "docker-compose.yml",
+          "fileName": "local/docker-compose.yml",
           "content": "..."
         },
         {
-          "fileName": ".env",
+          "fileName": "local/.env",
           "content": "..."
         }
       ],
@@ -563,7 +577,7 @@ UX:
 - PARSING400_10: 잘못된 dependency 방향
 - PARSING400_20: Redis imageVersion 누락
 - PARSING400_22: Redis password 누락
-- GENERATION400_1: 지원하지 않는 output format
+- COMMON400_1: 잘못된 JSON·enum·deployment target 또는 validation 오류
 - GENERATION400_2: 생성에 필요한 component 상태 오류
 
 ## 9. 민감 정보 처리
@@ -580,9 +594,7 @@ UX:
 1. Issue #31을 통해 nodeId를 프로젝트 저장·조회·Generate 전체의 기준으로 통일한다.
 2. nodeName은 표시용으로만 사용하고 edge endpoint에서 제거한다.
 3. 현재 애플리케이션은 `ddl-auto: update`를 사용한다. 개발 서버에는 기존 프로젝트 데이터가 없으므로 DB 초기화 후 새 schema를 반영한다. 기존 데이터를 보존하는 DB의 backfill과 schema 제약조건 반영은 후속 migration 작업으로 둔다.
-4. LOCAL_DEV와 CLOUD_DEPLOY 통합 출력의 요청·응답 구조를 확정한다.
-5. AWS·OCI를 runtime graph 밖의 DeploymentTarget으로 관리할지 결정한다.
-6. 통합 출력 시 하나의 history에 여러 output을 어떤 구조로 저장할지 결정한다.
+4. Local/Cloud scoped files와 하나의 history 저장 계약은 Issue #39에서 확정되었다.
 
 ## 11. 관련 기준 파일
 
@@ -591,5 +603,5 @@ UX:
 - history Controller: src/main/java/com/infragen/infragen/domain/project/controller/ProjectHistoryController.java
 - Generate Controller: src/main/java/com/infragen/infragen/domain/generation/controller/GenerationController.java
 - parsing Service: src/main/java/com/infragen/infragen/domain/parsing/service/ParsingService.java
-- Issue #31 handoff: docs/handoff/issue-31-handoff.md
+- Issue #31 handoff: docs/handoff/regacy/issue-31-handoff.md
 - 전체 계획: docs/handoff/plan/backend-future-plan.md

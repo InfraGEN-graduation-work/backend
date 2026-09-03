@@ -56,8 +56,7 @@ class ParsingServiceTest {
     @DisplayName("노드 없음 — PARSING400_1")
     void parsing_EmptyNodes_Throws() {
         // given
-        ParsingReqDTO request = new ParsingReqDTO();
-        request.setNodes(List.of());
+        ParsingReqDTO request = new ParsingReqDTO(List.of(), List.of());
 
         // when
         ParsingException exception = assertThrows(
@@ -73,9 +72,10 @@ class ParsingServiceTest {
     @DisplayName("포트 중복 — PARSING400_4")
     void parsing_DuplicatePort_Throws() {
         // given
-        ParsingReqDTO request = new ParsingReqDTO();
-        request.setNodes(List.of(mysqlNode("node-1", 8080), springBootNode("node-2", 8080)));
-        request.setEdges(List.of(edge("node-1", "node-2")));
+        ParsingReqDTO request = new ParsingReqDTO(
+            List.of(mysqlNode("node-1", 8080), springBootNode("node-2", 8080)),
+            List.of(edge("node-1", "node-2"))
+        );
 
         // when
         ParsingException exception = assertThrows(
@@ -91,9 +91,10 @@ class ParsingServiceTest {
     @DisplayName("포트 범위 초과 — PARSING400_3")
     void parsing_InvalidPortRange_Throws() {
         // given
-        ParsingReqDTO request = new ParsingReqDTO();
-        request.setNodes(List.of(springBootNode("node-1", 1023)));
-        request.setEdges(List.of());
+        ParsingReqDTO request = new ParsingReqDTO(
+            List.of(springBootNode("node-1", 1023)),
+            List.of()
+        );
 
         // when
         ParsingException exception = assertThrows(
@@ -109,12 +110,13 @@ class ParsingServiceTest {
     @DisplayName("순환 참조 — PARSING400_9")
     void parsing_CycleDetected_Throws() {
         // given
-        ParsingReqDTO request = new ParsingReqDTO();
-        request.setNodes(List.of(mysqlNode("node-1", 3306), mysqlNode("node-2", 3307)));
-        request.setEdges(List.of(
-            edge("node-1", "node-2"),
-            edge("node-2", "node-1")
-        ));
+        ParsingReqDTO request = new ParsingReqDTO(
+            List.of(mysqlNode("node-1", 3306), mysqlNode("node-2", 3307)),
+            List.of(
+                edge("node-1", "node-2"),
+                edge("node-2", "node-1")
+            )
+        );
 
         // when
         ParsingException exception = assertThrows(
@@ -127,10 +129,10 @@ class ParsingServiceTest {
     }
 
     private static ParsingReqDTO validRequest() {
-        ParsingReqDTO request = new ParsingReqDTO();
-        request.setNodes(List.of(mysqlNode("node-1", 3306), springBootNode("node-2")));
-        request.setEdges(List.of(edge("node-1", "node-2")));
-        return request;
+        return new ParsingReqDTO(
+            List.of(mysqlNode("node-1", 3306), springBootNode("node-2")),
+            List.of(edge("node-1", "node-2"))
+        );
     }
 
     private static NodeDTO mysqlNode(String nodeId, int port) {

@@ -70,7 +70,7 @@ return ApiResponse.onSuccess(
 - Controller는 `ApiResponse.onFailure`를 직접 호출하지 않는다.
 - 비즈니스 예외를 `try-catch`하지 않는다.
 - ErrorCode와 오류 메시지를 직접 선택하지 않는다.
-- `GlobalExceptionHandler`가 예외를 공통 실패 응답으로 변환한다.
+- `GeneralExceptionAdvice`가 예외를 공통 실패 응답으로 변환한다.
 
 ## Validation
 - RequestBody DTO에는 `@Valid`를 사용한다.

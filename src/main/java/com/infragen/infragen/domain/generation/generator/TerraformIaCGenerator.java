@@ -1,20 +1,24 @@
 package com.infragen.infragen.domain.generation.generator;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.EnumMap;
 import java.util.List;
+import java.util.Map;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import com.infragen.infragen.domain.generation.dto.request.DeploymentTargetReqDTO;
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
+import com.infragen.infragen.domain.generation.enums.DeploymentOption;
 import com.infragen.infragen.domain.generation.enums.OutputFormat;
-import com.infragen.infragen.domain.generation.generator.cloud.AwsTerraformRenderer;
+import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
+import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudComposeRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployContext;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployFileAssembler;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployWarningRenderer;
-import com.infragen.infragen.domain.generation.generator.cloud.MysqlCloudComposeServiceRenderer;
-import com.infragen.infragen.domain.generation.generator.cloud.OciTerraformRenderer;
+import com.infragen.infragen.domain.generation.generator.cloud.CloudTerraformRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.RuntimeDockerfileRenderer;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 
@@ -23,9 +27,9 @@ import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
  * provider와 runtime별 렌더링은 하위 renderer에 위임한다.
  */
 @Component
-public class TerraformIaCGenerator implements IaCGenerator {
-    private final AwsTerraformRenderer awsTerraformRenderer = new AwsTerraformRenderer();
-    private final OciTerraformRenderer ociTerraformRenderer = new OciTerraformRenderer();
+public class TerraformIaCGenerator implements TargetAwareIaCGenerator {
+    private final Map<DeploymentOption, CloudTerraformRenderer>
+        terraformRendererMap;
     private final RuntimeDockerfileRenderer runtimeDockerfileRenderer =
         new RuntimeDockerfileRenderer();
     private final CloudComposeRenderer cloudComposeRenderer;
@@ -34,13 +38,21 @@ public class TerraformIaCGenerator implements IaCGenerator {
     private final CloudDeployFileAssembler cloudDeployFileAssembler =
         new CloudDeployFileAssembler();
 
-    @Autowired
-    public TerraformIaCGenerator(CloudComposeRenderer cloudComposeRenderer) {
+    public TerraformIaCGenerator(
+        CloudComposeRenderer cloudComposeRenderer,
+        List<CloudTerraformRenderer> terraformRenderers
+    ) {
         this.cloudComposeRenderer = cloudComposeRenderer;
-    }
+        this.terraformRendererMap = new EnumMap<>(DeploymentOption.class);
+        for (CloudTerraformRenderer renderer : terraformRenderers) {
+            CloudTerraformRenderer previous = terraformRendererMap.put(
+                renderer.getProvider().deploymentOption(), renderer);
 
-    public TerraformIaCGenerator() {
-        this(new CloudComposeRenderer(List.of(new MysqlCloudComposeServiceRenderer())));
+            if (previous != null) {
+                throw new IllegalStateException(
+                    "중복된 cloud Terraform renderer입니다: " + renderer.getProvider());
+            }
+        }
     }
 
     @Override
@@ -48,24 +60,46 @@ public class TerraformIaCGenerator implements IaCGenerator {
         return OutputFormat.TERRAFORM;
     }
 
-    /**
-     * 검증된 파싱 결과로 provider별 Terraform과 runtime 산출물을 생성한다.
-     * 입력 그래프의 포트·이미지 버전은 `CloudDeployContext`를 통해 renderer에 전달한다.
-     *
-     * @param parsingResult ParsingService가 반환한 그래프 결과
-     * @return CLOUD_DEPLOY 생성 파일 묶음
-     */
     @Override
-    public IaCFileDTO.BundleResDTO generate(ParsingResultDTO parsingResult) {
+    public IaCFileDTO.BundleResDTO generate(
+        ParsingResultDTO parsingResult,
+        DeploymentTargetReqDTO.Target deploymentTarget
+    ) {
         CloudDeployContext context = CloudDeployContext.from(parsingResult);
+        return assembleCloudBundle(context, renderersFor(deploymentTarget), deploymentTarget);
+    }
+
+    private IaCFileDTO.BundleResDTO assembleCloudBundle(
+        CloudDeployContext context,
+        Collection<CloudTerraformRenderer> terraformRenderers,
+        DeploymentTargetReqDTO.Target deploymentTarget
+    ) {
         List<IaCFileDTO.FileContentResDTO> files = new ArrayList<>();
 
-        files.addAll(awsTerraformRenderer.render(context.applicationPort()));
-        files.addAll(ociTerraformRenderer.render(context.applicationPort()));
-        files.add(runtimeDockerfileRenderer.render(context.javaVersion(), context.applicationPort()));
-        files.add(cloudComposeRenderer.render(context));
-        files.add(cloudDeployWarningRenderer.render());
+        for (CloudTerraformRenderer renderer : terraformRenderers) {
+            files.addAll(renderer.render(context, deploymentTarget));
+        }
+
+        files.addAll(List.of(
+            runtimeDockerfileRenderer.render(context.javaVersion(), context.applicationPort()),
+            cloudComposeRenderer.render(context),
+            cloudDeployWarningRenderer.render()
+        ));
 
         return cloudDeployFileAssembler.assemble(files);
+    }
+
+    private Collection<CloudTerraformRenderer> renderersFor(
+        DeploymentTargetReqDTO.Target deploymentTarget
+    ) {
+        if (deploymentTarget == null) {
+            throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
+        }
+
+        CloudTerraformRenderer renderer = terraformRendererMap.get(deploymentTarget.provider());
+        if (renderer == null) {
+            throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
+        }
+        return List.of(renderer);
     }
 }

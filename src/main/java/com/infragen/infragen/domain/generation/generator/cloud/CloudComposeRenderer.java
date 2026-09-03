@@ -1,12 +1,15 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.stereotype.Component;
 
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
+import com.infragen.infragen.domain.parsing.dto.response.RedisComponent;
 import com.infragen.infragen.global.enums.ComponentType;
 
 /** CLOUD_DEPLOY에서 애플리케이션과 선택된 의존 인프라의 Compose bootstrap을 생성한다. */
@@ -40,6 +43,7 @@ public class CloudComposeRenderer {
             context.applicationPort(),
             context.applicationPort()
         ));
+        appendApplicationEnvironment(content, context);
         content.append("    env_file:\n");
         content.append("      - .env\n");
 
@@ -74,12 +78,47 @@ public class CloudComposeRenderer {
     }
 
     private void appendRootVolumes(StringBuilder content, CloudDeployContext context) {
+        Set<String> volumeNames = new LinkedHashSet<>();
         MySQLComponent mysql = context.firstComponent(ComponentType.MYSQL, MySQLComponent.class);
-        if (mysql == null || mysql.getVolumeName() == null || mysql.getVolumeName().isBlank()) {
+        if (mysql != null && mysql.getVolumeName() != null && !mysql.getVolumeName().isBlank()) {
+            volumeNames.add(mysql.getVolumeName().trim());
+        }
+        RedisComponent redis = context.firstComponent(ComponentType.REDIS, RedisComponent.class);
+        if (redis != null && redis.getVolumeName() != null && !redis.getVolumeName().isBlank()) {
+            volumeNames.add(redis.getVolumeName().trim());
+        }
+        if (volumeNames.isEmpty()) {
             return;
         }
 
-        content.append("\nvolumes:\n")
-            .append("  ").append(mysql.getVolumeName().trim()).append(":\n");
+        content.append("\nvolumes:\n");
+        for (String volumeName : volumeNames) {
+            content.append("  ").append(volumeName).append(":\n");
+        }
+    }
+
+    private void appendApplicationEnvironment(
+        StringBuilder content,
+        CloudDeployContext context
+    ) {
+        boolean hasMysql = context.hasIncomingDependency(ComponentType.MYSQL);
+        boolean hasRedis = context.hasIncomingDependency(ComponentType.REDIS);
+        if (!hasMysql && !hasRedis) {
+            return;
+        }
+
+        content.append("    environment:\n");
+        if (hasMysql) {
+            content.append("      SPRING_DATASOURCE_URL: \"jdbc:mysql://mysql:3306/${MYSQL_DATABASE:?외부 .env에 설정 필요}\"\n")
+                .append("      SPRING_DATASOURCE_USERNAME: \"${MYSQL_USER:?외부 .env에 설정 필요}\"\n")
+                .append("      SPRING_DATASOURCE_PASSWORD: \"${MYSQL_PASSWORD:?외부 .env에 설정 필요}\"\n")
+                .append("      MYSQL_HOST: mysql\n")
+                .append("      MYSQL_PORT: \"3306\"\n");
+        }
+        if (hasRedis) {
+            content.append("      REDIS_HOST: redis\n")
+                .append("      REDIS_PORT: \"6379\"\n")
+                .append("      REDIS_PASSWORD: \"${REDIS_PASSWORD:?외부 .env에 설정 필요}\"\n");
+        }
     }
 }

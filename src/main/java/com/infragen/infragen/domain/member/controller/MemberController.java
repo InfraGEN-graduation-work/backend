@@ -66,9 +66,11 @@ public class MemberController implements MemberControllerDocs {
     @Override
     @DeleteMapping("/me")
     public ApiResponse<Void> withdrawMember(
-            @AuthenticationPrincipal CustomUserDetails userDetails
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            HttpServletResponse response
     ) {
-        memberCommandService.withdrawMember(userDetails.getMemberId());
+        authService.withdrawMember(userDetails.getMemberId());
+        refreshTokenCookieWriter.clear(response);
         return ApiResponse.onSuccess(MemberSuccessCode.MEMBER_WITHDRAW_SUCCESS, null);
     }
 }

@@ -163,6 +163,21 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("회원 탈퇴 - 회원 비활성화 후 refresh token 폐기")
+    void withdrawMember_Success() {
+        // given
+        Long memberId = 1L;
+
+        // when
+        authService.withdrawMember(memberId);
+
+        // then
+        var inOrder = inOrder(memberCommandService, tokenService);
+        inOrder.verify(memberCommandService).withdrawMember(memberId);
+        inOrder.verify(tokenService).deleteRefreshToken(memberId);
+    }
+
+    @Test
     @DisplayName("RTR 동시성 방어 - 동일 RT 재발급 2회 요청 시 실패 검증")
     void reissueToken_Concurrency_Fail() {
         // given

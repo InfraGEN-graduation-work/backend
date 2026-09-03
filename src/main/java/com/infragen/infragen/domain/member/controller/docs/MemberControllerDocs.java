@@ -32,6 +32,7 @@ public interface MemberControllerDocs {
 
     @Operation(summary = "회원 탈퇴 API", description = "로그인한 회원을 Soft Delete 방식으로 탈퇴 처리합니다.")
     ApiResponse<Void> withdrawMember(
-            @AuthenticationPrincipal CustomUserDetails userDetails
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            HttpServletResponse response
     );
 }

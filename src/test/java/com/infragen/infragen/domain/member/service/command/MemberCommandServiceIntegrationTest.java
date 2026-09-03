@@ -121,7 +121,12 @@ class MemberCommandServiceIntegrationTest {
 
         Integer active = jdbcTemplate.queryForObject(
                 "select is_active from member where id = ?", Integer.class, member.getId());
-        assertEquals(0, active);
-        assertTrue(memberRepository.findById(member.getId()).isEmpty());
+        java.time.LocalDateTime deletedAt = jdbcTemplate.queryForObject(
+                "select deleted_at from member where id = ?", java.time.LocalDateTime.class, member.getId());
+        assertAll(
+                () -> assertEquals(0, active),
+                () -> assertNotNull(deletedAt),
+                () -> assertTrue(memberRepository.findById(member.getId()).isEmpty())
+        );
     }
 }

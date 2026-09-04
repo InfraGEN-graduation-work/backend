@@ -14,6 +14,7 @@ import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 
 import java.sql.SQLException;
 import java.util.function.Predicate;
@@ -54,6 +55,19 @@ public class GeneralExceptionAdvice {
                 .body(ApiResponse.onFailure(
                         GeneralErrorCode.BAD_REQUEST,
                         String.format("[%s] %s", fieldName, message)
+                ));
+    }
+
+    // JSON 형식·enum·polymorphic target 역직렬화 오류는 내부 예외를 노출하지 않고 400으로 응답
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<@NonNull ApiResponse<String>> handleUnreadableMessage(
+            HttpMessageNotReadableException e
+    ) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.onFailure(
+                        GeneralErrorCode.BAD_REQUEST,
+                        "요청 본문 형식이 올바르지 않습니다."
                 ));
     }
 

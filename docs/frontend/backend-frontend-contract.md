@@ -484,14 +484,37 @@ LOCAL_DEV와 CLOUD_DEPLOY를 한 번의 요청으로 생성할 수 있다.
 Cloud 선택 예시:
 
     {
-      "nodes": [],
+      "nodes": [
+        {
+          "nodeId": "app-1",
+          "componentType": "SPRING_BOOT",
+          "positionX": 400,
+          "positionY": 200,
+          "properties": {
+            "name": "app",
+            "port": 8080,
+            "javaVersion": "17",
+            "containerName": "spring-app"
+          }
+        }
+      ],
       "edges": [],
       "deploymentOption": "AWS",
       "includeLocalSpec": true,
       "deploymentTarget": {
         "region": "ap-northeast-2",
+        "vpcName": "infragen-vpc",
+        "subnetName": "infragen-subnet",
+        "internetGatewayName": "infragen-igw",
+        "routeTableName": "infragen-public-route",
+        "securityGroupName": "infragen-sg",
         "instanceType": "t3.micro",
-        "instanceName": "infragen-app"
+        "instanceName": "infragen-app",
+        "vpcCidr": "10.0.0.0/16",
+        "subnetCidr": "10.0.1.0/24",
+        "amiId": "ami-xxxxxxxx",
+        "adminCidr": "203.0.113.10/32",
+        "appCidr": "0.0.0.0/0"
       }
     }
 

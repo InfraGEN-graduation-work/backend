@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 
 import com.infragen.infragen.domain.generation.dto.request.DeploymentTargetReqDTO;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
@@ -71,8 +72,22 @@ class DeploymentTargetValidatorTest {
         );
 
         // when
-        assertDoesNotThrow(() -> deploymentTargetValidator.validate(target));
+        Executable validation = () -> deploymentTargetValidator.validate(target);
 
         // then
+        assertDoesNotThrow(validation);
+    }
+
+    @Test
+    @DisplayName("target 누락 — MISSING_DEPLOYMENT_TARGET 반환")
+    void validate_NullTarget_ThrowsMissingDeploymentTarget() {
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> deploymentTargetValidator.validate(null)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.MISSING_DEPLOYMENT_TARGET, exception.getCode());
     }
 }

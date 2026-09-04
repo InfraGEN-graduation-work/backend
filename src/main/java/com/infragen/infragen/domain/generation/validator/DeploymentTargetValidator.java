@@ -22,9 +22,13 @@ public class DeploymentTargetValidator {
      * typed deployment target의 provider별 필수값을 검증한다.
      *
      * @param target 검증할 provider target
-     * @throws IaCGenerationException target field constraint를 위반한 경우
+     * @throws IaCGenerationException target이 없거나 field constraint를 위반한 경우
      */
     public void validate(DeploymentTargetReqDTO.Target target) {
+        if (target == null) {
+            throw new IaCGenerationException(IaCGenerationErrorCode.MISSING_DEPLOYMENT_TARGET);
+        }
+
         Set<ConstraintViolation<DeploymentTargetReqDTO.Target>> violations =
             validator.validate(target);
         if (!violations.isEmpty()) {

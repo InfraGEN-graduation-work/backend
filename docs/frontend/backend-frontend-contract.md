@@ -459,11 +459,17 @@ UX:
 
 ### 6.3 CLOUD_DEPLOY 생성
 
-`deploymentOption=AWS` 또는 `deploymentOption=OCI`일 때 현재 생성 결과:
+`deploymentOption=AWS`일 때 현재 생성 결과:
 
 - `cloud/aws/terraform/main.tf`
 - `cloud/aws/terraform/variables.tf`
 - `cloud/aws/terraform/terraform.tfvars.example`
+- `cloud/Dockerfile`
+- `cloud/docker-compose.cloud.yml`
+- `cloud/CLOUD_DEPLOY_WARNING.md`
+
+`deploymentOption=OCI`일 때 현재 생성 결과:
+
 - `cloud/oci/terraform/main.tf`
 - `cloud/oci/terraform/variables.tf`
 - `cloud/oci/terraform/terraform.tfvars.example`

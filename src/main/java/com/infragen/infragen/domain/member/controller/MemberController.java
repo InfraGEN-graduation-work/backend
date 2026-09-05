@@ -69,7 +69,7 @@ public class MemberController implements MemberControllerDocs {
             @AuthenticationPrincipal CustomUserDetails userDetails,
             HttpServletResponse response
     ) {
-        authService.withdrawMember(userDetails.getMemberId());
+        memberCommandService.withdrawMember(userDetails.getMemberId());
         refreshTokenCookieWriter.clear(response);
         return ApiResponse.onSuccess(MemberSuccessCode.MEMBER_WITHDRAW_SUCCESS, null);
     }

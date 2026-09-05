@@ -1,6 +1,7 @@
 package com.infragen.infragen.domain.member.service.command;
 
 import com.infragen.infragen.domain.auth.dto.request.AuthReqDTO;
+import com.infragen.infragen.domain.auth.service.TokenService;
 import com.infragen.infragen.domain.member.converter.MemberConverter;
 import com.infragen.infragen.domain.member.dto.request.MemberReqDTO;
 import com.infragen.infragen.domain.member.dto.response.MemberResDTO;
@@ -24,6 +25,7 @@ import java.util.UUID;
 public class MemberCommandService {
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
+    private final TokenService tokenService;
 
     // 일반 회원가입
     public MemberResDTO.MemberResultDTO createMember(AuthReqDTO.SignupDTO request) {
@@ -73,9 +75,11 @@ public class MemberCommandService {
         return MemberConverter.toResultDTO(member);
     }
 
+    @Transactional
     public void withdrawMember(Long memberId) {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
         member.withdraw();
+        tokenService.deleteRefreshToken(memberId);
     }
 }

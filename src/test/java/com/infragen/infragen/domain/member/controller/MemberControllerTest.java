@@ -50,8 +50,8 @@ class MemberControllerTest {
         memberController.withdrawMember(userDetails, response);
 
         // then
-        var inOrder = inOrder(authService, refreshTokenCookieWriter);
-        inOrder.verify(authService).withdrawMember(1L);
+        var inOrder = inOrder(memberCommandService, refreshTokenCookieWriter);
+        inOrder.verify(memberCommandService).withdrawMember(1L);
         inOrder.verify(refreshTokenCookieWriter).clear(response);
     }
 }

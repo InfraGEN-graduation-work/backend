@@ -1,5 +1,6 @@
 package com.infragen.infragen.domain.member.service.command;
 
+import com.infragen.infragen.domain.auth.service.TokenService;
 import com.infragen.infragen.domain.member.dto.request.MemberReqDTO;
 import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.member.enums.SocialProvider;
@@ -27,6 +28,9 @@ class MemberCommandServiceTest {
 
     @Mock
     private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private TokenService tokenService;
 
     @Mock
     private Member member;
@@ -119,18 +123,30 @@ class MemberCommandServiceTest {
 
     @Test
     void withdrawMember_Success() {
+        // given
         when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
 
+        // when
         memberCommandService.withdrawMember(1L);
 
-        verify(member).withdraw();
+        // then
+        var inOrder = inOrder(member, tokenService);
+        inOrder.verify(member).withdraw();
+        inOrder.verify(tokenService).deleteRefreshToken(1L);
     }
 
     @Test
     void withdrawMember_MemberNotFound() {
+        // given
         when(memberRepository.findById(1L)).thenReturn(Optional.empty());
 
-        assertThrows(MemberException.class, () -> memberCommandService.withdrawMember(1L));
+        // when
+        MemberException exception = assertThrows(MemberException.class,
+                () -> memberCommandService.withdrawMember(1L));
+
+        // then
+        assertEquals(MemberErrorCode.MEMBER_NOT_FOUND, exception.getCode());
         verify(member, never()).withdraw();
+        verifyNoInteractions(tokenService);
     }
 }

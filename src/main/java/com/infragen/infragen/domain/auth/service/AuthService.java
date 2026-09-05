@@ -81,13 +81,6 @@ public class AuthService {
     }
 
     // 토큰 재발급
-    public void withdrawMember(Long memberId) {
-        memberCommandService.withdrawMember(memberId);
-        tokenService.deleteRefreshToken(memberId);
-
-        log.info("회원 탈퇴 및 refresh token 폐기 완료: memberId={}", memberId);
-    }
-
     public AuthResDTO.TokenResultDTO reissueToken(String refreshToken) {
         Long memberId = tokenService.consumeRefreshToken(refreshToken);
 

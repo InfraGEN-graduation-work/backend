@@ -1,5 +1,6 @@
 package com.infragen.infragen.domain.member.service.command;
 
+import com.infragen.infragen.domain.auth.service.TokenService;
 import com.infragen.infragen.domain.member.dto.request.MemberReqDTO;
 import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.member.enums.Role;
@@ -12,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.MySQLContainer;
@@ -20,6 +23,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 
 @Testcontainers
 @SpringBootTest(properties = "spring.docker.compose.enabled=false")
@@ -56,6 +61,9 @@ class MemberCommandServiceIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @MockitoBean
+    private TokenService tokenService;
 
     @BeforeEach
     void setUp() {
@@ -127,6 +135,34 @@ class MemberCommandServiceIntegrationTest {
                 () -> assertEquals(0, active),
                 () -> assertNotNull(deletedAt),
                 () -> assertTrue(memberRepository.findById(member.getId()).isEmpty())
+        );
+        verify(tokenService).deleteRefreshToken(member.getId());
+    }
+
+    @Test
+    void withdrawMember_TokenDeletionFails_RollsBackMemberChanges() {
+        // given
+        Member member = memberRepository.save(Member.builder()
+                .email("withdraw-failure@test.com")
+                .password("password")
+                .nickname("nickname")
+                .role(Role.ROLE_USER)
+                .isActive(true)
+                .build());
+        doThrow(new RedisConnectionFailureException("Redis unavailable"))
+                .when(tokenService).deleteRefreshToken(member.getId());
+
+        // when
+        assertThrows(RedisConnectionFailureException.class,
+                () -> memberCommandService.withdrawMember(member.getId()));
+
+        // then
+        Member unchanged = memberRepository.findById(member.getId()).orElseThrow();
+        assertAll(
+                () -> assertEquals("withdraw-failure@test.com", unchanged.getEmail()),
+                () -> assertEquals("nickname", unchanged.getNickname()),
+                () -> assertTrue(unchanged.getIsActive()),
+                () -> assertNull(unchanged.getDeletedAt())
         );
     }
 }

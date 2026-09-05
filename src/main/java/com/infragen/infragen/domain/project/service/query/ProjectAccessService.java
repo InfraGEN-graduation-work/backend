@@ -11,7 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class ProjectAccessService {
     private final ProjectRepository projectRepository;
     private final ProjectCollaboratorRepository projectCollaboratorRepository;
@@ -23,6 +22,7 @@ public class ProjectAccessService {
      * @param memberId 확인할 member 식별자
      * @throws ProjectException owner 또는 collaborator가 아닌 경우
      */
+    @Transactional(readOnly = true)
     public void requireReadAccess(Long projectId, Long memberId) {
         boolean owner = projectRepository.findByIdAndMemberId(projectId, memberId).isPresent();
         if (owner) {
@@ -41,6 +41,7 @@ public class ProjectAccessService {
      * @param memberId 확인할 member 식별자
      * @throws ProjectException EDITOR 이상 권한이 없는 경우
      */
+    @Transactional(readOnly = true)
     public void requireWriteAccess(Long projectId, Long memberId) {
         boolean owner = projectRepository.findByIdAndMemberId(projectId, memberId).isPresent();
         if (owner) {

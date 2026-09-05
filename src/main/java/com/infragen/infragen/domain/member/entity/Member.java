@@ -12,6 +12,7 @@ import com.infragen.infragen.domain.member.enums.SocialProvider;
 import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.global.entity.BaseEntity;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
@@ -50,6 +51,9 @@ public class Member extends BaseEntity {
     @Column(nullable = false)
     private Boolean isActive;
 
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
     @Builder
     public Member(
             String email,
@@ -79,6 +83,12 @@ public class Member extends BaseEntity {
         this.socialProvider = null;
         this.nickname = "탈퇴회원";
         this.isActive = false;
+        this.deletedAt = LocalDateTime.now();
+    }
+
+    public void updateProfile(String nickname, String encodedPassword) {
+        this.nickname = nickname;
+        this.password = encodedPassword;
     }
 
     private static String createMaskedEmail(Long memberId) {

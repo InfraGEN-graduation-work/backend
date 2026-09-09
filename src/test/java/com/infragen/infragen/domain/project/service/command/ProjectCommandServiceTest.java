@@ -5,6 +5,9 @@ import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.exception.MemberException;
 import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
 import com.infragen.infragen.domain.member.service.query.MemberQueryService;
+import com.infragen.infragen.domain.collaboration.service.command.ProjectCollaborationVersionService;
+import com.infragen.infragen.domain.collaboration.exception.CollaborationException;
+import com.infragen.infragen.domain.collaboration.exception.code.error.CollaborationErrorCode;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 import com.infragen.infragen.domain.project.dto.request.ProjectReqDTO;
 import com.infragen.infragen.domain.project.dto.response.ProjectResDTO;
@@ -25,6 +28,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
@@ -61,6 +65,12 @@ class ProjectCommandServiceTest {
 
     @Mock
     private ProjectQueryService projectQueryService;
+
+    @Mock
+    private ProjectCollaborationVersionService projectCollaborationVersionService;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private ProjectCommandService projectCommandService;
@@ -151,10 +161,11 @@ class ProjectCommandServiceTest {
         );
 
         ProjectReqDTO.UpdateProjectReqDTO updateRequest = new ProjectReqDTO.UpdateProjectReqDTO(
-                "New Title", "New Desc", List.of(nodeReq), List.of(edgeReq)
+                "New Title", "New Desc", List.of(nodeReq), List.of(edgeReq), 0L
         );
 
         when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(project);
+        when(projectCollaborationVersionService.issueNextVersionForFullReplace(projectId, 0L)).thenReturn(1L);
         when(projectNodeRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(projectEdgeRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -172,6 +183,7 @@ class ProjectCommandServiceTest {
         assertEquals("node-1", result.edges().get(0).targetNodeId());
 
         verify(projectQueryService).getOwnedProject(projectId, memberId);
+        verify(projectCollaborationVersionService).issueNextVersionForFullReplace(projectId, 0L);
         verify(projectEdgeRepository).deleteByProjectId(projectId);
         verify(projectNodeRepository).deleteByProjectId(projectId);
         verify(projectNodeRepository).saveAll(anyList());
@@ -198,10 +210,11 @@ class ProjectCommandServiceTest {
                 "node-1", "Database", "MYSQL", BigDecimal.valueOf(300.0), BigDecimal.valueOf(400.0), Map.of()
         );
         ProjectReqDTO.UpdateProjectReqDTO updateRequest = new ProjectReqDTO.UpdateProjectReqDTO(
-                "Project", "Description", List.of(firstNode, secondNode), Collections.emptyList()
+                "Project", "Description", List.of(firstNode, secondNode), Collections.emptyList(), 0L
         );
 
         when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(project);
+        when(projectCollaborationVersionService.issueNextVersionForFullReplace(projectId, 0L)).thenReturn(1L);
         when(projectNodeRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         // when
@@ -215,6 +228,42 @@ class ProjectCommandServiceTest {
     }
 
     @Test
+    @DisplayName("프로젝트 수정 - 미래 version이면 전체 graph 저장을 시작하지 않음")
+    void updateProject_FutureBaseVersion_ThrowsVersionConflict() {
+        // given
+        Long memberId = 1L;
+        Long projectId = 100L;
+        Project project = Project.builder()
+                .title("Project")
+                .status(ProjectStatus.DRAFT)
+                .build();
+        ProjectReqDTO.UpdateProjectReqDTO updateRequest = new ProjectReqDTO.UpdateProjectReqDTO(
+                "Project",
+                "Description",
+                Collections.emptyList(),
+                Collections.emptyList(),
+                5L
+        );
+        CollaborationException versionConflict = new CollaborationException(
+                CollaborationErrorCode.VERSION_CONFLICT
+        );
+        when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(project);
+        doThrow(versionConflict).when(projectCollaborationVersionService)
+                .issueNextVersionForFullReplace(projectId, 5L);
+
+        // when
+        CollaborationException exception = assertThrows(
+                CollaborationException.class,
+                () -> projectCommandService.updateProject(projectId, updateRequest, memberId)
+        );
+
+        // then
+        assertEquals(CollaborationErrorCode.VERSION_CONFLICT, exception.getCode());
+        verify(projectEdgeRepository, never()).deleteByProjectId(projectId);
+        verify(projectNodeRepository, never()).deleteByProjectId(projectId);
+    }
+
+    @Test
     @DisplayName("프로젝트 수정 - 본인 프로젝트가 아니거나 존재하지 않을 경우 예외 발생")
     void updateProject_ProjectNotFound_ThrowsException() {
         // given
@@ -222,7 +271,7 @@ class ProjectCommandServiceTest {
         Long projectId = 100L;
 
         ProjectReqDTO.UpdateProjectReqDTO updateRequest = new ProjectReqDTO.UpdateProjectReqDTO(
-                "New Title", "New Desc", Collections.emptyList(), Collections.emptyList()
+                "New Title", "New Desc", Collections.emptyList(), Collections.emptyList(), 0L
         );
 
         when(projectQueryService.getOwnedProject(projectId, memberId))

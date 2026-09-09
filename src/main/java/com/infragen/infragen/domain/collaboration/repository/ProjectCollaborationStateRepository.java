@@ -1,20 +1,29 @@
 package com.infragen.infragen.domain.collaboration.repository;
 
-import com.infragen.infragen.domain.collaboration.entity.ProjectCollaborationState;
-import jakarta.persistence.LockModeType;
+import java.util.Optional;
+
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.util.Optional;
+import com.infragen.infragen.domain.collaboration.entity.ProjectCollaborationState;
+
+import jakarta.persistence.LockModeType;
 
 public interface ProjectCollaborationStateRepository
         extends JpaRepository<@NonNull ProjectCollaborationState, @NonNull Long> {
     /**
-     * project의 collaboration version 상태를 쓰기 잠금과 함께 조회한다.
+     * project의 collaboration state 존재 여부를 잠금 없이 조회한다.
      *
+     * @param projectId 조회할 project 식별자
+     * @return collaboration state가 있으면 반환
+     */
+    Optional<ProjectCollaborationState> findByProjectId(Long projectId);
+
+    /**
+     * project의 collaboration version 상태를 쓰기 잠금과 함께 조회한다.
      * @param projectId 조회할 project 식별자
      * @return project collaboration 상태
      */

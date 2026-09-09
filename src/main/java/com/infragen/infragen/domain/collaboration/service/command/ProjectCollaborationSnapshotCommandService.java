@@ -1,6 +1,16 @@
 package com.infragen.infragen.domain.collaboration.service.command;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
+
 import com.infragen.infragen.domain.collaboration.entity.ProjectCollaborationSnapshot;
+import com.infragen.infragen.domain.collaboration.event.ProjectCollaborationCheckpointEvent;
 import com.infragen.infragen.domain.collaboration.exception.CollaborationException;
 import com.infragen.infragen.domain.collaboration.exception.code.error.CollaborationErrorCode;
 import com.infragen.infragen.domain.collaboration.repository.ProjectCollaborationSnapshotRepository;
@@ -11,11 +21,8 @@ import com.infragen.infragen.domain.project.exception.ProjectException;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.repository.ProjectRepository;
 import com.infragen.infragen.domain.project.service.query.ProjectAccessService;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Map;
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +31,8 @@ public class ProjectCollaborationSnapshotCommandService {
     private final ProjectRepository projectRepository;
     private final MemberQueryService memberQueryService;
     private final ProjectCollaborationSnapshotRepository snapshotRepository;
+    private final ProjectCollaborationSnapshotWriter snapshotWriter;
+    private final ProjectCollaborationCheckpointFailureService failureService;
 
     /**
      * materialized graph를 지정한 serverVersion의 snapshot으로 저장한다.
@@ -55,7 +64,28 @@ public class ProjectCollaborationSnapshotCommandService {
                 .project(project)
                 .updatedBy(member)
                 .serverVersion(serverVersion)
-                .graphPayload(graphPayload)
+                .graphPayload(normalizeGraphPayload(graphPayload))
                 .build());
     }
+
+    /**
+     * commit된 operation의 checkpoint event를 별도 transaction에서 snapshot으로 저장한다.
+     *
+     * @param event commit된 operation의 version과 materialized graph payload
+     */
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleOperationCommitted(ProjectCollaborationCheckpointEvent event) {
+        try {
+            snapshotWriter.write(event);
+        } catch (RuntimeException exception) {
+            failureService.record(event, exception);
+        }
+    }
+
+    private Map<String, Object> normalizeGraphPayload(Map<String, Object> graphPayload) {
+        Map<String, Object> normalizedPayload = new LinkedHashMap<>(graphPayload);
+        normalizedPayload.values().removeIf(Objects::isNull);
+        return normalizedPayload;
+    }
+
 }

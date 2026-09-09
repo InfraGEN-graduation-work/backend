@@ -47,6 +47,21 @@ public enum ProjectErrorCode implements BaseErrorCode {
             "중복된 nodeId가 존재합니다.",
             "PROJECT400_5"
     ),
+    COLLABORATOR_ALREADY_EXISTS(
+            HttpStatus.CONFLICT,
+            "이미 프로젝트에 등록된 collaborator입니다.",
+            "PROJECT409_2"
+    ),
+    COLLABORATOR_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "프로젝트 collaborator를 찾을 수 없습니다.",
+            "PROJECT404_2"
+    ),
+    OWNER_CANNOT_BE_COLLABORATOR(
+            HttpStatus.BAD_REQUEST,
+            "프로젝트 소유자는 collaborator로 등록할 수 없습니다.",
+            "PROJECT400_6"
+    ),
     ;
     private final HttpStatus httpStatus;
     private final String message;

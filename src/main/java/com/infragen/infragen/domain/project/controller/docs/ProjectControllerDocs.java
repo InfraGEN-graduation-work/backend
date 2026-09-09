@@ -34,7 +34,7 @@ public interface ProjectControllerDocs {
             @PathVariable Long projectId
     );
 
-    @Operation(summary = "프로젝트 캔버스 저장/수정 API", description = "특정 프로젝트의 식별자(ID)와 수정된 캔버스 데이터(노드/엣지 전체 목록)를 받아 기존 설정을 덮어쓰고 저장합니다.")
+    @Operation(summary = "프로젝트 캔버스 저장/수정 API", description = "특정 프로젝트의 식별자(ID), client가 알고 있는 baseVersion, 수정된 캔버스 데이터(노드/엣지 전체 목록)를 받아 version을 확인한 뒤 저장합니다. 오래된 baseVersion은 거부됩니다.")
     ApiResponse<ProjectResDTO.ProjectDetailResDTO> updateProject(
             @PathVariable Long projectId,
             ProjectReqDTO.UpdateProjectReqDTO request,

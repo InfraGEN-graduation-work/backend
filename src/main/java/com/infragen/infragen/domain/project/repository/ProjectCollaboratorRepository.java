@@ -28,6 +28,15 @@ public interface ProjectCollaboratorRepository
     List<ProjectCollaborator> findAllByProjectId(Long projectId);
 
     /**
+     * project에서 지정한 member의 collaborator membership을 삭제한다.
+     *
+     * @param projectId 삭제할 project 식별자
+     * @param memberId 삭제할 collaborator member 식별자
+     * @return 삭제된 membership 수
+     */
+    long deleteByProjectIdAndMemberId(Long projectId, Long memberId);
+
+    /**
      * project와 member 사이의 collaborator membership 존재 여부를 확인한다.
      *
      * @param projectId 확인할 project 식별자

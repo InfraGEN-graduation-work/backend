@@ -4,6 +4,7 @@ import com.infragen.infragen.domain.collaboration.entity.ProjectCollaborationSna
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface ProjectCollaborationSnapshotRepository
@@ -27,4 +28,10 @@ public interface ProjectCollaborationSnapshotRepository
             Long projectId,
             Long serverVersion
     );
+
+    @org.springframework.data.jpa.repository.Query("""
+            SELECT DISTINCT snapshot.project.id
+            FROM ProjectCollaborationSnapshot snapshot
+            """)
+    List<Long> findDistinctProjectIds();
 }

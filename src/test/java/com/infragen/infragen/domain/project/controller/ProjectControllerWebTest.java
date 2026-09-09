@@ -61,6 +61,7 @@ class ProjectControllerWebTest {
         {
           "title": "my-infra",
           "description": "개발용 인프라",
+          "baseVersion": 0,
           "nodes": [
             {
               "nodeId": "mysql-node-1",
@@ -180,6 +181,25 @@ class ProjectControllerWebTest {
     void updateProject_MissingNodeId_ReturnsBadRequest() throws Exception {
         // given
         String requestJson = REQUEST_JSON.replace("\"nodeId\": \"mysql-node-1\",", "");
+
+        // when
+        mockMvc.perform(put(PROJECT_URL, 1L)
+                .with(authenticatedAs(7L))
+                .contentType(APPLICATION_JSON)
+                .content(requestJson))
+            // then
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.isSuccess").value(false))
+            .andExpect(jsonPath("$.code").value("COMMON400_1"));
+
+        verifyNoInteractions(projectCommandService);
+    }
+
+    @Test
+    @DisplayName("PUT /projects/{projectId} — baseVersion 누락 시 validation 오류")
+    void updateProject_MissingBaseVersion_ReturnsBadRequest() throws Exception {
+        // given
+        String requestJson = REQUEST_JSON.replace("\"baseVersion\": 0,", "");
 
         // when
         mockMvc.perform(put(PROJECT_URL, 1L)

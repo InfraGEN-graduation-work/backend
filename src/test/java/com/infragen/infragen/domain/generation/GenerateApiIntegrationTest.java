@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,11 +37,16 @@ import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
 import com.infragen.infragen.domain.project.entity.GeneratedFile;
 import com.infragen.infragen.domain.project.entity.Project;
+import com.infragen.infragen.domain.project.entity.ProjectEdge;
+import com.infragen.infragen.domain.project.entity.ProjectNode;
 import com.infragen.infragen.domain.project.entity.ProjectHistory;
 import com.infragen.infragen.domain.project.enums.ProjectStatus;
 import com.infragen.infragen.domain.project.repository.GeneratedFileRepository;
 import com.infragen.infragen.domain.project.repository.ProjectHistoryRepository;
+import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
+import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
 import com.infragen.infragen.domain.project.repository.ProjectRepository;
+import com.infragen.infragen.global.enums.ComponentType;
 import com.infragen.infragen.global.auth.CustomUserDetails;
 
 @Testcontainers
@@ -187,6 +193,12 @@ class GenerateApiIntegrationTest {
     private ProjectRepository projectRepository;
 
     @Autowired
+    private ProjectNodeRepository projectNodeRepository;
+
+    @Autowired
+    private ProjectEdgeRepository projectEdgeRepository;
+
+    @Autowired
     private ProjectHistoryRepository projectHistoryRepository;
 
     @Autowired
@@ -197,6 +209,8 @@ class GenerateApiIntegrationTest {
         SecurityContextHolder.clearContext();
         generatedFileRepository.deleteAllInBatch();
         projectHistoryRepository.deleteAllInBatch();
+        projectEdgeRepository.deleteAllInBatch();
+        projectNodeRepository.deleteAllInBatch();
         projectRepository.deleteAllInBatch();
         memberRepository.deleteAllInBatch();
     }
@@ -207,6 +221,7 @@ class GenerateApiIntegrationTest {
         // given
         Member owner = saveMember("owner@infragen.test");
         Project project = saveProject(owner, "owned-project");
+        saveDurableGraph(project, false);
 
         // when
         ResultActions result = mockMvc.perform(post(GENERATE_URL, project.getId())
@@ -239,6 +254,9 @@ class GenerateApiIntegrationTest {
         assertTrue(generatedFiles.stream().anyMatch(file ->
             ".env".equals(file.getFileName())
                 && file.getContent().contains("localhost")));
+        assertTrue(generatedFiles.stream().anyMatch(file ->
+            "docker-compose.yml".equals(file.getFileName())
+                && file.getContent().contains("durable-mysql")));
     }
 
     @Test
@@ -247,6 +265,7 @@ class GenerateApiIntegrationTest {
         // given
         Member owner = saveMember("redis-owner@infragen.test");
         Project project = saveProject(owner, "mysql-redis-project");
+        saveDurableGraph(project, true);
 
         // when
         ResultActions result = mockMvc.perform(post(GENERATE_URL, project.getId())
@@ -270,13 +289,16 @@ class GenerateApiIntegrationTest {
 
         assertTrue(generatedFiles.stream().anyMatch(file ->
             "docker-compose.yml".equals(file.getFileName())
-                && file.getContent().contains("redis_data:/data")
-                && file.getContent().contains("  redis_data:\n")));
+                && file.getContent().contains("durable_redis_data:/data")
+                && file.getContent().contains("  durable_redis_data:\n")));
         assertTrue(generatedFiles.stream().anyMatch(file ->
             ".env".equals(file.getFileName())
                 && file.getContent().contains("REDIS_HOST=localhost")
                 && file.getContent().contains("REDIS_PORT=6379")
-                && file.getContent().contains("REDIS_PASSWORD=test-redis-password")));
+                && file.getContent().contains("REDIS_PASSWORD=durable-redis-password")));
+        assertTrue(generatedFiles.stream().anyMatch(file ->
+            "docker-compose.yml".equals(file.getFileName())
+                && file.getContent().contains("durable-redis")));
     }
 
     @Test
@@ -305,8 +327,8 @@ class GenerateApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("필수 파싱값 누락 — 400 반환 및 생성 결과 미저장")
-    void generate_MissingMySqlUsername_ReturnsBadRequestWithoutSavingHistory() throws Exception {
+    @DisplayName("저장 graph 없음 — request body와 무관하게 400 반환")
+    void generate_WithoutStoredGraph_ReturnsBadRequestWithoutSavingHistory() throws Exception {
         // given
         Member owner = saveMember("owner@infragen.test");
         Project project = saveProject(owner, "invalid-project");
@@ -325,7 +347,7 @@ class GenerateApiIntegrationTest {
         result
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.isSuccess").value(false))
-            .andExpect(jsonPath("$.code").value("PARSING400_18"));
+            .andExpect(jsonPath("$.code").value("PARSING400_1"));
         assertEquals(0, projectHistoryRepository
             .countByProjectId(project.getId()));
         assertEquals(0, generatedFileRepository.count());
@@ -348,6 +370,87 @@ class GenerateApiIntegrationTest {
             .status(ProjectStatus.DRAFT)
             .member(member)
             .build());
+    }
+
+    private void saveDurableGraph(Project project, boolean includeRedis) {
+        ProjectNode mysql = ProjectNode.builder()
+            .project(project)
+            .componentType(ComponentType.MYSQL)
+            .nodeId("durable-mysql-node")
+            .nodeName("durable-mysql")
+            .positionX(new java.math.BigDecimal("100"))
+            .positionY(new java.math.BigDecimal("200"))
+            .properties(Map.of(
+                "imageVersion", "mysql:8.0",
+                "containerName", "durable-mysql",
+                "volumeName", "durable_mysql_data",
+                "port", 3306,
+                "env", Map.of(
+                    "databaseName", "durable_db",
+                    "username", "durable_user",
+                    "userPassword", "durablepass12",
+                    "rootPassword", "durableroot12"
+                )
+            ))
+            .build();
+        ProjectNode springBoot = ProjectNode.builder()
+            .project(project)
+            .componentType(ComponentType.SPRING_BOOT)
+            .nodeId("durable-app-node")
+            .nodeName("durable-app")
+            .positionX(new java.math.BigDecimal("400"))
+            .positionY(new java.math.BigDecimal("200"))
+            .properties(Map.of(
+                "name", "durable-app",
+                "port", 8080,
+                "javaVersion", "17",
+                "containerName", "durable-app"
+            ))
+            .build();
+
+        List<ProjectNode> nodes = includeRedis
+            ? List.of(mysql, saveRedisNode(project), springBoot)
+            : List.of(mysql, springBoot);
+        projectNodeRepository.saveAllAndFlush(nodes);
+
+        if (includeRedis) {
+            ProjectNode redis = nodes.get(1);
+            projectEdgeRepository.saveAndFlush(ProjectEdge.builder()
+                .project(project)
+                .sourceNode(mysql)
+                .targetNode(springBoot)
+                .build());
+            projectEdgeRepository.saveAndFlush(ProjectEdge.builder()
+                .project(project)
+                .sourceNode(redis)
+                .targetNode(springBoot)
+                .build());
+            return;
+        }
+
+        projectEdgeRepository.saveAndFlush(ProjectEdge.builder()
+            .project(project)
+            .sourceNode(mysql)
+            .targetNode(springBoot)
+            .build());
+    }
+
+    private ProjectNode saveRedisNode(Project project) {
+        return ProjectNode.builder()
+            .project(project)
+            .componentType(ComponentType.REDIS)
+            .nodeId("durable-redis-node")
+            .nodeName("durable-redis")
+            .positionX(new java.math.BigDecimal("250"))
+            .positionY(new java.math.BigDecimal("200"))
+            .properties(Map.of(
+                "imageVersion", "redis:7.4",
+                "containerName", "durable-redis",
+                "volumeName", "durable_redis_data",
+                "port", 6379,
+                "password", "durable-redis-password"
+            ))
+            .build();
     }
 
     private static RequestPostProcessor authenticatedAs(Member member) {

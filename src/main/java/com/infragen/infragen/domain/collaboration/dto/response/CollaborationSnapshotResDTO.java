@@ -12,6 +12,7 @@ public final class CollaborationSnapshotResDTO {
     @Builder
     public record SnapshotResDTO(
             ProjectResDTO.ProjectDetailResDTO project,
+            Long graphVersion,
             Long serverVersion,
             List<CollaborationOperationResDTO.BroadcastOperationResDTO> operations
     ) {

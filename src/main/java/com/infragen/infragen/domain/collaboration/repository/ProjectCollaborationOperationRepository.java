@@ -1,6 +1,9 @@
 package com.infragen.infragen.domain.collaboration.repository;
 
 import com.infragen.infragen.domain.collaboration.entity.ProjectCollaborationOperation;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -9,6 +12,24 @@ import java.util.Optional;
 
 public interface ProjectCollaborationOperationRepository
         extends JpaRepository<@NonNull ProjectCollaborationOperation, @NonNull Long> {
+    /**
+     * 지정한 snapshot version 이하의 operation log를 삭제한다.
+     *
+     * @param projectId 삭제할 project 식별자
+     * @param serverVersion snapshot으로 보존되는 마지막 version
+     * @return 삭제된 operation 수
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            DELETE FROM ProjectCollaborationOperation operation
+            WHERE operation.project.id = :projectId
+              AND operation.serverVersion <= :serverVersion
+            """)
+    int deleteAllByProjectIdAndServerVersionLessThanEqual(
+            @Param("projectId") Long projectId,
+            @Param("serverVersion") Long serverVersion
+    );
+
     /**
      * project 안에서 operationId에 해당하는 log를 조회한다.
      *

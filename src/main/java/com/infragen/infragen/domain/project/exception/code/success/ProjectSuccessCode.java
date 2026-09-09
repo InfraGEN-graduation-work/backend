@@ -32,6 +32,26 @@ public enum ProjectSuccessCode implements BaseSuccessCode {
         "프로젝트 삭제에 성공했습니다.",
         "PROJECT200_4"
     ),
+    PROJECT_COLLABORATOR_GET_SUCCESS(
+        HttpStatus.OK,
+        "프로젝트 collaborator 조회에 성공했습니다.",
+        "PROJECT200_5"
+    ),
+    PROJECT_COLLABORATOR_ADD_SUCCESS(
+        HttpStatus.CREATED,
+        "프로젝트 collaborator 등록에 성공했습니다.",
+        "PROJECT201_2"
+    ),
+    PROJECT_COLLABORATOR_ROLE_UPDATE_SUCCESS(
+        HttpStatus.OK,
+        "프로젝트 collaborator 역할 변경에 성공했습니다.",
+        "PROJECT200_6"
+    ),
+    PROJECT_COLLABORATOR_DELETE_SUCCESS(
+        HttpStatus.OK,
+        "프로젝트 collaborator 삭제에 성공했습니다.",
+        "PROJECT200_7"
+    ),
     ;
     private final HttpStatus httpStatus;
     private final String message;

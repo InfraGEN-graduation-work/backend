@@ -14,6 +14,9 @@ import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.service.ParsingService;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 import com.infragen.infragen.domain.project.service.command.ProjectHistoryCommandService;
+import com.infragen.infragen.domain.project.converter.ProjectGraphParsingConverter;
+import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
+import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +26,8 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class GenerationCommandService {
     private final ProjectQueryService projectQueryService;
+    private final ProjectNodeRepository projectNodeRepository;
+    private final ProjectEdgeRepository projectEdgeRepository;
     private final ParsingService parsingService;
     private final IaCGenerationService iaCGenerationService;
     private final ProjectHistoryCommandService projectHistoryCommandService;
@@ -51,7 +56,12 @@ public class GenerationCommandService {
 
         projectQueryService.getOwnedProject(projectId, memberId);
 
-        ParsingResultDTO parsingResult = parsingService.parsing(request, projectId);
+        ParsingReqDTO storedGraph = ProjectGraphParsingConverter.toParsingReqDTO(
+                projectNodeRepository.findAllByProjectId(projectId),
+                projectEdgeRepository.findAllByProjectId(projectId)
+        );
+
+        ParsingResultDTO parsingResult = parsingService.parsing(storedGraph, projectId);
         IaCFileDTO.BundleResDTO bundle = iaCGenerationService.generate(parsingResult, outputFormat);
 
         Long historyId = projectHistoryCommandService.saveGeneratedHistory(

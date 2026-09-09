@@ -5,23 +5,20 @@ import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
 import com.infragen.infragen.domain.auth.exception.AuthException;
 import com.infragen.infragen.domain.auth.exception.code.error.AuthErrorCode;
 import com.infragen.infragen.global.auth.CustomUserDetails;
-import com.infragen.infragen.global.auth.CustomUserDetailsService;
-import com.infragen.infragen.global.util.JwtUtil;
-import com.infragen.infragen.global.util.RedisUtil;
 import com.infragen.infragen.domain.project.service.query.ProjectAccessService;
-
-import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * STOMP CONNECT frame의 access token을 검증하고 이후 message의 Principal을 설정한다.
@@ -31,42 +28,59 @@ import java.util.regex.Matcher;
 public class StompAuthChannelInterceptor implements ChannelInterceptor {
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
-    private static final String ACCESS_CATEGORY = "access";
     private static final Pattern OPERATIONS_DESTINATION =
-            Pattern.compile("^/app/projects/\\d+/operations$");
+            Pattern.compile("^/app/projects/(\\d+)/operations$");
     private static final Pattern OPERATIONS_TOPIC_DESTINATION =
-            Pattern.compile("^/topic/projects/\\d+/operations$");
+            Pattern.compile("^/topic/projects/(\\d+)/operations$");
+    private static final Pattern ROOM_RESYNC_DESTINATION =
+            Pattern.compile("^/topic/projects/(\\d+)/resync$");
     private static final Pattern OPERATION_RESULT_DESTINATION =
-            Pattern.compile("^/user/queue/projects/\\d+/operation-results$");
+            Pattern.compile("^/user/queue/projects/(\\d+)/operation-results$");
 
-    private final JwtUtil jwtUtil;
-    private final RedisUtil redisUtil;
-    private final CustomUserDetailsService customUserDetailsService;
+    private final StompAccessTokenAuthenticator tokenAuthenticator;
     private final ProjectAccessService projectAccessService;
+    private final Map<String, Authentication> sessionAuthentications = new ConcurrentHashMap<>();
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(message);
 
         if (StompCommand.CONNECT.equals(accessor.getCommand())) {
-            accessor.setUser(authenticate(accessor));
+            Authentication authentication = authenticate(accessor);
+            sessionAuthentications.put(accessor.getSessionId(), authentication);
+            accessor.setUser(authentication);
+            return rebuildMessage(message, accessor);
         } else if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())
                 || StompCommand.SEND.equals(accessor.getCommand())) {
             validateMessage(accessor);
+            return rebuildMessage(message, accessor);
+        } else if (StompCommand.DISCONNECT.equals(accessor.getCommand())) {
+            sessionAuthentications.remove(accessor.getSessionId());
         }
 
         return message;
     }
 
+    private Message<?> rebuildMessage(Message<?> message, StompHeaderAccessor accessor) {
+        return MessageBuilder.withPayload(message.getPayload())
+                .setHeaders(accessor)
+                .build();
+    }
+
     private void validateMessage(StompHeaderAccessor accessor) {
-        if (accessor.getUser() == null) {
+        Authentication authentication = getAuthentication(accessor);
+        if (authentication == null) {
             throw new AuthException(AuthErrorCode.TOKEN_INVALID);
         }
 
         String destination = accessor.getDestination();
+        Authentication refreshedAuthentication = tokenAuthenticator.authenticate(accessToken(authentication));
+        sessionAuthentications.put(accessor.getSessionId(), refreshedAuthentication);
+        accessor.setUser(refreshedAuthentication);
         boolean allowedDestination = switch (accessor.getCommand()) {
             case SEND -> matches(OPERATIONS_DESTINATION, destination);
             case SUBSCRIBE -> matches(OPERATIONS_TOPIC_DESTINATION, destination)
+                    || matches(ROOM_RESYNC_DESTINATION, destination)
                     || matches(OPERATION_RESULT_DESTINATION, destination);
             default -> false;
         };
@@ -94,8 +108,13 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
                 ? OPERATIONS_DESTINATION
                 : matches(OPERATIONS_TOPIC_DESTINATION, destination)
                         ? OPERATIONS_TOPIC_DESTINATION
-                        : OPERATION_RESULT_DESTINATION;
+                        : matches(ROOM_RESYNC_DESTINATION, destination)
+                                ? ROOM_RESYNC_DESTINATION
+                                : OPERATION_RESULT_DESTINATION;
         Matcher matcher = pattern.matcher(destination);
+        if (!matcher.matches()) {
+            throw new IllegalArgumentException("지원하지 않는 STOMP destination입니다.");
+        }
         return Long.valueOf(matcher.group(1));
     }
 
@@ -123,32 +142,20 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
             throw new AuthException(AuthErrorCode.TOKEN_INVALID);
         }
 
-        Claims claims = jwtUtil.getClaims(token);
-        String category = claims.get("category", String.class);
-        if (!ACCESS_CATEGORY.equals(category) || redisUtil.isBlackList(token)) {
-            throw new AuthException(
-                    ACCESS_CATEGORY.equals(category)
-                            ? AuthErrorCode.TOKEN_BLACKLIST
-                            : AuthErrorCode.TOKEN_INVALID
-            );
+        return tokenAuthenticator.authenticate(token);
+    }
+
+    private Authentication getAuthentication(StompHeaderAccessor accessor) {
+        if (accessor.getUser() instanceof Authentication authentication) {
+            return authentication;
         }
+        return sessionAuthentications.get(accessor.getSessionId());
+    }
 
-        String memberId = claims.getSubject();
-        if (memberId == null || memberId.isBlank()) {
-            throw new AuthException(AuthErrorCode.TOKEN_INVALID);
+    private String accessToken(Authentication authentication) {
+        if (authentication.getCredentials() instanceof String token && !token.isBlank()) {
+            return token;
         }
-
-        CustomUserDetails userDetails = (CustomUserDetails)
-                customUserDetailsService.loadUserByUsername(memberId);
-
-        if (!userDetails.isEnabled()) {
-            throw new AuthException(AuthErrorCode.TOKEN_INVALID);
-        }
-
-        return new UsernamePasswordAuthenticationToken(
-                userDetails,
-                null,
-                userDetails.getAuthorities()
-        );
+        throw new AuthException(AuthErrorCode.TOKEN_INVALID);
     }
 }

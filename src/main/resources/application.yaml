@@ -1,5 +1,6 @@
 server:
   port: 8080
+  forward-headers-strategy: framework
 
 # spring 컨테이너 설정 관련
 spring:

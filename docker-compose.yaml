@@ -10,8 +10,21 @@ services:
       - infragen-network
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot_letsencrypt:/etc/letsencrypt:ro
+
+  certbot:
+    image: certbot/certbot:v5.8.0
+    container_name: infragen-certbot
+    profiles:
+      - certbot
+    ports:
+      - "80:80"
+    volumes:
+      - certbot_letsencrypt:/etc/letsencrypt
+      - certbot_lib:/var/lib/letsencrypt
 
   # mysql 설정
   infragen-mysql:
@@ -72,5 +85,9 @@ networks:
 
 # 데이터 보존을 위한 명명된 볼륨 정의
 volumes:
+  certbot_letsencrypt:
+    name: infragen_certbot_letsencrypt
+  certbot_lib:
+    name: infragen_certbot_lib
   mysql_data:
   redis_data:

@@ -3,6 +3,7 @@ package com.infragen.infragen.domain.generation.service.command;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -13,18 +14,25 @@ import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.infragen.infragen.domain.generation.dto.request.DeploymentTargetReqDTO;
+import com.infragen.infragen.domain.generation.dto.request.GenerateReqDTO;
 import com.infragen.infragen.domain.generation.dto.response.GenerateResDTO;
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
+import com.infragen.infragen.domain.generation.enums.DeploymentOption;
 import com.infragen.infragen.domain.generation.enums.OutputFormat;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.generation.service.IaCGenerationService;
+import com.infragen.infragen.domain.generation.validator.DeploymentTargetValidator;
 import com.infragen.infragen.domain.parsing.dto.request.ParsingReqDTO;
+import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
+import com.infragen.infragen.domain.parsing.dto.request.NodeDTO;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
@@ -35,7 +43,7 @@ import com.infragen.infragen.domain.project.entity.ProjectNode;
 import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
 import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
 import com.infragen.infragen.global.enums.ComponentType;
-import org.mockito.ArgumentCaptor;
+import java.util.Map;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("GenerationCommandService")
@@ -59,6 +67,9 @@ class GenerationCommandServiceTest {
     @Mock
     private ProjectHistoryCommandService projectHistoryCommandService;
 
+    @Mock
+    private DeploymentTargetValidator deploymentTargetValidator;
+
     @InjectMocks
     private GenerationCommandService generationCommandService;
 
@@ -68,7 +79,7 @@ class GenerationCommandServiceTest {
         // given
         Long projectId = 1L;
         Long memberId = 2L;
-        ParsingReqDTO request = new ParsingReqDTO();
+        GenerateReqDTO.Request request = localRequest();
         ProjectNode storedNode = ProjectNode.builder()
                 .componentType(ComponentType.MYSQL)
                 .nodeId("stored-node")
@@ -80,11 +91,11 @@ class GenerationCommandServiceTest {
         ParsingResultDTO parsingResult = new ParsingResultDTO();
         List<IaCFileDTO.FileContentResDTO> files = List.of(
             IaCFileDTO.FileContentResDTO.builder()
-                .fileName("docker-compose.yml")
+                .fileName("local/docker-compose.yml")
                 .content("services:\n  mysql:\n    image: mysql:8.0\n")
                 .build(),
             IaCFileDTO.FileContentResDTO.builder()
-                .fileName(".env")
+                .fileName("local/.env")
                 .content("MYSQL_HOST=localhost\n")
                 .build()
         );
@@ -105,17 +116,16 @@ class GenerationCommandServiceTest {
         GenerateResDTO.GenerateResultResDTO result = generationCommandService.generate(
             projectId,
             request,
-            memberId,
-            OutputFormat.DOCKER_COMPOSE
+            memberId
         );
 
         // then
         assertAll(
             () -> assertEquals(42L, result.historyId()),
             () -> assertEquals(2, result.files().size()),
-            () -> assertEquals("docker-compose.yml", result.files().get(0).fileName()),
+            () -> assertEquals("local/docker-compose.yml", result.files().get(0).fileName()),
             () -> assertEquals(files.get(0).content(), result.files().get(0).content()),
-            () -> assertEquals(".env", result.files().get(1).fileName()),
+            () -> assertEquals("local/.env", result.files().get(1).fileName()),
             () -> assertEquals(files.get(1).content(), result.files().get(1).content())
         );
         verify(projectQueryService).getOwnedProject(projectId, memberId);
@@ -127,16 +137,23 @@ class GenerationCommandServiceTest {
     }
 
     @Test
-    @DisplayName("TERRAFORM 형식 — Terraform generator로 라우팅하고 history 저장")
-    void generate_TerraformFormat_RoutesToTerraformGenerator() {
+    @DisplayName("AWS 배포 옵션 — Terraform generator로 라우팅하고 history 저장")
+    void generate_AwsDeploymentOption_RoutesToTerraformGenerator() {
         // given
         Long projectId = 1L;
         Long memberId = 2L;
-        ParsingReqDTO request = new ParsingReqDTO();
+        DeploymentTargetReqDTO.Target deploymentTarget = awsTarget();
+        GenerateReqDTO.Request request = new GenerateReqDTO.Request(
+            null,
+            null,
+            DeploymentOption.AWS,
+            false,
+            deploymentTarget
+        );
         ParsingResultDTO parsingResult = new ParsingResultDTO();
         List<IaCFileDTO.FileContentResDTO> files = List.of(
             IaCFileDTO.FileContentResDTO.builder()
-                .fileName("Dockerfile")
+                .fileName("cloud/Dockerfile")
                 .content("FROM eclipse-temurin:17-jre\n")
                 .build()
         );
@@ -146,7 +163,7 @@ class GenerationCommandServiceTest {
 
         when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(null);
         when(parsingService.parsing(any(ParsingReqDTO.class), eq(projectId))).thenReturn(parsingResult);
-        when(iaCGenerationService.generate(parsingResult, OutputFormat.TERRAFORM))
+        when(iaCGenerationService.generate(parsingResult, OutputFormat.TERRAFORM, deploymentTarget))
             .thenReturn(bundle);
         when(projectHistoryCommandService.saveGeneratedHistory(projectId, memberId, files))
             .thenReturn(43L);
@@ -155,36 +172,199 @@ class GenerationCommandServiceTest {
         GenerateResDTO.GenerateResultResDTO result = generationCommandService.generate(
             projectId,
             request,
-            memberId,
-            OutputFormat.TERRAFORM
+            memberId
         );
 
         // then
         assertAll(
             () -> assertEquals(43L, result.historyId()),
-            () -> assertEquals("Dockerfile", result.files().get(0).fileName()),
+            () -> assertEquals("cloud/Dockerfile", result.files().get(0).fileName()),
             () -> assertEquals(files.get(0).content(), result.files().get(0).content())
         );
         verify(projectQueryService).getOwnedProject(projectId, memberId);
         verify(parsingService).parsing(any(ParsingReqDTO.class), eq(projectId));
-        verify(iaCGenerationService).generate(parsingResult, OutputFormat.TERRAFORM);
+        verify(iaCGenerationService).generate(parsingResult, OutputFormat.TERRAFORM, deploymentTarget);
         verify(projectHistoryCommandService).saveGeneratedHistory(projectId, memberId, files);
     }
 
     @Test
-    @DisplayName("지원하지 않는 출력 형식 — GENERATION400_1")
-    void generate_UnsupportedFormat_ThrowsGenerationException() {
+    @DisplayName("OCI 배포 옵션과 AWS target — provider 불일치 오류 반환")
+    void generate_OciOptionWithAwsTarget_ThrowsProviderMismatch() {
         // given
-        ParsingReqDTO request = new ParsingReqDTO();
+        Long projectId = 1L;
+        Long memberId = 2L;
+        GenerateReqDTO.Request request = new GenerateReqDTO.Request(
+            null,
+            null,
+            DeploymentOption.OCI,
+            false,
+            awsTarget()
+        );
+        ParsingResultDTO parsingResult = new ParsingResultDTO();
 
         // when
         IaCGenerationException exception = assertThrows(
             IaCGenerationException.class,
-            () -> generationCommandService.generate(1L, request, 2L, null)
+            () -> generationCommandService.generate(projectId, request, memberId)
         );
 
         // then
-        assertEquals(IaCGenerationErrorCode.UNSUPPORTED_OUTPUT_FORMAT, exception.getCode());
+        assertEquals(
+            IaCGenerationErrorCode.DEPLOYMENT_TARGET_PROVIDER_MISMATCH,
+            exception.getCode()
+        );
+        verifyNoInteractions(
+            projectQueryService,
+            parsingService,
+            iaCGenerationService,
+            projectHistoryCommandService
+        );
+    }
+
+    @Test
+    @DisplayName("AWS target 필수값 누락 — 생성 전에 예외 발생")
+    void generate_AwsTargetMissingRequiredValue_ThrowsBeforeGeneration() {
+        // given
+        DeploymentTargetReqDTO.Target target = new DeploymentTargetReqDTO.AwsDeploymentTarget(
+            "ap-northeast-2",
+            "",
+            "infragen-subnet",
+            "infragen-igw",
+            "infragen-public-route",
+            "infragen-sg",
+            "infragen-app",
+            "10.0.0.0/16",
+            "10.0.1.0/24",
+            "ami-xxxxxxxx",
+            "t3.micro",
+            "203.0.113.10/32",
+            "0.0.0.0/0"
+        );
+        GenerateReqDTO.Request request = new GenerateReqDTO.Request(
+            List.of(),
+            List.of(),
+            DeploymentOption.AWS,
+            false,
+            target
+        );
+        doThrow(new IaCGenerationException(IaCGenerationErrorCode.INVALID_DEPLOYMENT_TARGET))
+            .when(deploymentTargetValidator).validate(target);
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> generationCommandService.generate(1L, request, 2L)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.INVALID_DEPLOYMENT_TARGET, exception.getCode());
+        verify(deploymentTargetValidator).validate(target);
+        verifyNoInteractions(
+            projectQueryService,
+            parsingService,
+            iaCGenerationService,
+            projectHistoryCommandService
+        );
+    }
+
+    @Test
+    @DisplayName("Local includeLocalSpec null — 생성 전에 예외 발생")
+    void generate_LocalWithoutExplicitIncludeFlag_ThrowsBeforeGeneration() {
+        // given
+        GenerateReqDTO.Request request = new GenerateReqDTO.Request(
+            List.of(),
+            List.of(),
+            DeploymentOption.LOCAL,
+            null,
+            null
+        );
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> generationCommandService.generate(1L, request, 2L)
+        );
+
+        // then
+        assertEquals(
+            IaCGenerationErrorCode.INVALID_LOCAL_DEPLOYMENT_CONFIGURATION,
+            exception.getCode()
+        );
+        verifyNoInteractions(
+            projectQueryService,
+            parsingService,
+            iaCGenerationService,
+            projectHistoryCommandService
+        );
+    }
+
+    @Test
+    @DisplayName("요청 객체 누락 — 생성 전에 요청 오류 반환")
+    void generate_NullRequest_ThrowsInvalidGenerationRequest() {
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> generationCommandService.generate(1L, null, 2L)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.INVALID_GENERATION_REQUEST, exception.getCode());
+        verifyNoInteractions(
+            projectQueryService,
+            parsingService,
+            iaCGenerationService,
+            projectHistoryCommandService
+        );
+    }
+
+    @Test
+    @DisplayName("배포 옵션 누락 — 생성 전에 배포 옵션 오류 반환")
+    void generate_MissingDeploymentOption_ThrowsMissingDeploymentOption() {
+        // given
+        GenerateReqDTO.Request request = new GenerateReqDTO.Request(
+            List.of(),
+            List.of(),
+            null,
+            false,
+            null
+        );
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> generationCommandService.generate(1L, request, 2L)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.MISSING_DEPLOYMENT_OPTION, exception.getCode());
+        verifyNoInteractions(
+            projectQueryService,
+            parsingService,
+            iaCGenerationService,
+            projectHistoryCommandService
+        );
+    }
+
+    @Test
+    @DisplayName("Cloud target 누락 — 생성 전에 target 오류 반환")
+    void generate_MissingCloudTarget_ThrowsMissingDeploymentTarget() {
+        // given
+        GenerateReqDTO.Request request = new GenerateReqDTO.Request(
+            List.of(),
+            List.of(),
+            DeploymentOption.AWS,
+            false,
+            null
+        );
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> generationCommandService.generate(1L, request, 2L)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.MISSING_DEPLOYMENT_TARGET, exception.getCode());
         verifyNoInteractions(
             projectQueryService,
             projectNodeRepository,
@@ -201,7 +381,7 @@ class GenerationCommandServiceTest {
         // given
         Long projectId = 1L;
         Long memberId = 2L;
-        ParsingReqDTO request = new ParsingReqDTO();
+        GenerateReqDTO.Request request = localRequest();
         ParsingException parsingException = new ParsingException(ParsingErrorCode.EMPTY_NODES);
 
         when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(null);
@@ -213,8 +393,7 @@ class GenerationCommandServiceTest {
             () -> generationCommandService.generate(
                 projectId,
                 request,
-                memberId,
-                OutputFormat.DOCKER_COMPOSE
+                memberId
             )
         );
 
@@ -231,7 +410,7 @@ class GenerationCommandServiceTest {
         // given
         Long projectId = 1L;
         Long memberId = 2L;
-        ParsingReqDTO request = new ParsingReqDTO();
+        GenerateReqDTO.Request request = localRequest();
         ParsingResultDTO parsingResult = new ParsingResultDTO();
         IaCGenerationException generationException = new IaCGenerationException(
             IaCGenerationErrorCode.INVALID_COMPONENT_STATE
@@ -248,8 +427,7 @@ class GenerationCommandServiceTest {
             () -> generationCommandService.generate(
                 projectId,
                 request,
-                memberId,
-                OutputFormat.DOCKER_COMPOSE
+                memberId
             )
         );
 
@@ -259,5 +437,36 @@ class GenerationCommandServiceTest {
         verify(parsingService).parsing(any(ParsingReqDTO.class), eq(projectId));
         verify(iaCGenerationService).generate(parsingResult, OutputFormat.DOCKER_COMPOSE);
         verifyNoInteractions(projectHistoryCommandService);
+    }
+
+    private GenerateReqDTO.Request localRequest() {
+        EdgeDTO edge = new EdgeDTO();
+        edge.setSourceNodeId("mysql-1");
+        edge.setTargetNodeId("app-1");
+        return new GenerateReqDTO.Request(
+            List.of(new NodeDTO("mysql-1", "MYSQL", 0f, 0f, Map.of())),
+            List.of(edge),
+            DeploymentOption.LOCAL,
+            false,
+            null
+        );
+    }
+
+    private DeploymentTargetReqDTO.Target awsTarget() {
+        return new DeploymentTargetReqDTO.AwsDeploymentTarget(
+            "ap-northeast-2",
+            "infragen-vpc",
+            "infragen-subnet",
+            "infragen-igw",
+            "infragen-public-route",
+            "infragen-sg",
+            "infragen-app",
+            "10.0.0.0/16",
+            "10.0.1.0/24",
+            "ami-xxxxxxxx",
+            "t3.micro",
+            "203.0.113.10/32",
+            "0.0.0.0/0"
+        );
     }
 }

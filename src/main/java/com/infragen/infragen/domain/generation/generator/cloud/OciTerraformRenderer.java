@@ -2,22 +2,44 @@ package com.infragen.infragen.domain.generation.generator.cloud;
 
 import java.util.List;
 
+import org.springframework.stereotype.Component;
+
+import com.infragen.infragen.domain.generation.dto.request.DeploymentTargetReqDTO;
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
+import com.infragen.infragen.domain.generation.enums.DeploymentOption;
+import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
+import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 
 /** OCI 단일 인스턴스 scaffold의 provider-specific Terraform 파일을 생성한다. */
-public class OciTerraformRenderer {
+@Component
+public class OciTerraformRenderer implements CloudTerraformRenderer {
 
-    /**
-     * 파싱된 애플리케이션 포트를 OCI security list 변수의 기본값으로 반영한다.
-     *
-     * @param applicationPort parsing 결과의 애플리케이션 포트
-     * @return OCI Terraform 파일 목록
-     */
-    public List<IaCFileDTO.FileContentResDTO> render(int applicationPort) {
+    @Override
+    public DeploymentOption getProvider() {
+        return DeploymentOption.OCI;
+    }
+
+    @Override
+    public List<IaCFileDTO.FileContentResDTO> render(
+        CloudDeployContext context,
+        DeploymentTargetReqDTO.Target deploymentTarget
+    ) {
+        DeploymentTargetReqDTO.OciDeploymentTarget target = requireTarget(deploymentTarget);
         return List.of(
-            file("terraform/oci/main.tf", mainTerraform()),
-            file("terraform/oci/variables.tf", variablesTerraform(applicationPort))
+            file("oci/terraform/main.tf", mainTerraform()),
+            file("oci/terraform/variables.tf", variablesTerraform(context.applicationPort())),
+            file("oci/terraform/terraform.tfvars.example", tfvarsExample(
+                context.applicationPort(), target))
         );
+    }
+
+    private DeploymentTargetReqDTO.OciDeploymentTarget requireTarget(
+        DeploymentTargetReqDTO.Target deploymentTarget
+    ) {
+        if (!(deploymentTarget instanceof DeploymentTargetReqDTO.OciDeploymentTarget target)) {
+            throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
+        }
+        return target;
     }
 
     private IaCFileDTO.FileContentResDTO file(String fileName, String content) {
@@ -231,5 +253,67 @@ public class OciTerraformRenderer {
               default     = %d
             }
             """.formatted(applicationPort);
+    }
+
+    private String tfvarsExample(
+        int applicationPort,
+        DeploymentTargetReqDTO.OciDeploymentTarget target
+    ) {
+        return """
+            # InfraGEN이 생성한 OCI target 예시입니다. 실제 credential은 포함하지 않습니다.
+            oci_region = %s
+            oci_vcn_name = %s
+            oci_subnet_name = %s
+            oci_internet_gateway_name = %s
+            oci_route_table_name = %s
+            oci_security_list_name = %s
+            oci_instance_name = %s
+            oci_hostname_label = %s
+            oci_compartment_id = %s
+            oci_availability_domain = %s
+            oci_image_id = %s
+            oci_shape = %s
+            oci_vcn_cidr = %s
+            oci_subnet_cidr = %s
+            oci_admin_cidr = %s
+            oci_app_cidr = %s
+            oci_ssh_authorized_keys = %s
+            app_port = %d
+            """.formatted(
+                hcl(valueOrDefault(target.region(), "ap-seoul-1")),
+                hcl(target.vcnName()),
+                hcl(target.subnetName()),
+                hcl(target.internetGatewayName()),
+                hcl(target.routeTableName()),
+                hcl(target.securityListName()),
+                hcl(target.instanceName()),
+                hcl(target.hostnameLabel()),
+                hcl(target.compartmentId()),
+                hcl(target.availabilityDomain()),
+                hcl(target.imageId()),
+                hcl(valueOrDefault(target.shape(), "VM.Standard.E2.1.Micro")),
+                hcl(valueOrDefault(target.vcnCidr(), "10.0.0.0/16")),
+                hcl(valueOrDefault(target.subnetCidr(), "10.0.1.0/24")),
+                hcl(target.adminCidr()),
+                hcl(target.appCidr()),
+                hcl(target.sshAuthorizedKeys()),
+                applicationPort
+            );
+    }
+
+    private String valueOrDefault(String value, String defaultValue) {
+        return value == null || value.isBlank() ? defaultValue : value;
+    }
+
+    private String hcl(String value) {
+        if (value == null) {
+            throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
+        }
+        return "\"" + value
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            + "\"";
     }
 }

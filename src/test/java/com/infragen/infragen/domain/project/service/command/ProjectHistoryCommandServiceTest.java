@@ -108,12 +108,20 @@ class ProjectHistoryCommandServiceTest {
         Long projectId = 100L;
         List<IaCFileDTO.FileContentResDTO> generatedFiles = List.of(
             IaCFileDTO.FileContentResDTO.builder()
-                .fileName("docker-compose.yml")
+                .fileName("local/docker-compose.yml")
                 .content("services:\n  mysql:\n    image: mysql:8.0\n")
                 .build(),
             IaCFileDTO.FileContentResDTO.builder()
-                .fileName(".env")
+                .fileName("local/.env")
                 .content("SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/appdb\n")
+                .build(),
+            IaCFileDTO.FileContentResDTO.builder()
+                .fileName("cloud/aws/terraform/main.tf")
+                .content("resource \"aws_vpc\" \"main\" {}\n")
+                .build(),
+            IaCFileDTO.FileContentResDTO.builder()
+                .fileName("cloud/Dockerfile")
+                .content("FROM eclipse-temurin:17-jre\n")
                 .build()
         );
 
@@ -144,18 +152,26 @@ class ProjectHistoryCommandServiceTest {
         assertEquals("v2", savedHistory.getVersionName());
         assertNull(savedHistory.getDescription());
         assertEquals(project, savedHistory.getProject());
-        assertEquals(2, savedHistory.getGeneratedFileList().size());
+        assertEquals(4, savedHistory.getGeneratedFileList().size());
 
         GeneratedFile composeFile = savedHistory.getGeneratedFileList().get(0);
-        assertEquals("docker-compose.yml", composeFile.getFileName());
+        assertEquals("local/docker-compose.yml", composeFile.getFileName());
         assertEquals("services:\n  mysql:\n    image: mysql:8.0\n", composeFile.getContent());
-        assertEquals("projects/100/histories/v2/docker-compose.yml", composeFile.getFilePath());
+        assertEquals("projects/100/histories/v2/local/docker-compose.yml", composeFile.getFilePath());
         assertEquals(composeFile.getContent().getBytes(StandardCharsets.UTF_8).length, composeFile.getFileSize());
 
         GeneratedFile envFile = savedHistory.getGeneratedFileList().get(1);
-        assertEquals(".env", envFile.getFileName());
+        assertEquals("local/.env", envFile.getFileName());
         assertEquals("SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/appdb\n", envFile.getContent());
-        assertEquals("projects/100/histories/v2/.env", envFile.getFilePath());
+        assertEquals("projects/100/histories/v2/local/.env", envFile.getFilePath());
+
+        GeneratedFile terraformFile = savedHistory.getGeneratedFileList().get(2);
+        assertEquals("cloud/aws/terraform/main.tf", terraformFile.getFileName());
+        assertEquals("projects/100/histories/v2/cloud/aws/terraform/main.tf", terraformFile.getFilePath());
+
+        GeneratedFile dockerfile = savedHistory.getGeneratedFileList().get(3);
+        assertEquals("cloud/Dockerfile", dockerfile.getFileName());
+        assertEquals("projects/100/histories/v2/cloud/Dockerfile", dockerfile.getFilePath());
 
         verify(projectQueryService).getOwnedProject(projectId, memberId);
         verify(projectHistoryRepository).countByProjectId(projectId);

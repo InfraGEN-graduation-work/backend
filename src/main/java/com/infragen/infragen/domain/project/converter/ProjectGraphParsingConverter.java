@@ -23,14 +23,14 @@ public final class ProjectGraphParsingConverter {
             List<ProjectNode> nodes,
             List<ProjectEdge> edges
     ) {
-        ParsingReqDTO request = new ParsingReqDTO();
-        request.setNodes(nodes.stream()
-                .map(ProjectGraphParsingConverter::toNodeDTO)
-                .toList());
-        request.setEdges(edges.stream()
-                .map(ProjectGraphParsingConverter::toEdgeDTO)
-                .toList());
-        return request;
+        return new ParsingReqDTO(
+                nodes.stream()
+                        .map(ProjectGraphParsingConverter::toNodeDTO)
+                        .toList(),
+                edges.stream()
+                        .map(ProjectGraphParsingConverter::toEdgeDTO)
+                        .toList()
+        );
     }
 
     private static NodeDTO toNodeDTO(ProjectNode node) {

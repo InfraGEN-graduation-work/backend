@@ -23,7 +23,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final StompAuthChannelInterceptor stompAuthChannelInterceptor;
     private final StompErrorHandler stompErrorHandler;
 
-    @Value("${ALLOWED_ORIGINS:http://localhost:5173}")
+    @Value("${cors.allowed-origins}")
     private String allowedOrigins;
 
     @Override

@@ -69,7 +69,8 @@ Apply these rules to new or updated tests. Do not rewrite unrelated legacy tests
 
 - Use `@SpringBootTest` only when multiple application layers or real infrastructure must work together.
 - MySQL- or Redis-dependent tests must use the documented local Docker services or an explicitly
-  configured container-based test environment; do not assume H2 is available.
+  configured container-based test environment; do not assume H2 is available. Testcontainers is
+  preferred when the test needs isolated infrastructure.
 - Use test-only configuration and environment variables. Never embed real credentials or `.env` values.
 - Keep test data isolated through rollback, explicit cleanup, or uniquely scoped data.
 - Do not leave required tests indefinitely `@Disabled`; record the reason and restoration condition.
@@ -91,8 +92,13 @@ Apply these rules to new or updated tests. Do not rewrite unrelated legacy tests
 
 ## Verification
 
-- Run the most focused relevant test while editing.
-- Run `./gradlew test` before handoff; use `./gradlew clean build` for broad changes.
-- When an integration test requires MySQL or Redis, start the documented services before execution.
+- By default, run the most focused relevant tests that do not require Docker, MySQL, Redis,
+  Terraform CLI, or other external infrastructure while editing.
+- Run `./gradlew test` or `./gradlew clean build` only when the user explicitly requests the full
+  suite or a broad build.
+- Run Docker-, MySQL-, Redis-, or Terraform CLI-dependent tests only when the user explicitly
+  requests them. Otherwise report them as not run and state the remaining risk.
+- When an explicitly requested integration test requires MySQL or Redis, start the documented
+  services before execution.
 - Report skipped or unexecutable tests, their reason, and the remaining risk.
 - Do not bypass or weaken a failing test merely to make the build pass.

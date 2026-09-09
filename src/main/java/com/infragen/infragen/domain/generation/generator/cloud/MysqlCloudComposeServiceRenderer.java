@@ -9,14 +9,21 @@ import com.infragen.infragen.global.enums.ComponentType;
 @Component
 public class MysqlCloudComposeServiceRenderer implements CloudComposeServiceRenderer {
 
+    /** @return 이 renderer가 담당하는 MySQL component type */
+    @Override
+    public ComponentType getSupportedType() {
+        return ComponentType.MYSQL;
+    }
+
     @Override
     public String getServiceName() {
         return "mysql";
     }
 
+    /** 그래프에서 애플리케이션으로 연결된 MySQL만 Cloud Compose에 포함한다. */
     @Override
     public boolean isEnabled(CloudDeployContext context) {
-        return context.hasComponent(ComponentType.MYSQL);
+        return context.hasIncomingDependency(ComponentType.MYSQL);
     }
 
     @Override
@@ -26,7 +33,7 @@ public class MysqlCloudComposeServiceRenderer implements CloudComposeServiceRend
 
     @Override
     public String render(CloudDeployContext context) {
-        MySQLComponent mysql = context.firstComponent(ComponentType.MYSQL, MySQLComponent.class);
+        MySQLComponent mysql = context.dependencyComponent(ComponentType.MYSQL, MySQLComponent.class);
         String volumeName = mysql.getVolumeName();
         String volumeMount = volumeName == null || volumeName.isBlank()
             ? ""

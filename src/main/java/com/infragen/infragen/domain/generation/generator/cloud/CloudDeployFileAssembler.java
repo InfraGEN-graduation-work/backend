@@ -15,7 +15,18 @@ public class CloudDeployFileAssembler {
      */
     public IaCFileDTO.BundleResDTO assemble(List<IaCFileDTO.FileContentResDTO> files) {
         return IaCFileDTO.BundleResDTO.builder()
-            .files(List.copyOf(files))
+            .files(files.stream()
+                .map(this::applyCloudScope)
+                .toList())
+            .build();
+    }
+
+    private IaCFileDTO.FileContentResDTO applyCloudScope(
+        IaCFileDTO.FileContentResDTO file
+    ) {
+        return IaCFileDTO.FileContentResDTO.builder()
+            .fileName("cloud/" + file.fileName())
+            .content(file.content())
             .build();
     }
 }

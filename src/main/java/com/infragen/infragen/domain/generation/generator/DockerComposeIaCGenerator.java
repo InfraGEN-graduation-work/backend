@@ -27,7 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Component
 @Slf4j
-public class DockerComposeIaCGenerator implements IaCGenerator {
+public class DockerComposeIaCGenerator implements LocalIaCGenerator {
     private final Map<ComponentType, ComposeServiceRenderer> rendererMap;
     // LOCAL_DEV — 호스트에서 실행할 애플리케이션용 .env 키와 값을 context에 추가
     private final Map<ComponentType, HostAppEnvContributor> hostAppEnvContributorMap;
@@ -112,15 +112,15 @@ public class DockerComposeIaCGenerator implements IaCGenerator {
             context.getEnvVars().size()
         );
 
-        
+
         return IaCFileDTO.BundleResDTO.builder()
             .files(List.of(
                 IaCFileDTO.FileContentResDTO.builder()
-                    .fileName("docker-compose.yml")
+                    .fileName("local/docker-compose.yml")
                     .content(dockerComposeContent)
                     .build(),
                 IaCFileDTO.FileContentResDTO.builder()
-                    .fileName(".env")
+                    .fileName("local/.env")
                     .content(envContent)
                     .build()
             ))

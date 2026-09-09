@@ -1,11 +1,13 @@
 package com.infragen.infragen.domain.parsing.dto.request;
-import lombok.Getter;
-import lombok.Setter;
+
 import java.util.List;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 @Getter
-@Setter
-public class ParsingReqDTO {
-    private List<NodeDTO> nodes;
-    private List<EdgeDTO> edges;
+@AllArgsConstructor
+public final class ParsingReqDTO {
+    private final List<NodeDTO> nodes;
+    private final List<EdgeDTO> edges;
 }

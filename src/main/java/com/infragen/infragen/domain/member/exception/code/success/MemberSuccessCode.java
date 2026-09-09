@@ -18,6 +18,16 @@ public enum MemberSuccessCode implements BaseSuccessCode {
             "로그아웃에 성공했습니다.",
             "MEMBER200_2"
     ),
+    MEMBER_UPDATE_SUCCESS(
+            HttpStatus.OK,
+            "회원 정보 수정이 완료되었습니다.",
+            "MEMBER200_3"
+    ),
+    MEMBER_WITHDRAW_SUCCESS(
+            HttpStatus.OK,
+            "회원 탈퇴가 완료되었습니다.",
+            "MEMBER200_4"
+    ),
     ;
 
     private final HttpStatus httpStatus;

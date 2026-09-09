@@ -57,27 +57,38 @@ public final class CloudDeployContext {
         );
     }
 
+    /** @return runtime Dockerfile에 사용할 Java major version */
     public String javaVersion() {
         return application.getJavaVersion();
     }
 
+    /** @return Cloud runtime에 노출할 Spring Boot 애플리케이션 포트 */
     public int applicationPort() {
         return application.getPort();
     }
 
+    /** @return 선택된 애플리케이션으로 연결된 non-application component 목록 */
     public List<BaseComponent> dependencyComponents() {
+        Set<String> incomingDependencyNodeIds = incomingDependencyNodeIds();
         return components.stream()
             .filter(component -> component.getComponentType().getCategory() != ComponentCategory.APPLICATION)
+            .filter(component -> incomingDependencyNodeIds.contains(component.getNodeId()))
             .toList();
     }
 
-    public boolean hasComponent(ComponentType componentType) {
-        return components.stream()
-            .anyMatch(component -> component.getComponentType() == componentType);
-    }
-
-    public <T extends BaseComponent> T firstComponent(ComponentType componentType, Class<T> componentClass) {
-        return components.stream()
+    /**
+     * 연결된 dependency 중 지정한 component type과 DTO 타입에 해당하는 항목을 찾는다.
+     *
+     * @param componentType 찾을 component type
+     * @param componentClass 반환할 DTO 타입
+     * @param <T> 반환 component 타입
+     * @return 일치하는 연결 dependency 또는 없으면 null
+     */
+    public <T extends BaseComponent> T dependencyComponent(
+        ComponentType componentType,
+        Class<T> componentClass
+    ) {
+        return dependencyComponents().stream()
             .filter(component -> component.getComponentType() == componentType)
             .filter(componentClass::isInstance)
             .map(componentClass::cast)
@@ -85,23 +96,26 @@ public final class CloudDeployContext {
             .orElse(null);
     }
 
+    /**
+     * 선택된 애플리케이션으로 연결된 dependency 중 지정한 type의 존재 여부를 확인한다.
+     *
+     * @param componentType 확인할 dependency type
+     * @return incoming edge로 연결된 dependency가 있는지 여부
+     */
     public boolean hasIncomingDependency(ComponentType componentType) {
-        Set<String> dependencyNodeIds = nodeIdsOf(componentType);
-        if (application.getNodeId() == null || dependencyNodeIds.isEmpty()) {
-            return false;
-        }
-
-        return edges.stream()
-            .filter(edge -> edge != null)
-            .anyMatch(edge -> application.getNodeId().equals(edge.getTargetNodeId())
-                && dependencyNodeIds.contains(edge.getSourceNodeId()));
+        return dependencyComponents().stream()
+            .anyMatch(component -> component.getComponentType() == componentType);
     }
 
-    private Set<String> nodeIdsOf(ComponentType componentType) {
+    private Set<String> incomingDependencyNodeIds() {
+        if (application.getNodeId() == null) {
+            return Set.of();
+        }
+
         Set<String> nodeIds = new HashSet<>();
-        for (BaseComponent component : components) {
-            if (component.getComponentType() == componentType) {
-                nodeIds.add(component.getNodeId());
+        for (EdgeDTO edge : edges) {
+            if (edge != null && application.getNodeId().equals(edge.getTargetNodeId())) {
+                nodeIds.add(edge.getSourceNodeId());
             }
         }
         return nodeIds;

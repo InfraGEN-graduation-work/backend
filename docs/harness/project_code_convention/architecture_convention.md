@@ -25,7 +25,8 @@ src/main/java/com/infragen/infragen
 │   ├── member      회원 persistence와 회원 use case
 │   ├── project     프로젝트·graph·history persistence
 │   ├── parsing     graph 검증과 component parsing
-│   └── generation  IaC 출력 형식 선택과 산출물 생성
+│   ├── generation  IaC 출력 형식 선택과 산출물 생성
+│   └── collaboration  STOMP operation·snapshot·replay와 project graph materialization
 └── global
     ├── apiPayload  공통 응답·예외 응답
     ├── auth        JWT filter와 Spring Security adapter
@@ -53,6 +54,12 @@ Generate
           → IaCGenerator
             → Renderer / Context / Contributor / Assembler
               → IaCFileDTO.BundleResDTO
+
+Collaboration
+  → STOMP CONNECT/SUBSCRIBE/SEND 인증·project access 검증
+    → operation validator + serverVersion 발급
+      → ProjectNode·ProjectEdge materialization + operation log
+        → snapshot checkpoint / replay / compaction
 ```
 
 Controller는 HTTP 진입점이고, Service는 유스케이스 흐름과 transaction을 조정한다. Repository는 persistence query,
@@ -67,6 +74,7 @@ Converter는 표현 변환, Entity는 저장 상태와 domain method를 담당�
 | `project` | 프로젝트 graph와 history·generated file의 저장·조회·삭제 | `member` 소유권 조회, project Repository/Converter |
 | `parsing` | raw graph의 component type·port·edge·cycle 검증과 내부 component 변환 | `ComponentParser`, `ValidateGraphStructure` |
 | `generation` | 출력 형식별 generator 선택, IaC 산출물 생성, 생성 history 저장 흐름 | `parsing`, `project`, renderer 계열 |
+| `collaboration` | project별 operation 계약·권한 연결·serverVersion·materialized graph·snapshot/replay 관리 | `project`, `member`, STOMP infrastructure |
 | `global` | 인증 filter, 공통 응답/예외, Redis/Jackson/RestClient 등 infrastructure 제공 | 모든 domain의 횡단 관심사 |
 
 현재 주요 유스케이스 흐름:
@@ -74,6 +82,8 @@ Converter는 표현 변환, Entity는 저장 상태와 domain method를 담당�
 - Project 저장: `ProjectController` → `ProjectCommandService` → project Repository/Converter
 - Project 조회: `ProjectController` → `ProjectQueryService` → project Repository/Converter
 - Generate: `GenerationController` → `GenerationCommandService` → `ParsingService` → `IaCGenerationService` → history 저장
+- Collaboration operation: `CollaborationOperationMessageController` → `CollaborationOperationCommandService` → version·materialization·operation log → STOMP broadcast
+- Collaboration reconnect: `CollaborationSnapshotController` → `CollaborationSnapshotQueryService` → snapshot/replay 또는 materialized graph fallback
 - 일반 로그인: `AuthController` → `AuthService` → `MemberQueryService` → `JwtUtil`·`RedisUtil`
 - 소셜 로그인: `AuthController` → `AuthService` → `KakaoOAuthClient` → member 조회·생성 → token 발급
 - 인증된 요청: `JwtExceptionFilter` → `JwtAuthFilter` → `CustomUserDetailsService` → `SecurityContext`

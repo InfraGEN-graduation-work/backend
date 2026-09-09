@@ -38,6 +38,14 @@ public class ParsingService {
             .collect(Collectors.toMap(ComponentParser::getSupportedType, parser -> parser));
     }
 
+    /**
+     * graph request를 검증하고 component parser를 통해 generation 입력으로 변환한다.
+     *
+     * @param requestDTO parsing할 graph request
+     * @param projectId parsing 결과에 연결할 project 식별자
+     * @return 검증과 component parsing이 완료된 결과
+     * @throws ParsingException node·edge·component·port 규칙을 위반한 경우
+     */
     public ParsingResultDTO parsing(ParsingReqDTO requestDTO, Long projectId) {
         if (requestDTO.getNodes() == null || requestDTO.getNodes().isEmpty()) {
             throw new ParsingException(ParsingErrorCode.EMPTY_NODES);

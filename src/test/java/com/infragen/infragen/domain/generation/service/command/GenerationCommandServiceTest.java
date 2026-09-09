@@ -2,22 +2,21 @@ package com.infragen.infragen.domain.generation.service.command;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 
 import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -40,7 +39,10 @@ import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCod
 import com.infragen.infragen.domain.parsing.service.ParsingService;
 import com.infragen.infragen.domain.project.service.command.ProjectHistoryCommandService;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
-
+import com.infragen.infragen.domain.project.entity.ProjectNode;
+import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
+import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
+import com.infragen.infragen.global.enums.ComponentType;
 import java.util.Map;
 
 @ExtendWith(MockitoExtension.class)
@@ -49,6 +51,12 @@ class GenerationCommandServiceTest {
 
     @Mock
     private ProjectQueryService projectQueryService;
+
+    @Mock
+    private ProjectNodeRepository projectNodeRepository;
+
+    @Mock
+    private ProjectEdgeRepository projectEdgeRepository;
 
     @Mock
     private ParsingService parsingService;
@@ -72,6 +80,14 @@ class GenerationCommandServiceTest {
         Long projectId = 1L;
         Long memberId = 2L;
         GenerateReqDTO.Request request = localRequest();
+        ProjectNode storedNode = ProjectNode.builder()
+                .componentType(ComponentType.MYSQL)
+                .nodeId("stored-node")
+                .nodeName("stored-mysql")
+                .positionX(java.math.BigDecimal.TEN)
+                .positionY(java.math.BigDecimal.ZERO)
+                .properties(java.util.Map.of("port", 3306))
+                .build();
         ParsingResultDTO parsingResult = new ParsingResultDTO();
         List<IaCFileDTO.FileContentResDTO> files = List.of(
             IaCFileDTO.FileContentResDTO.builder()
@@ -88,6 +104,8 @@ class GenerationCommandServiceTest {
             .build();
 
         when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(null);
+        when(projectNodeRepository.findAllByProjectId(projectId)).thenReturn(List.of(storedNode));
+        when(projectEdgeRepository.findAllByProjectId(projectId)).thenReturn(List.of());
         when(parsingService.parsing(any(ParsingReqDTO.class), eq(projectId))).thenReturn(parsingResult);
         when(iaCGenerationService.generate(parsingResult, OutputFormat.DOCKER_COMPOSE))
             .thenReturn(bundle);
@@ -111,11 +129,9 @@ class GenerationCommandServiceTest {
             () -> assertEquals(files.get(1).content(), result.files().get(1).content())
         );
         verify(projectQueryService).getOwnedProject(projectId, memberId);
-        ArgumentCaptor<ParsingReqDTO> parsingRequestCaptor =
-            ArgumentCaptor.forClass(ParsingReqDTO.class);
-        verify(parsingService).parsing(parsingRequestCaptor.capture(), eq(projectId));
-        assertSame(request.nodes(), parsingRequestCaptor.getValue().getNodes());
-        assertSame(request.edges(), parsingRequestCaptor.getValue().getEdges());
+        ArgumentCaptor<ParsingReqDTO> parsingRequest = ArgumentCaptor.forClass(ParsingReqDTO.class);
+        verify(parsingService).parsing(parsingRequest.capture(), eq(projectId));
+        assertEquals("stored-node", parsingRequest.getValue().getNodes().get(0).getNodeId());
         verify(iaCGenerationService).generate(parsingResult, OutputFormat.DOCKER_COMPOSE);
         verify(projectHistoryCommandService).saveGeneratedHistory(projectId, memberId, files);
     }
@@ -351,6 +367,8 @@ class GenerationCommandServiceTest {
         assertEquals(IaCGenerationErrorCode.MISSING_DEPLOYMENT_TARGET, exception.getCode());
         verifyNoInteractions(
             projectQueryService,
+            projectNodeRepository,
+            projectEdgeRepository,
             parsingService,
             iaCGenerationService,
             projectHistoryCommandService

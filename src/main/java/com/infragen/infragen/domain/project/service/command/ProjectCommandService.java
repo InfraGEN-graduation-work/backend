@@ -3,27 +3,32 @@ package com.infragen.infragen.domain.project.service.command;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.infragen.infragen.domain.collaboration.event.ProjectRoomResyncEvent;
+import com.infragen.infragen.domain.collaboration.service.command.ProjectCollaborationVersionService;
 import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.member.service.query.MemberQueryService;
 import com.infragen.infragen.domain.project.converter.ProjectConverter;
-import com.infragen.infragen.domain.project.converter.ProjectNodeConverter;
 import com.infragen.infragen.domain.project.converter.ProjectEdgeConverter;
+import com.infragen.infragen.domain.project.converter.ProjectNodeConverter;
 import com.infragen.infragen.domain.project.dto.request.ProjectReqDTO;
 import com.infragen.infragen.domain.project.dto.response.ProjectResDTO;
 import com.infragen.infragen.domain.project.entity.Project;
-import com.infragen.infragen.domain.project.entity.ProjectNode;
 import com.infragen.infragen.domain.project.entity.ProjectEdge;
-import com.infragen.infragen.domain.project.repository.ProjectRepository;
-import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
-import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
-import com.infragen.infragen.domain.project.repository.ProjectHistoryRepository;
-import com.infragen.infragen.domain.project.repository.GeneratedFileRepository;
+import com.infragen.infragen.domain.project.entity.ProjectNode;
 import com.infragen.infragen.domain.project.exception.ProjectException;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
+import com.infragen.infragen.domain.project.repository.GeneratedFileRepository;
+import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
+import com.infragen.infragen.domain.project.repository.ProjectHistoryRepository;
+import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
+import com.infragen.infragen.domain.project.repository.ProjectRepository;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -38,6 +43,8 @@ public class ProjectCommandService {
     private final GeneratedFileRepository generatedFileRepository;
     private final MemberQueryService memberQueryService;
     private final ProjectQueryService projectQueryService;
+    private final ProjectCollaborationVersionService projectCollaborationVersionService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public ProjectResDTO.CreateProjectResDTO createProject(
@@ -62,6 +69,10 @@ public class ProjectCommandService {
         log.info("프로젝트 수정 요청: id={}, memberId={}", projectId, memberId);
 
         Project project = projectQueryService.getOwnedProject(projectId, memberId);
+        Long serverVersion = projectCollaborationVersionService.issueNextVersionForFullReplace(
+                projectId,
+                request.baseVersion()
+        );
 
         // 프로젝트 메타정보 수정
         project.updateInfo(request.title(), request.description());
@@ -88,8 +99,15 @@ public class ProjectCommandService {
         List<ProjectEdge> newEdges = ProjectEdgeConverter.toEntityList(request.edges(), project, nodeMap);
         List<ProjectEdge> savedEdges = projectEdgeRepository.saveAll(newEdges);
 
-        log.info("프로젝트 수정 완료: id={}", projectId);
-        return ProjectConverter.toProjectDetailResDTO(project, savedNodes, savedEdges);
+        ProjectResDTO.ProjectDetailResDTO result = ProjectConverter.toProjectDetailResDTO(
+                project,
+                savedNodes,
+                savedEdges
+        );
+        eventPublisher.publishEvent(new ProjectRoomResyncEvent(projectId, serverVersion, result));
+
+        log.info("프로젝트 수정 완료: id={}, serverVersion={}", projectId, serverVersion);
+        return result;
     }
 
     @Transactional

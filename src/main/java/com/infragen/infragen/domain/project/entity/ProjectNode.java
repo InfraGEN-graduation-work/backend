@@ -78,4 +78,24 @@ public class ProjectNode extends BaseEntity {
         this.properties = (properties != null) ? properties : new HashMap<>();
         this.project = project;
     }
+
+    /**
+     * canvas node의 표시 이름을 변경한다.
+     *
+     * @param nodeName 변경할 표시 이름
+     */
+    public void renameTo(String nodeName) {
+        this.nodeName = nodeName;
+    }
+
+    /**
+     * canvas node의 위치를 변경한다.
+     *
+     * @param positionX 변경할 X 좌표
+     * @param positionY 변경할 Y 좌표
+     */
+    public void moveTo(BigDecimal positionX, BigDecimal positionY) {
+        this.positionX = positionX;
+        this.positionY = positionY;
+    }
 }

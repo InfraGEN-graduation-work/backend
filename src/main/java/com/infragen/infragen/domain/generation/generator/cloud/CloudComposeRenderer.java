@@ -114,7 +114,7 @@ public class CloudComposeRenderer {
             long matchingDependencyCount = context.dependencyComponents().stream()
                 .filter(component -> component.getComponentType() == renderer.getSupportedType())
                 .count();
-                
+
             if (matchingDependencyCount > 1) {
                 throw new IaCGenerationException(
                     IaCGenerationErrorCode.AMBIGUOUS_DEPENDENCY_CONFIGURATION);

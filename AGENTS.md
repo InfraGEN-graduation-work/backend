@@ -18,7 +18,8 @@ Read only the documents relevant to the task before making substantial changes.
 
 Use these as the default entry points:
 
-- `docs/handoff/issue-{number}-handoff.md` -> issue scope, technical contracts, current work state, and verification results
+- `docs/handoff/issue-{number}-handoff.md` -> issue scope, technical contracts, cross-session context, current work state, and verification results
+- `docs/handoff/plan/backend-future-plan.md` -> project-wide execution order and future scope
 - `docs/infra-gen-project-overview.md` -> project goal and product context
 - `docs/harness/personal_convention/work_scope_convention.md` -> work scope limits
 - `docs/harness/personal_convention/comment-style.md` -> comment and Javadoc style rules

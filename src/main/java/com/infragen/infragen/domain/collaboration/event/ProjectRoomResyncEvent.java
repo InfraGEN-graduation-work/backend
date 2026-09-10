@@ -6,7 +6,9 @@ import com.infragen.infragen.domain.collaboration.dto.response.CollaborationSnap
 import com.infragen.infragen.domain.project.dto.response.ProjectResDTO;
 
 /**
- * REST PUT으로 materialized graph가 교체된 뒤 collaboration room을 재동기화할 event다.
+ * owner-only PUT의 전체 graph 교체 결과와 발급된 version을 원래 transaction 안에서 전달한다.
+ * commit 전에는 snapshot 저장에, commit 성공 후에는 room resync 전송에 사용한다.
+ * 새 snapshot 저장을 수반하므로 단순 알림 재전송 용도로 발행하지 않는다.
  */
 public record ProjectRoomResyncEvent(
         Long projectId,

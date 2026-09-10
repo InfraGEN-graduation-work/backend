@@ -23,23 +23,34 @@ import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
 import com.infragen.infragen.domain.project.entity.Project;
 import com.infragen.infragen.domain.project.entity.ProjectNode;
+import com.infragen.infragen.domain.project.entity.ProjectEdge;
+import com.infragen.infragen.domain.project.dto.response.ProjectResDTO;
 import com.infragen.infragen.domain.project.dto.request.ProjectEdgeReqDTO;
 import com.infragen.infragen.domain.project.dto.request.ProjectNodeReqDTO;
 import com.infragen.infragen.domain.project.dto.request.ProjectReqDTO;
 import com.infragen.infragen.domain.project.enums.ProjectStatus;
 import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
+import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
 import com.infragen.infragen.domain.project.repository.ProjectRepository;
 import com.infragen.infragen.domain.project.service.command.ProjectCommandService;
+import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 import com.infragen.infragen.global.enums.ComponentType;
 import com.infragen.infragen.global.util.JwtUtil;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.web.client.RestClient;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -58,6 +69,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -69,6 +81,9 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Testcontainers
@@ -96,6 +111,8 @@ class CollaborationOperationConcurrencyIntegrationTest {
 
     @DynamicPropertySource
     static void registerProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.docker.compose.enabled", () -> false);
+        registry.add("collaboration.compaction.enabled", () -> false);
         registry.add("spring.datasource.url", MYSQL::getJdbcUrl);
         registry.add("spring.datasource.username", MYSQL::getUsername);
         registry.add("spring.datasource.password", MYSQL::getPassword);
@@ -151,6 +168,18 @@ class CollaborationOperationConcurrencyIntegrationTest {
     @Autowired
     private JwtUtil jwtUtil;
 
+    @Autowired
+    private ProjectEdgeRepository projectEdgeRepository;
+
+    @Autowired
+    private ProjectQueryService projectQueryService;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
     @AfterEach
     void tearDown() {
         checkpointFailureRepository.deleteAllInBatch();
@@ -158,6 +187,7 @@ class CollaborationOperationConcurrencyIntegrationTest {
         snapshotRepository.deleteAllInBatch();
         stateRepository.deleteAllInBatch();
         collaboratorRepository.deleteAllInBatch();
+        projectEdgeRepository.deleteAllInBatch();
         projectNodeRepository.deleteAllInBatch();
         projectRepository.deleteAllInBatch();
         memberRepository.deleteAllInBatch();
@@ -250,6 +280,114 @@ class CollaborationOperationConcurrencyIntegrationTest {
         assertEquals(3L, result.operations().get(0).serverVersion());
     }
 
+    @ParameterizedTest
+    @ValueSource(longs = {0L, 49L, 50L})
+    @DisplayName("MySQL snapshot v50 이후 HTTP PUT v51을 저장하면 재접속 API가 최신 graph를 복원한다")
+    void updateProject_AfterCheckpoint_RestoresPutThroughHttp(long afterVersion) {
+        // given
+        Member owner = saveMember();
+        Project project = saveProjectWithCheckpoint(owner);
+        ProjectReqDTO.UpdateProjectReqDTO request = replacementRequest();
+
+        // when
+        ProjectResDTO.ProjectDetailResDTO updated = putProject(project, owner, request);
+        CollaborationSnapshotResDTO.SnapshotResDTO restored = getSnapshot(project, owner, afterVersion);
+
+        // then
+        ProjectCollaborationSnapshot stored = snapshotRepository
+                .findByProjectIdAndServerVersion(project.getId(), 51L).orElseThrow();
+        assertAll(
+                () -> assertEquals(updated, restored.project()),
+                () -> assertEquals(51L, restored.graphVersion()),
+                () -> assertEquals(51L, restored.serverVersion()),
+                () -> assertTrue(restored.operations().isEmpty()),
+                () -> assertEquals(updated, objectMapper.convertValue(
+                        stored.getGraphPayload(), ProjectResDTO.ProjectDetailResDTO.class)),
+                () -> assertEquals(2, restored.project().nodes().size()),
+                () -> assertEquals(1, restored.project().edges().size()),
+                () -> assertTrue(operationRepository.findAllByProjectIdOrderByServerVersionAsc(project.getId())
+                        .stream().noneMatch(operation -> operation.getServerVersion() == 51L))
+        );
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    @DisplayName("MySQL PUT snapshot 뒤 operation은 compact 여부와 관계없이 재접속에서 한 번만 replay된다")
+    void getSnapshot_OperationAfterPut_ReplaysAfterSnapshot(boolean compact) {
+        // given
+        Member owner = saveMember();
+        Project project = saveProjectWithCheckpoint(owner);
+        ProjectResDTO.ProjectDetailResDTO updated = putProject(project, owner, replacementRequest());
+        operationCommandService.recordOperation(project.getId(), owner.getId(),
+                new CollaborationOperationReqDTO.Operation(
+                        UUID.randomUUID().toString(), "after-put-client", 51L,
+                        CollaborationOperationType.UPDATE_NODE_NAME, "node-1", Map.of("value", "after-put")));
+        if (compact) {
+            compactionService.compact(project.getId());
+        }
+
+        // when
+        CollaborationSnapshotResDTO.SnapshotResDTO restored = getSnapshot(project, owner, 50L);
+        CollaborationSnapshotResDTO.SnapshotResDTO delta = getSnapshot(project, owner, 51L);
+
+        // then
+        assertAll(
+                () -> assertEquals(updated, restored.project()),
+                () -> assertEquals(51L, restored.graphVersion()),
+                () -> assertEquals(52L, restored.serverVersion()),
+                () -> assertEquals(List.of(52L), restored.operations().stream()
+                        .map(CollaborationOperationResDTO.BroadcastOperationResDTO::serverVersion).toList()),
+                () -> assertEquals(Map.of("value", "after-put"), restored.operations().getFirst().payload()),
+                () -> assertNull(delta.project()),
+                () -> assertEquals(51L, delta.graphVersion()),
+                () -> assertEquals(52L, delta.serverVersion()),
+                () -> assertEquals(restored.operations(), delta.operations()),
+                () -> assertEquals("after-put", projectNodeRepository
+                        .findByProjectIdAndNodeId(project.getId(), "node-1").orElseThrow().getNodeName())
+        );
+    }
+
+    @Test
+    @DisplayName("MySQL snapshot INSERT 실패 시 PUT의 metadata·node·edge·version이 모두 롤백된다")
+    void updateProject_SnapshotInsertFailure_RollsBackStoredGraphAndVersion() {
+        // given
+        Member owner = saveMember();
+        Project project = saveProjectWithCheckpoint(owner);
+        ProjectResDTO.ProjectDetailResDTO before = projectQueryService.getProjectDetail(project.getId(), owner.getId());
+        Map<String, Object> snapshotBefore = snapshotRepository
+                .findByProjectIdAndServerVersion(project.getId(), 50L).orElseThrow().getGraphPayload();
+        // 격리된 테스트 DB에서 이 PUT의 snapshot INSERT만 실패시킨다.
+        jdbcTemplate.execute("ALTER TABLE project_collaboration_snapshot ADD CONSTRAINT reject_put_snapshot "
+                + "CHECK (project_id <> " + project.getId() + " OR server_version <> 51)");
+
+        try {
+            // when
+            DataIntegrityViolationException failure = assertThrows(DataIntegrityViolationException.class,
+                    () -> projectCommandService.updateProject(project.getId(), replacementRequest(), owner.getId()));
+            ProjectResDTO.ProjectDetailResDTO after = projectQueryService.getProjectDetail(project.getId(), owner.getId());
+            CollaborationSnapshotResDTO.SnapshotResDTO restored = getSnapshot(project, owner, 0L);
+
+            // then
+            assertAll(
+                    () -> assertTrue(failure.getMostSpecificCause().getMessage().contains("reject_put_snapshot")),
+                    () -> assertEquals(before.title(), after.title()),
+                    () -> assertEquals(before.description(), after.description()),
+                    () -> assertEquals(Set.copyOf(before.nodes()), Set.copyOf(after.nodes())),
+                    () -> assertEquals(Set.copyOf(before.edges()), Set.copyOf(after.edges())),
+                    () -> assertEquals(50L, stateRepository.findByProjectId(project.getId())
+                            .orElseThrow().getServerVersion()),
+                    () -> assertTrue(snapshotRepository.findByProjectIdAndServerVersion(project.getId(), 51L).isEmpty()),
+                    () -> assertEquals(snapshotBefore, snapshotRepository
+                            .findByProjectIdAndServerVersion(project.getId(), 50L).orElseThrow().getGraphPayload()),
+                    () -> assertEquals(50L, restored.graphVersion()),
+                    () -> assertEquals(50L, restored.serverVersion()),
+                    () -> assertTrue(restored.operations().isEmpty())
+            );
+        } finally {
+            jdbcTemplate.execute("ALTER TABLE project_collaboration_snapshot DROP CHECK reject_put_snapshot");
+        }
+    }
+
     @Test
     @DisplayName("PUT과 operation이 동시에 실행되어도 operation 변경을 덮어쓰지 않는다")
     void updateProject_withConcurrentOperation_doesNotOverwriteOperationMaterialization() throws Exception {
@@ -310,7 +448,7 @@ class CollaborationOperationConcurrencyIntegrationTest {
     }
 
     @Test
-    @DisplayName("두 WebSocket client가 operation broadcast와 PUT resync를 수신한다")
+    @DisplayName("두 WebSocket client가 PUT resync를 수신하고 연결 종료 후 같은 graph를 복원한다")
     void websocket_twoClients_receiveOperationAndPutResync() throws Exception {
         // given
         Member owner = saveMember();
@@ -353,15 +491,17 @@ class CollaborationOperationConcurrencyIntegrationTest {
                 owner.getId()
         );
         CollaborationSnapshotResDTO.SnapshotResDTO resync = editorResyncs.poll(10, TimeUnit.SECONDS);
+        editorSession.disconnect();
+        CollaborationSnapshotResDTO.SnapshotResDTO restored = getSnapshot(project, editor, 0L);
 
         // then
         assertEquals("database", ownerOperation.payload().get("value"));
         assertEquals(ownerOperation.serverVersion(), editorOperation.serverVersion());
         assertEquals(ownerOperation.serverVersion() + 1L, resync.graphVersion());
         assertEquals("put-name", resync.project().nodes().get(0).nodeName());
+        assertEquals(resync, restored);
 
         ownerSession.disconnect();
-        editorSession.disconnect();
         client.stop();
     }
 
@@ -420,6 +560,62 @@ class CollaborationOperationConcurrencyIntegrationTest {
                 List.of(),
                 baseVersion
         );
+    }
+
+    private ProjectReqDTO.UpdateProjectReqDTO replacementRequest() {
+        return new ProjectReqDTO.UpdateProjectReqDTO(
+                "replaced-title", "replaced-description",
+                List.of(
+                        new ProjectNodeReqDTO.NodeInfoReqDTO("node-1", "replaced-db", "MYSQL",
+                                BigDecimal.ONE, BigDecimal.TEN, Map.of("port", 3307)),
+                        new ProjectNodeReqDTO.NodeInfoReqDTO("node-3", "replaced-app", "SPRING_BOOT",
+                                BigDecimal.TEN, BigDecimal.ONE, Map.of("port", 8081))
+                ),
+                List.of(new ProjectEdgeReqDTO.EdgeInfoReqDTO("node-1", "node-3")),
+                50L
+        );
+    }
+
+    private Project saveProjectWithCheckpoint(Member owner) {
+        Project project = saveProject(owner);
+        saveNode(project);
+        ProjectNode application = projectNodeRepository.saveAndFlush(ProjectNode.builder()
+                .project(project).componentType(ComponentType.SPRING_BOOT).nodeId("node-2").nodeName("old-app")
+                .positionX(BigDecimal.ZERO).positionY(BigDecimal.ZERO).properties(Map.of("port", 8080)).build());
+        projectEdgeRepository.saveAndFlush(ProjectEdge.builder().project(project)
+                .sourceNode(projectNodeRepository.findByProjectIdAndNodeId(project.getId(), "node-1").orElseThrow())
+                .targetNode(application).build());
+        ProjectCollaborationState state = new ProjectCollaborationState(project);
+        for (int version = 0; version < 49; version++) {
+            state.advanceServerVersion();
+        }
+        stateRepository.saveAndFlush(state);
+        operationCommandService.recordOperation(project.getId(), owner.getId(), operation(UUID.randomUUID().toString()));
+        snapshotRepository.findByProjectIdAndServerVersion(project.getId(), 50L).orElseThrow();
+        return project;
+    }
+
+    private ProjectResDTO.ProjectDetailResDTO putProject(
+            Project project,
+            Member owner,
+            ProjectReqDTO.UpdateProjectReqDTO request
+    ) {
+        JsonNode response = httpClient(owner).put().uri("/api/v1/projects/{projectId}", project.getId())
+                .body(request).retrieve().body(JsonNode.class);
+        return objectMapper.convertValue(response.get("result"), ProjectResDTO.ProjectDetailResDTO.class);
+    }
+
+    private CollaborationSnapshotResDTO.SnapshotResDTO getSnapshot(Project project, Member owner, long afterVersion) {
+        JsonNode response = httpClient(owner).get()
+                .uri("/api/v1/projects/{projectId}/collaboration?afterVersion={afterVersion}", project.getId(), afterVersion)
+                .retrieve().body(JsonNode.class);
+        return objectMapper.convertValue(response.get("result"), CollaborationSnapshotResDTO.SnapshotResDTO.class);
+    }
+
+    private RestClient httpClient(Member member) {
+        return RestClient.builder().baseUrl("http://localhost:" + serverPort)
+                .defaultHeaders(headers -> headers.setBearerAuth(jwtUtil.createAccessToken(member.getId(), member.getRole())))
+                .build();
     }
 
     private Member saveMember() {

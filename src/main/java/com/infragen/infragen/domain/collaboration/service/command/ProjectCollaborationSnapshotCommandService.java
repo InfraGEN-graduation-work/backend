@@ -1,16 +1,15 @@
 package com.infragen.infragen.domain.collaboration.service.command;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Objects;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
-import com.infragen.infragen.domain.collaboration.entity.ProjectCollaborationSnapshot;
+import com.infragen.infragen.domain.collaboration.converter.ProjectCollaborationSnapshotConverter;
 import com.infragen.infragen.domain.collaboration.event.ProjectCollaborationCheckpointEvent;
+import com.infragen.infragen.domain.collaboration.event.ProjectRoomResyncEvent;
 import com.infragen.infragen.domain.collaboration.exception.CollaborationException;
 import com.infragen.infragen.domain.collaboration.exception.code.error.CollaborationErrorCode;
 import com.infragen.infragen.domain.collaboration.repository.ProjectCollaborationSnapshotRepository;
@@ -23,6 +22,7 @@ import com.infragen.infragen.domain.project.repository.ProjectRepository;
 import com.infragen.infragen.domain.project.service.query.ProjectAccessService;
 
 import lombok.RequiredArgsConstructor;
+import tools.jackson.databind.ObjectMapper;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +33,7 @@ public class ProjectCollaborationSnapshotCommandService {
     private final ProjectCollaborationSnapshotRepository snapshotRepository;
     private final ProjectCollaborationSnapshotWriter snapshotWriter;
     private final ProjectCollaborationCheckpointFailureService failureService;
+    private final ObjectMapper objectMapper;
 
     /**
      * materialized graph를 지정한 serverVersion의 snapshot으로 저장한다.
@@ -60,12 +61,23 @@ public class ProjectCollaborationSnapshotCommandService {
                 .orElseThrow(() -> new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
         Member member = memberQueryService.findById(memberId);
 
-        snapshotRepository.save(ProjectCollaborationSnapshot.builder()
-                .project(project)
-                .updatedBy(member)
-                .serverVersion(serverVersion)
-                .graphPayload(normalizeGraphPayload(graphPayload))
-                .build());
+        persistSnapshot(project, member, serverVersion, graphPayload);
+    }
+
+    /**
+     * owner-only PUT의 graph와 version을 원래 transaction의 snapshot으로 저장한다.
+     * 저장 실패는 PUT을 롤백시키며 commit 이후 room resync도 발행되지 않는다.
+     */
+    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
+    public void handleProjectReplacing(ProjectRoomResyncEvent event) {
+        Project project = projectRepository.findById(event.projectId())
+                .orElseThrow(() -> new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
+        persistSnapshot(
+                project,
+                project.getMember(),
+                event.snapshot().graphVersion(),
+                ProjectCollaborationSnapshotConverter.toGraphPayload(event.snapshot().project(), objectMapper)
+        );
     }
 
     /**
@@ -82,10 +94,18 @@ public class ProjectCollaborationSnapshotCommandService {
         }
     }
 
-    private Map<String, Object> normalizeGraphPayload(Map<String, Object> graphPayload) {
-        Map<String, Object> normalizedPayload = new LinkedHashMap<>(graphPayload);
-        normalizedPayload.values().removeIf(Objects::isNull);
-        return normalizedPayload;
+    private void persistSnapshot(
+            Project project,
+            Member member,
+            Long serverVersion,
+            Map<String, Object> graphPayload
+    ) {
+        snapshotRepository.save(ProjectCollaborationSnapshotConverter.toEntity(
+                project,
+                member,
+                serverVersion,
+                graphPayload
+        ));
     }
 
 }

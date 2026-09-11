@@ -46,6 +46,7 @@ public class CollaborationSnapshotQueryService {
 
     /**
      * 초기 graph 또는 요청 version 이후의 operation을 조회한다.
+     * client보다 최신 snapshot이 있으면 해당 graph와 그 이후 operation을 반환한다.
      *
      * @param projectId snapshot을 조회할 project 식별자
      * @param memberId 조회를 요청한 member 식별자
@@ -85,11 +86,10 @@ public class CollaborationSnapshotQueryService {
                 .filter(snapshot -> snapshot.getServerVersion() <= serverVersion)
                 .orElse(null);
 
-        // 해당 조건문의 역할은 다음과 같다.
-        // 1. afterVersion이 0인 경우: 클라이언트가 초기 상태에서 동기화를 요청한 경우이므로, 전체 snapshot을 반환한다.
-        // 2. afterVersion이 serverVersion보다 작은 경우: 클라이언트가 서버와 동기화되지 않은 상태에서 operation을 전송했을 때 발생할 수 있으므로, operation gap이 발생한 것으로 간주하고 전체 snapshot을 반환한다.
-        // 3. afterVersion 이후의 operation이 존재하지 않는 경우: 클라이언트가 서버와 동기화되지 않은 상태에서 operation을 전송했을 때 발생할 수 있으므로, operation gap이 발생한 것으로 간주하고 전체 snapshot을 반환한다.
-        if (afterVersion == 0L || hasOperationGap(afterVersion, serverVersion, allOperations)) {
+        // PUT version은 operation log에 없으므로 최신 snapshot 이전 client에는 graph도 전달한다.
+        if (afterVersion == 0L
+                || (latestSnapshot != null && afterVersion < latestSnapshot.getServerVersion())
+                || hasOperationGap(afterVersion, serverVersion, allOperations)) {
             return buildFullSnapshot(projectId, project, allOperations, serverVersion, latestSnapshot);
         }
 

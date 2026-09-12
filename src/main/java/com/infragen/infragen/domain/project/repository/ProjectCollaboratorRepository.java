@@ -4,12 +4,22 @@ import com.infragen.infragen.domain.project.entity.ProjectCollaborator;
 import com.infragen.infragen.domain.project.enums.ProjectCollaboratorRole;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
 
 public interface ProjectCollaboratorRepository
         extends JpaRepository<@NonNull ProjectCollaborator, @NonNull Long> {
+    /**
+     * 프로젝트 삭제 transaction에서 대상 project의 membership만 일괄 삭제한다. 회원은 삭제하지 않는다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("DELETE FROM ProjectCollaborator collaborator WHERE collaborator.project.id = :projectId")
+    void deleteByProjectId(@Param("projectId") Long projectId);
+
     /**
      * project와 member가 가진 collaborator membership을 조회한다.
      *

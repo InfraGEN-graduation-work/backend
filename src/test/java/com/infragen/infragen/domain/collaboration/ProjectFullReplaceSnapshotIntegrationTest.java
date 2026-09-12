@@ -8,6 +8,7 @@ import com.infragen.infragen.domain.collaboration.entity.ProjectCollaborationSta
 import com.infragen.infragen.domain.collaboration.enums.CollaborationOperationType;
 import com.infragen.infragen.domain.collaboration.event.ProjectRoomResyncPublisher;
 import com.infragen.infragen.domain.collaboration.repository.ProjectCollaborationOperationRepository;
+import com.infragen.infragen.domain.collaboration.repository.ProjectCollaborationCheckpointFailureRepository;
 import com.infragen.infragen.domain.collaboration.repository.ProjectCollaborationSnapshotRepository;
 import com.infragen.infragen.domain.collaboration.repository.ProjectCollaborationStateRepository;
 import com.infragen.infragen.domain.collaboration.service.command.ProjectCollaborationCheckpointFailureService;
@@ -26,6 +27,7 @@ import com.infragen.infragen.domain.project.dto.response.ProjectResDTO;
 import com.infragen.infragen.domain.project.entity.Project;
 import com.infragen.infragen.domain.project.enums.ProjectStatus;
 import com.infragen.infragen.domain.project.repository.GeneratedFileRepository;
+import com.infragen.infragen.domain.project.repository.ProjectCollaboratorRepository;
 import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
 import com.infragen.infragen.domain.project.repository.ProjectHistoryRepository;
 import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
@@ -121,6 +123,10 @@ class ProjectFullReplaceSnapshotIntegrationTest {
     private ProjectCollaborationSnapshotWriter snapshotWriter;
     @MockitoBean
     private ProjectCollaborationCheckpointFailureService failureService;
+    @MockitoBean
+    private ProjectCollaborationCheckpointFailureRepository checkpointFailureRepository;
+    @MockitoBean
+    private ProjectCollaboratorRepository collaboratorRepository;
     @MockitoBean
     private SimpMessagingTemplate messagingTemplate;
 

@@ -13,6 +13,13 @@ import java.util.Optional;
 public interface ProjectCollaborationOperationRepository
         extends JpaRepository<@NonNull ProjectCollaborationOperation, @NonNull Long> {
     /**
+     * 프로젝트 삭제 transaction에서 version 보존 조건 없이 대상 project의 operation log를 일괄 삭제한다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("DELETE FROM ProjectCollaborationOperation operation WHERE operation.project.id = :projectId")
+    void deleteByProjectId(@Param("projectId") Long projectId);
+
+    /**
      * 지정한 snapshot version 이하의 operation log를 삭제한다.
      *
      * @param projectId 삭제할 project 식별자

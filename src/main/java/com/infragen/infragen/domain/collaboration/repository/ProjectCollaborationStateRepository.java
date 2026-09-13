@@ -5,6 +5,7 @@ import java.util.Optional;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -14,6 +15,13 @@ import jakarta.persistence.LockModeType;
 
 public interface ProjectCollaborationStateRepository
         extends JpaRepository<@NonNull ProjectCollaborationState, @NonNull Long> {
+    /**
+     * 프로젝트 삭제 transaction에서 대상 project의 version 상태를 삭제한다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("DELETE FROM ProjectCollaborationState state WHERE state.project.id = :projectId")
+    void deleteByProjectId(@Param("projectId") Long projectId);
+
     /**
      * project의 collaboration state 존재 여부를 잠금 없이 조회한다.
      *

@@ -3,12 +3,22 @@ package com.infragen.infragen.domain.collaboration.repository;
 import com.infragen.infragen.domain.collaboration.entity.ProjectCollaborationSnapshot;
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
 
 public interface ProjectCollaborationSnapshotRepository
         extends JpaRepository<@NonNull ProjectCollaborationSnapshot, @NonNull Long> {
+    /**
+     * 프로젝트 삭제 transaction에서 대상 project의 모든 version snapshot을 일괄 삭제한다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("DELETE FROM ProjectCollaborationSnapshot snapshot WHERE snapshot.project.id = :projectId")
+    void deleteByProjectId(@Param("projectId") Long projectId);
+
     /**
      * project에서 가장 최신 serverVersion의 snapshot을 조회한다.
      *

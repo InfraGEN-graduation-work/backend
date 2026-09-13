@@ -9,6 +9,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.infragen.infragen.domain.collaboration.event.ProjectRoomResyncEvent;
+import com.infragen.infragen.domain.collaboration.repository.ProjectCollaborationCheckpointFailureRepository;
+import com.infragen.infragen.domain.collaboration.repository.ProjectCollaborationOperationRepository;
+import com.infragen.infragen.domain.collaboration.repository.ProjectCollaborationSnapshotRepository;
+import com.infragen.infragen.domain.collaboration.repository.ProjectCollaborationStateRepository;
 import com.infragen.infragen.domain.collaboration.service.command.ProjectCollaborationVersionService;
 import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.member.service.query.MemberQueryService;
@@ -23,6 +27,7 @@ import com.infragen.infragen.domain.project.entity.ProjectNode;
 import com.infragen.infragen.domain.project.exception.ProjectException;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.repository.GeneratedFileRepository;
+import com.infragen.infragen.domain.project.repository.ProjectCollaboratorRepository;
 import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
 import com.infragen.infragen.domain.project.repository.ProjectHistoryRepository;
 import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
@@ -45,6 +50,11 @@ public class ProjectCommandService {
     private final ProjectQueryService projectQueryService;
     private final ProjectCollaborationVersionService projectCollaborationVersionService;
     private final ApplicationEventPublisher eventPublisher;
+    private final ProjectCollaboratorRepository projectCollaboratorRepository;
+    private final ProjectCollaborationStateRepository collaborationStateRepository;
+    private final ProjectCollaborationOperationRepository collaborationOperationRepository;
+    private final ProjectCollaborationSnapshotRepository collaborationSnapshotRepository;
+    private final ProjectCollaborationCheckpointFailureRepository checkpointFailureRepository;
 
     @Transactional
     public ProjectResDTO.CreateProjectResDTO createProject(
@@ -110,13 +120,24 @@ public class ProjectCommandService {
         return result;
     }
 
+    /**
+     * owner의 프로젝트와 모든 종속 데이터를 하나의 transaction으로 삭제한다.
+     * 자식 데이터를 먼저 정리하며 어느 단계에서든 실패하면 전체 삭제를 롤백한다.
+     */
     @Transactional
     public void deleteProject(Long projectId, Long memberId) {
         log.info("프로젝트 삭제: id={}, memberId={}", projectId, memberId);
 
         Project project = projectQueryService.getOwnedProject(projectId, memberId);
 
-        // 외래키 무결성을 위해 자식 데이터 물리 선삭제 (File -> History -> Edge -> Node)
+        // project를 참조하는 협업 기록을 부모 삭제 전에 정리한다.
+        checkpointFailureRepository.deleteByProjectId(projectId);
+        collaborationSnapshotRepository.deleteByProjectId(projectId);
+        collaborationOperationRepository.deleteByProjectId(projectId);
+        collaborationStateRepository.deleteByProjectId(projectId);
+        projectCollaboratorRepository.deleteByProjectId(projectId);
+
+        // generated file은 history를, edge는 node를 참조하므로 자식부터 삭제한다.
         generatedFileRepository.deleteByProjectId(projectId);
         projectHistoryRepository.deleteByProjectId(projectId);
         projectEdgeRepository.deleteByProjectId(projectId);

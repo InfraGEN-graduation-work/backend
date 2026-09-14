@@ -6,6 +6,7 @@ import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageBuilder;
+import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
@@ -43,7 +44,11 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
     @Override
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
-        StompHeaderAccessor accessor = StompHeaderAccessor.wrap(message);
+        // CONNECT의 user-change callback을 보존해 Spring session registry에도 인증 사용자가 등록되게 한다.
+        StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
+        if (accessor == null || !accessor.isMutable()) {
+            accessor = StompHeaderAccessor.wrap(message);
+        }
 
         if (StompCommand.CONNECT.equals(accessor.getCommand())) {
             Authentication authentication = authenticate(accessor);
@@ -92,9 +97,9 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         Long projectId = extractProjectId(destination);
         CustomUserDetails userDetails = getUserDetails(accessor);
 
-        if (StompCommand.SEND.equals(accessor.getCommand())) {
-            projectAccessService.requireWriteAccess(projectId, userDetails.getMemberId());
-        } else {
+        // SEND 쓰기 권한은 operation service에서 검사하고 사용자 전용 오류 응답으로 반환한다.
+        // 여기서 예외를 던지면 VIEWER의 읽기 연결까지 STOMP ERROR로 종료된다.
+        if (StompCommand.SUBSCRIBE.equals(accessor.getCommand())) {
             projectAccessService.requireReadAccess(projectId, userDetails.getMemberId());
         }
     }

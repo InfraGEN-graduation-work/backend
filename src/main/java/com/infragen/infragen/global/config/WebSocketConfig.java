@@ -2,6 +2,7 @@ package com.infragen.infragen.global.config;
 
 import com.infragen.infragen.global.auth.websocket.StompAuthChannelInterceptor;
 import com.infragen.infragen.global.auth.websocket.StompErrorHandler;
+import com.infragen.infragen.global.auth.websocket.StompProjectOutboundInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
@@ -22,6 +23,7 @@ import java.util.Arrays;
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final StompAuthChannelInterceptor stompAuthChannelInterceptor;
     private final StompErrorHandler stompErrorHandler;
+    private final StompProjectOutboundInterceptor stompProjectOutboundInterceptor;
 
     @Value("${cors.allowed-origins}")
     private String allowedOrigins;
@@ -43,6 +45,12 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
         registration.interceptors(stompAuthChannelInterceptor);
+    }
+
+    /** 기존 구독에도 현재 project 읽기 권한을 적용하도록 outbound 전달 검사를 연결한다. */
+    @Override
+    public void configureClientOutboundChannel(ChannelRegistration registration) {
+        registration.interceptors(stompProjectOutboundInterceptor);
     }
 
     private String[] allowedOriginPatterns() {

@@ -7,6 +7,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -17,6 +19,14 @@ import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import java.util.stream.Stream;
+import com.infragen.infragen.domain.project.dto.request.ProjectReqDTO;
+import com.infragen.infragen.domain.project.exception.ProjectException;
+import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
+import com.infragen.infragen.domain.collaboration.exception.CollaborationException;
+import com.infragen.infragen.domain.collaboration.exception.code.error.CollaborationErrorCode;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -212,6 +222,112 @@ class ProjectControllerWebTest {
             .andExpect(jsonPath("$.code").value("COMMON400_1"));
 
         verifyNoInteractions(projectCommandService);
+    }
+
+    @Test
+    @DisplayName("홈 목록은 인증 회원으로 조회하고 모든 접근 역할을 반환한다")
+    void getProjects_AuthenticatedMember_ReturnsAccessRoles() throws Exception {
+        // given
+        var previews = Stream.of("OWNER", "EDITOR", "VIEWER").map(role ->
+                ProjectResDTO.ProjectPreviewResDTO.builder().projectId(1L).title("Project")
+                        .status("DRAFT").accessRole(role).build()).toList();
+        when(projectQueryService.getProjects(7L)).thenReturn(
+                ProjectResDTO.ProjectPreviewListResDTO.builder().projectList(previews).build());
+
+        // when
+        var response = mockMvc.perform(get("/api/v1/projects").param("memberId", "999")
+                .with(authenticatedAs(7L)));
+
+        // then
+        response.andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("PROJECT200_1"))
+                .andExpect(jsonPath("$.result.projectList[0].accessRole").value("OWNER"))
+                .andExpect(jsonPath("$.result.projectList[1].accessRole").value("EDITOR"))
+                .andExpect(jsonPath("$.result.projectList[2].accessRole").value("VIEWER"));
+        verify(projectQueryService).getProjects(7L);
+    }
+
+    @ParameterizedTest
+    @MethodSource("validMetadataBodies")
+    @DisplayName("metadata PATCH는 graph 없이 title·description·baseVersion을 받는다")
+    void updateMetadata_ValidBody_ReturnsPreview(String body) throws Exception {
+        // given
+        when(projectCommandService.updateMetadata(eq(1L), any(), eq(7L))).thenReturn(
+                ProjectResDTO.ProjectPreviewResDTO.builder().projectId(1L).title("New")
+                        .description("Kept").status("DRAFT").accessRole("OWNER").build());
+
+        // when
+        var response = mockMvc.perform(patch(PROJECT_URL + "/metadata", 1L)
+                .with(authenticatedAs(7L)).contentType(APPLICATION_JSON).content(body));
+
+        // then
+        response.andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("PROJECT200_8"))
+                .andExpect(jsonPath("$.result.title").value("New"))
+                .andExpect(jsonPath("$.result.accessRole").value("OWNER"))
+                .andExpect(jsonPath("$.result.nodes").doesNotExist());
+        verify(projectCommandService).updateMetadata(1L, new ProjectReqDTO.UpdateMetadata("New", null, 12L), 7L);
+    }
+
+    static Stream<String> validMetadataBodies() {
+        return Stream.of("{\"title\":\"New\",\"baseVersion\":12}",
+                "{\"title\":\"New\",\"description\":null,\"baseVersion\":12}");
+    }
+
+    @ParameterizedTest
+    @MethodSource("invalidMetadataBodies")
+    @DisplayName("metadata의 누락·공백·길이·음수 입력은 service 호출 전에 거부한다")
+    void updateMetadata_InvalidBody_ReturnsBadRequest(String body) throws Exception {
+        // given
+        var request = patch(PROJECT_URL + "/metadata", 1L).with(authenticatedAs(7L))
+                .contentType(APPLICATION_JSON).content(body);
+
+        // when
+        var response = mockMvc.perform(request);
+
+        // then
+        response.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("COMMON400_1"));
+        verifyNoInteractions(projectCommandService);
+    }
+
+    static Stream<String> invalidMetadataBodies() {
+        return Stream.of("{\"baseVersion\":0}", "{\"title\":null,\"baseVersion\":0}",
+                "{\"title\":\"   \",\"baseVersion\":0}", "{\"title\":\"New\"}",
+                "{\"title\":\"New\",\"baseVersion\":-1}",
+                "{\"title\":\"" + "a".repeat(101) + "\",\"baseVersion\":0}");
+    }
+
+    @Test
+    @DisplayName("metadata의 version conflict는 기존 409 code로 반환한다")
+    void updateMetadata_VersionConflict_ReturnsConflict() throws Exception {
+        // given
+        when(projectCommandService.updateMetadata(eq(1L), any(), eq(7L)))
+                .thenThrow(new CollaborationException(CollaborationErrorCode.VERSION_CONFLICT));
+
+        // when
+        var response = mockMvc.perform(patch(PROJECT_URL + "/metadata", 1L)
+                .with(authenticatedAs(7L)).contentType(APPLICATION_JSON)
+                .content("{\"title\":\"New\",\"baseVersion\":12}"));
+
+        // then
+        response.andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("COLLAB409_2"));
+    }
+
+    @Test
+    @DisplayName("소유하지 않은 프로젝트의 metadata 변경은 404로 반환한다")
+    void updateMetadata_NotOwned_ReturnsNotFound() throws Exception {
+        // given
+        when(projectCommandService.updateMetadata(eq(1L), any(), eq(7L)))
+                .thenThrow(new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
+
+        // when
+        var response = mockMvc.perform(patch(PROJECT_URL + "/metadata", 1L)
+                .with(authenticatedAs(7L)).contentType(APPLICATION_JSON)
+                .content("{\"title\":\"New\",\"baseVersion\":12}"));
+
+        // then
+        response.andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("PROJECT404_1"));
     }
 
     private static RequestPostProcessor authenticatedAs(Long memberId) {

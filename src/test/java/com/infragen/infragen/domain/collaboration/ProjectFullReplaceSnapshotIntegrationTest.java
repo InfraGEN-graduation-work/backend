@@ -79,7 +79,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * DB를 mock으로 격리하고 실제 PUT 서비스와 Spring transaction event의 복원·broadcast 계약을 검증한다.
+ * DB를 mock으로 격리하고 실제 PUT·metadata PATCH와 Spring transaction event의 복원·broadcast 계약을 검증한다.
  * DB 원자성과 row lock 동시성은 MySQL integration test에서 별도로 검증해야 한다.
  */
 @SpringJUnitConfig(ProjectFullReplaceSnapshotIntegrationTest.Config.class)
@@ -337,6 +337,67 @@ class ProjectFullReplaceSnapshotIntegrationTest {
                 List.of(new ProjectEdgeReqDTO.EdgeInfoReqDTO("node-1", "node-2")),
                 50L
         );
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {0L, 50L})
+    @DisplayName("metadata PATCH는 commit 전 snapshot을 저장하고 commit 후 resync와 재접속에 반영된다")
+    void updateMetadata_AfterSnapshot_RestoresMetadata(long afterVersion) {
+        // given
+        when(projectRepository.existsByIdAndMemberId(1L, 2L)).thenReturn(true);
+        when(projectRepository.findByIdAndMemberId(1L, 2L)).thenReturn(Optional.of(project));
+        when(nodeRepository.findAllByProjectId(1L)).thenReturn(List.of());
+        when(edgeRepository.findAllByProjectId(1L)).thenReturn(List.of());
+        doAnswer(invocation -> {
+            assertEquals(0, transactionManager.commits);
+            ProjectCollaborationSnapshot snapshot = invocation.getArgument(0);
+            snapshots.add(snapshot);
+            return snapshot;
+        }).when(snapshotRepository).save(any());
+        doAnswer(invocation -> {
+            assertEquals(1, transactionManager.commits);
+            return null;
+        }).when(messagingTemplate).convertAndSend(eq("/topic/projects/1/resync"), any(Object.class));
+
+        // when
+        var updated = projectCommandService.updateMetadata(1L,
+                new ProjectReqDTO.UpdateMetadata("Renamed", null, 50L), 2L);
+        var restored = snapshotQueryService.getSnapshot(1L, 2L, afterVersion);
+
+        // then
+        var broadcast = ArgumentCaptor.forClass(CollaborationSnapshotResDTO.SnapshotResDTO.class);
+        verify(messagingTemplate).convertAndSend(eq("/topic/projects/1/resync"), broadcast.capture());
+        assertAll(
+                () -> assertEquals("Renamed", restored.project().title()),
+                () -> assertEquals("old-description", restored.project().description()),
+                () -> assertEquals(updated.title(), restored.project().title()),
+                () -> assertEquals(51L, restored.graphVersion()),
+                () -> assertEquals(51L, restored.serverVersion()),
+                () -> assertEquals(restored, broadcast.getValue()),
+                () -> assertTrue(restored.operations().isEmpty())
+        );
+    }
+
+    @Test
+    @DisplayName("metadata snapshot 저장 실패는 원래 transaction을 롤백하고 resync를 차단한다")
+    void updateMetadata_SnapshotFailure_RollsBackWithoutBroadcast() {
+        // given
+        when(projectRepository.existsByIdAndMemberId(1L, 2L)).thenReturn(true);
+        when(projectRepository.findByIdAndMemberId(1L, 2L)).thenReturn(Optional.of(project));
+        when(nodeRepository.findAllByProjectId(1L)).thenReturn(List.of());
+        when(edgeRepository.findAllByProjectId(1L)).thenReturn(List.of());
+        when(snapshotRepository.save(any())).thenThrow(new DataAccessResourceFailureException("snapshot failed"));
+
+        // when
+        assertThrows(DataAccessResourceFailureException.class, () -> projectCommandService.updateMetadata(
+                1L, new ProjectReqDTO.UpdateMetadata("Renamed", null, 50L), 2L));
+
+        // then
+        assertAll(
+                () -> assertEquals(0, transactionManager.commits),
+                () -> assertEquals(1, transactionManager.rollbacks)
+        );
+        verifyNoInteractions(messagingTemplate);
     }
 
     private ProjectCollaborationOperation operation(long version) {

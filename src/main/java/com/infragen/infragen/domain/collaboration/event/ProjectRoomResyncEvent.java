@@ -6,7 +6,7 @@ import com.infragen.infragen.domain.collaboration.dto.response.CollaborationSnap
 import com.infragen.infragen.domain.project.dto.response.ProjectResDTO;
 
 /**
- * owner-only PUT의 전체 graph 교체 결과와 발급된 version을 원래 transaction 안에서 전달한다.
+ * owner-only PUT 또는 metadata PATCH 결과의 전체 graph와 version을 원래 transaction 안에서 전달한다.
  * commit 전에는 snapshot 저장에, commit 성공 후에는 room resync 전송에 사용한다.
  * 새 snapshot 저장을 수반하므로 단순 알림 재전송 용도로 발행하지 않는다.
  */

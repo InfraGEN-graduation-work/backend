@@ -7,7 +7,7 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
- * PUT transaction이 commit된 뒤 같은 project room에 최신 materialized graph를 broadcast한다.
+ * PUT 또는 metadata PATCH가 commit된 뒤 같은 project room에 최신 graph를 broadcast한다.
  */
 @Component
 @RequiredArgsConstructor

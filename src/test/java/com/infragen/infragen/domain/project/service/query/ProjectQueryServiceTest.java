@@ -20,6 +20,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.data.projection.SpelAwareProxyProjectionFactory;
+import com.infragen.infragen.domain.project.repository.projection.ProjectAccessPreview;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -67,7 +71,7 @@ class ProjectQueryServiceTest {
                 .member(member)
                 .build();
         ReflectionTestUtils.setField(recentProject, "id", 101L);
-        ReflectionTestUtils.setField(recentProject, "createdAt", LocalDateTime.now().minusMinutes(10));
+        ReflectionTestUtils.setField(recentProject, "createdAt", LocalDateTime.of(2026, 9, 16, 12, 0));
 
         // 이전 프로젝트 (id: 100, 1일 전 생성)
         Project oldProject = Project.builder()
@@ -77,11 +81,11 @@ class ProjectQueryServiceTest {
                 .member(member)
                 .build();
         ReflectionTestUtils.setField(oldProject, "id", 100L);
-        ReflectionTestUtils.setField(oldProject, "createdAt", LocalDateTime.now().minusDays(1));
+        ReflectionTestUtils.setField(oldProject, "createdAt", LocalDateTime.of(2026, 9, 15, 12, 0));
 
         // repository는 최신순(Recent -> Old)으로 정렬된 데이터를 리턴하도록
-        when(projectRepository.findAllByMemberIdOrderByCreatedAtDesc(memberId))
-                .thenReturn(List.of(recentProject, oldProject));
+        when(projectRepository.findAllAccessibleByMemberId(memberId))
+                .thenReturn(List.of(preview(recentProject, "OWNER"), preview(oldProject, "OWNER")));
 
         // when
         ProjectResDTO.ProjectPreviewListResDTO result = projectQueryService.getProjects(memberId);
@@ -98,7 +102,8 @@ class ProjectQueryServiceTest {
         assertEquals(100L, result.projectList().get(1).projectId());
         assertEquals("Old Project", result.projectList().get(1).title());
 
-        verify(projectRepository).findAllByMemberIdOrderByCreatedAtDesc(memberId);
+        assertEquals("OWNER", result.projectList().getFirst().accessRole());
+        verify(projectRepository).findAllAccessibleByMemberId(memberId);
     }
 
     @Test
@@ -106,7 +111,7 @@ class ProjectQueryServiceTest {
     void getProjects_EmptyList_Success() {
         // given
         Long memberId = 1L;
-        when(projectRepository.findAllByMemberIdOrderByCreatedAtDesc(memberId))
+        when(projectRepository.findAllAccessibleByMemberId(memberId))
                 .thenReturn(Collections.emptyList());
 
         // when
@@ -115,7 +120,41 @@ class ProjectQueryServiceTest {
         // then
         assertNotNull(result);
         assertTrue(result.projectList().isEmpty());
-        verify(projectRepository).findAllByMemberIdOrderByCreatedAtDesc(memberId);
+        verify(projectRepository).findAllAccessibleByMemberId(memberId);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"EDITOR", "VIEWER"})
+    @DisplayName("참여 프로젝트도 접근 역할과 기존 preview 필드를 함께 반환한다")
+    void getProjects_Collaborator_ReturnsAccessRole(String accessRole) {
+        // given
+        Project project = Project.builder().title("Shared").description("Team")
+                .status(ProjectStatus.DRAFT).build();
+        ReflectionTestUtils.setField(project, "id", 20L);
+        ReflectionTestUtils.setField(project, "createdAt", LocalDateTime.of(2026, 9, 16, 12, 0));
+        when(projectRepository.findAllAccessibleByMemberId(7L))
+                .thenReturn(List.of(preview(project, accessRole)));
+
+        // when
+        var result = projectQueryService.getProjects(7L).projectList().getFirst();
+
+        // then
+        assertAll(
+                () -> assertEquals(20L, result.projectId()),
+                () -> assertEquals("Shared", result.title()),
+                () -> assertEquals("Team", result.description()),
+                () -> assertEquals("DRAFT", result.status()),
+                () -> assertEquals(project.getCreatedAt(), result.createdAt()),
+                () -> assertEquals(accessRole, result.accessRole())
+        );
+        verifyNoInteractions(projectNodeRepository, projectEdgeRepository);
+    }
+
+    private ProjectAccessPreview preview(Project project, String accessRole) {
+        return new SpelAwareProxyProjectionFactory().createProjection(ProjectAccessPreview.class, Map.of(
+                "projectId", project.getId(), "title", project.getTitle(),
+                "description", project.getDescription(), "status", project.getStatus(),
+                "createdAt", project.getCreatedAt(), "accessRole", accessRole));
     }
 
     @Test

@@ -52,6 +52,11 @@ public enum ProjectSuccessCode implements BaseSuccessCode {
         "프로젝트 collaborator 삭제에 성공했습니다.",
         "PROJECT200_7"
     ),
+    PROJECT_METADATA_UPDATE_SUCCESS(
+        HttpStatus.OK,
+        "프로젝트 이름과 설명 수정에 성공했습니다.",
+        "PROJECT200_8"
+    ),
     ;
     private final HttpStatus httpStatus;
     private final String message;

@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -48,6 +49,7 @@ public class ProjectController implements ProjectControllerDocs {
         );
     }
 
+    /** 인증된 회원의 소유·참여 프로젝트를 접근 역할과 함께 조회한다. */
     @Override
     @GetMapping
     public ApiResponse<ProjectResDTO.ProjectPreviewListResDTO> getProjects(
@@ -84,6 +86,18 @@ public class ProjectController implements ProjectControllerDocs {
             ProjectSuccessCode.PROJECT_CANVAS_GET_SUCCESS,
             result
         );
+    }
+
+    /** owner가 graph를 교체하지 않고 프로젝트 이름·설명만 수정한다. */
+    @Override
+    @PatchMapping("/{projectId}/metadata")
+    public ApiResponse<ProjectResDTO.ProjectPreviewResDTO> updateMetadata(
+        @PathVariable Long projectId,
+        @RequestBody @Valid ProjectReqDTO.UpdateMetadata request,
+        @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        var result = projectCommandService.updateMetadata(projectId, request, userDetails.getMemberId());
+        return ApiResponse.onSuccess(ProjectSuccessCode.PROJECT_METADATA_UPDATE_SUCCESS, result);
     }
 
     @Override

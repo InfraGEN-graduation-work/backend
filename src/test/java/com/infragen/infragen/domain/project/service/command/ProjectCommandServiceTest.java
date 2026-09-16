@@ -33,6 +33,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
+import com.infragen.infragen.domain.project.entity.ProjectNode;
+import com.infragen.infragen.domain.project.entity.ProjectEdge;
+import com.infragen.infragen.domain.project.converter.ProjectConverter;
+import com.infragen.infragen.domain.collaboration.event.ProjectRoomResyncEvent;
+import com.infragen.infragen.global.enums.ComponentType;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -96,6 +105,100 @@ class ProjectCommandServiceTest {
 
     @InjectMocks
     private ProjectCommandService projectCommandService;
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {"New description"})
+    @DisplayName("metadata만 바꾸고 기존 graph와 식별자를 resync에 보존한다")
+    void updateMetadata_Owner_PreservesGraph(String description) {
+        // given
+        Project project = Project.builder().title("Old").description("Keep me")
+                .status(ProjectStatus.DRAFT).build();
+        ReflectionTestUtils.setField(project, "id", 100L);
+        ProjectNode node = ProjectNode.builder().project(project).nodeId("node-1").nodeName("Database")
+                .componentType(ComponentType.MYSQL).positionX(BigDecimal.ONE).positionY(BigDecimal.TEN)
+                .properties(Map.of("port", 3306)).build();
+        ReflectionTestUtils.setField(node, "id", 101L);
+        ProjectNode target = ProjectNode.builder().project(project).nodeId("node-2").nodeName("App")
+                .componentType(ComponentType.SPRING_BOOT).positionX(BigDecimal.TEN).positionY(BigDecimal.ONE)
+                .properties(Map.of()).build();
+        ReflectionTestUtils.setField(target, "id", 102L);
+        ProjectEdge edge = ProjectEdge.builder().project(project).sourceNode(node).targetNode(target).build();
+        ReflectionTestUtils.setField(edge, "id", 201L);
+        var original = ProjectConverter.toProjectDetailResDTO(project, List.of(node, target), List.of(edge));
+        when(projectRepository.existsByIdAndMemberId(100L, 7L)).thenReturn(true);
+        when(projectCollaborationVersionService.issueNextVersionForFullReplace(100L, 12L)).thenReturn(13L);
+        when(projectRepository.findByIdAndMemberId(100L, 7L)).thenReturn(Optional.of(project));
+        when(projectNodeRepository.findAllByProjectId(100L)).thenReturn(List.of(node, target));
+        when(projectEdgeRepository.findAllByProjectId(100L)).thenReturn(List.of(edge));
+
+        // when
+        var result = projectCommandService.updateMetadata(100L,
+                new ProjectReqDTO.UpdateMetadata("New", description, 12L), 7L);
+
+        // then
+        var event = ArgumentCaptor.forClass(ProjectRoomResyncEvent.class);
+        verify(eventPublisher).publishEvent(event.capture());
+        assertAll(
+                () -> assertEquals("New", result.title()),
+                () -> assertEquals(description == null ? "Keep me" : description, result.description()),
+                () -> assertEquals("OWNER", result.accessRole()),
+                () -> assertEquals(100L, result.projectId()),
+                () -> assertEquals(13L, event.getValue().snapshot().serverVersion()),
+                () -> assertEquals(13L, event.getValue().snapshot().graphVersion()),
+                () -> assertEquals(original.nodes(), event.getValue().snapshot().project().nodes()),
+                () -> assertEquals(original.edges(), event.getValue().snapshot().project().edges()),
+                () -> assertEquals(result.description(), event.getValue().snapshot().project().description())
+        );
+        InOrder order = inOrder(projectRepository, projectCollaborationVersionService, projectNodeRepository);
+        order.verify(projectRepository).existsByIdAndMemberId(100L, 7L);
+        order.verify(projectCollaborationVersionService).issueNextVersionForFullReplace(100L, 12L);
+        order.verify(projectRepository).findByIdAndMemberId(100L, 7L);
+        order.verify(projectNodeRepository).findAllByProjectId(100L);
+        verify(projectNodeRepository, never()).deleteByProjectId(anyLong());
+        verify(projectEdgeRepository, never()).deleteByProjectId(anyLong());
+        verify(projectNodeRepository, never()).saveAll(anyList());
+        verify(projectEdgeRepository, never()).saveAll(anyList());
+        verifyNoInteractions(projectCollaboratorRepository, projectQueryService);
+    }
+
+    @Test
+    @DisplayName("소유자가 아니거나 프로젝트가 없으면 metadata 변경을 거부한다")
+    void updateMetadata_NotOwner_RejectsBeforeVersion() {
+        // given
+        var request = new ProjectReqDTO.UpdateMetadata("New", null, 12L);
+        when(projectRepository.existsByIdAndMemberId(100L, 7L)).thenReturn(false);
+
+        // when
+        var exception = assertThrows(ProjectException.class,
+                () -> projectCommandService.updateMetadata(100L, request, 7L));
+
+        // then
+        assertEquals(ProjectErrorCode.PROJECT_NOT_FOUND, exception.getCode());
+        verifyNoInteractions(projectCollaborationVersionService, projectNodeRepository,
+                projectEdgeRepository, eventPublisher);
+        verify(projectRepository, never()).findByIdAndMemberId(anyLong(), anyLong());
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {11L, 13L})
+    @DisplayName("metadata 기준 버전 충돌 시 graph 조회와 event 발행을 하지 않는다")
+    void updateMetadata_VersionConflict_LeavesGraphUntouched(long baseVersion) {
+        // given
+        var request = new ProjectReqDTO.UpdateMetadata("New", null, baseVersion);
+        when(projectRepository.existsByIdAndMemberId(100L, 7L)).thenReturn(true);
+        when(projectCollaborationVersionService.issueNextVersionForFullReplace(100L, baseVersion))
+                .thenThrow(new CollaborationException(CollaborationErrorCode.VERSION_CONFLICT));
+
+        // when
+        var exception = assertThrows(CollaborationException.class,
+                () -> projectCommandService.updateMetadata(100L, request, 7L));
+
+        // then
+        assertEquals(CollaborationErrorCode.VERSION_CONFLICT, exception.getCode());
+        verifyNoInteractions(projectNodeRepository, projectEdgeRepository, eventPublisher);
+        verify(projectRepository, never()).findByIdAndMemberId(anyLong(), anyLong());
+    }
 
     @Test
     @DisplayName("프로젝트 생성 - 성공 시 프로젝트 정보 반환")

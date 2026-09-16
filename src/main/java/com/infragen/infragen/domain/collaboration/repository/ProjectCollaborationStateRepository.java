@@ -30,6 +30,9 @@ public interface ProjectCollaborationStateRepository
      */
     Optional<ProjectCollaborationState> findByProjectId(Long projectId);
 
+    /** 잠금 전에 state 엔티티를 영속성 컨텍스트에 적재하지 않고 존재 여부만 확인한다. */
+    boolean existsByProjectId(Long projectId);
+
     /**
      * project의 collaboration version 상태를 쓰기 잠금과 함께 조회한다.
      * @param projectId 조회할 project 식별자

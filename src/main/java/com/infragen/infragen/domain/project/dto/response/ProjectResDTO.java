@@ -5,7 +5,10 @@ import java.util.List;
 
 import lombok.Builder;
 
-public class ProjectResDTO {
+public final class ProjectResDTO {
+    private ProjectResDTO() {
+    }
+
     @Builder
     public record CreateProjectResDTO(
         Long projectId,
@@ -19,7 +22,8 @@ public class ProjectResDTO {
         String title,
         String description,
         String status,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        String accessRole
     ) {
     }
 

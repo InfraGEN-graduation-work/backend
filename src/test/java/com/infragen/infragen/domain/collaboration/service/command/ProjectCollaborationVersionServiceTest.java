@@ -15,6 +15,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
@@ -42,7 +44,7 @@ class ProjectCollaborationVersionServiceTest {
         // given
         Long projectId = 1L;
         Project project = project();
-        when(stateRepository.findByProjectId(projectId)).thenReturn(Optional.empty());
+        when(stateRepository.existsByProjectId(projectId)).thenReturn(false);
         when(projectRepository.findByIdForUpdate(projectId))
                 .thenReturn(Optional.of(project));
         when(stateRepository.findByProjectIdForUpdate(projectId)).thenReturn(Optional.empty());
@@ -69,7 +71,7 @@ class ProjectCollaborationVersionServiceTest {
         Project project = project();
         ProjectCollaborationState state = new ProjectCollaborationState(project);
         state.advanceServerVersion();
-        when(stateRepository.findByProjectId(projectId)).thenReturn(Optional.of(state));
+        when(stateRepository.existsByProjectId(projectId)).thenReturn(true);
         when(stateRepository.findByProjectIdForUpdate(projectId)).thenReturn(Optional.of(state));
 
         // when
@@ -87,7 +89,7 @@ class ProjectCollaborationVersionServiceTest {
         Long projectId = 1L;
         Project project = project();
         ProjectCollaborationState state = new ProjectCollaborationState(project);
-        when(stateRepository.findByProjectId(projectId)).thenReturn(Optional.of(state));
+        when(stateRepository.existsByProjectId(projectId)).thenReturn(true);
         when(stateRepository.findByProjectIdForUpdate(projectId)).thenReturn(Optional.of(state));
 
         // when
@@ -105,7 +107,7 @@ class ProjectCollaborationVersionServiceTest {
     void issueNextVersion_withUnknownProject_throwsProjectNotFound() {
         // given
         Long projectId = 1L;
-        when(stateRepository.findByProjectId(projectId)).thenReturn(Optional.empty());
+        when(stateRepository.existsByProjectId(projectId)).thenReturn(false);
         when(projectRepository.findByIdForUpdate(projectId))
                 .thenReturn(Optional.empty());
 
@@ -117,6 +119,43 @@ class ProjectCollaborationVersionServiceTest {
 
         // then
         assertEquals(ProjectErrorCode.PROJECT_NOT_FOUND, exception.getCode());
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {0L, 2L})
+    @DisplayName("정확한 version을 요구하는 수정은 이전·미래 version 모두 거부한다")
+    void issueNextVersionForFullReplace_MismatchedVersion_Rejects(long baseVersion) {
+        // given
+        var state = new ProjectCollaborationState(project());
+        state.advanceServerVersion();
+        when(stateRepository.existsByProjectId(1L)).thenReturn(true);
+        when(stateRepository.findByProjectIdForUpdate(1L)).thenReturn(Optional.of(state));
+
+        // when
+        var exception = assertThrows(CollaborationException.class,
+                () -> versionService.issueNextVersionForFullReplace(1L, baseVersion));
+
+        // then
+        assertEquals(CollaborationErrorCode.VERSION_CONFLICT, exception.getCode());
+        assertEquals(1L, state.getServerVersion());
+        verify(stateRepository, org.mockito.Mockito.never()).findByProjectId(1L);
+    }
+
+    @Test
+    @DisplayName("정확한 version을 요구하는 수정은 잠금으로 읽은 version을 증가시킨다")
+    void issueNextVersionForFullReplace_CurrentVersion_AdvancesLockedState() {
+        // given
+        var state = new ProjectCollaborationState(project());
+        state.advanceServerVersion();
+        when(stateRepository.existsByProjectId(1L)).thenReturn(true);
+        when(stateRepository.findByProjectIdForUpdate(1L)).thenReturn(Optional.of(state));
+
+        // when
+        Long version = versionService.issueNextVersionForFullReplace(1L, 1L);
+
+        // then
+        assertEquals(2L, version);
+        verify(stateRepository, org.mockito.Mockito.never()).findByProjectId(1L);
     }
 
     private Project project() {

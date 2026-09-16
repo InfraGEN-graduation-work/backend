@@ -2,7 +2,7 @@
 
 > 프론트엔드가 사용자 흐름에 따라 API를 연동할 때 사용하는 기준 문서다.
 >
-> 최종 갱신일: 2026-09-03
+> 최종 갱신일: 2026-09-16 (#55 프로젝트 목록·metadata 계약 갱신)
 >
 > 상태: 현재는 현재 코드에 구현된 계약, 예정은 설계만 있고 아직 구현되지 않은 계약, 진행 중은 Issue #31 등에서 변경 중인 계약이다.
 
@@ -194,6 +194,10 @@ UX:
 
     GET /api/v1/projects
 
+인증된 JWT의 회원 ID로 소유·EDITOR·VIEWER 참여 프로젝트를 함께 조회한다.
+project당 한 번만 반환하며 생성일 내림차순, 생성일이 같으면 projectId 내림차순이다.
+memberId query parameter나 body는 조회 기준이 아니다.
+
 성공 result:
 
     {
@@ -203,7 +207,8 @@ UX:
           "title": "my-infra",
           "description": "개발용 인프라",
           "status": "DRAFT",
-          "createdAt": "2026-08-27T12:00:00"
+          "createdAt": "2026-08-27T12:00:00",
+          "accessRole": "OWNER"
         }
       ]
     }
@@ -211,13 +216,17 @@ UX:
 UX:
 
 - 프로젝트 목록 진입 시 호출한다.
-- projectId를 선택해 캔버스 편집 화면으로 이동한다.
+- `accessRole`은 `OWNER`, `EDITOR`, `VIEWER`다.
+- OWNER는 기존 상세 API 또는 collaboration snapshot API로 진입한다.
+- EDITOR·VIEWER는 `GET /api/v1/projects/{projectId}/collaboration?afterVersion=0`으로 진입한다.
+- collaborator 등록은 별도 수락 없이 즉시 반영된다. 등록 성공 후 참여자의 목록 캐시를 무효화하거나 홈 진입·재진입 시 목록을 다시 조회한다. 이 API 변경 자체가 참여자에게 홈 알림을 push하지는 않는다.
+- collaborator가 삭제되면 다음 목록 조회에서 해당 프로젝트가 제외된다.
 
 ### 4.3 프로젝트 상세 복원
 
     GET /api/v1/projects/{projectId}
 
-용도: 프로젝트 정보와 저장된 node·edge를 캔버스에 복원한다.
+용도: owner의 프로젝트 정보와 저장된 node·edge를 캔버스에 복원한다. EDITOR·VIEWER에게 이 API의 권한을 확장하지 않는다.
 
 UX:
 
@@ -232,11 +241,12 @@ UX:
 
 용도: 프로젝트 제목, 설명, 캔버스 node·edge 전체를 저장한다. 부분 수정이 아니라 기존 graph를 전체 교체하는 방식이다.
 
-현재 진행 중인 Issue #31 계약:
+현재 전체 저장 요청 계약:
 
     {
       "title": "my-infra",
       "description": "개발용 인프라",
+      "baseVersion": 12,
       "nodes": [
         {
           "nodeId": "mysql-node-1",
@@ -283,6 +293,37 @@ UX:
 - 저장 중에는 중복 저장을 막거나 저장 상태를 표시한다.
 - 저장 성공 시 “저장 완료” 상태를 표시한다.
 - 저장 실패 시 현재 캔버스 내용을 지우지 않고 재시도할 수 있어야 한다.
+
+### 4.4.1 프로젝트 이름·설명 수정
+
+    PATCH /api/v1/projects/{projectId}/metadata
+
+OWNER만 호출할 수 있다. 제목은 공백이 아닌 값(최대 100자), baseVersion은 0 이상의 정수로 필수다.
+description은 생략하거나 null이면 유지하고, 빈 문자열이면 설명을 비운다.
+
+    {
+      "title": "새 프로젝트 이름",
+      "description": "새 설명",
+      "baseVersion": 12
+    }
+
+성공: HTTP 200, `PROJECT200_8`. result는 목록 항목과 같은 preview다.
+
+    {
+      "projectId": 1,
+      "title": "새 프로젝트 이름",
+      "description": "새 설명",
+      "status": "DRAFT",
+      "createdAt": "2026-08-27T12:00:00",
+      "accessRole": "OWNER"
+    }
+
+- title·description만 변경하며 node·edge와 각 DB 식별자를 보존한다.
+- 현재 version과 baseVersion이 다르면 HTTP 409, `COLLAB409_2`로 거부한다. 메시지 문구 대신 code로 처리한다.
+- 소유 프로젝트가 아니거나 존재하지 않으면 HTTP 404, `PROJECT404_1`로 거부한다.
+- graph 전체와 새 version을 snapshot에 함께 저장한 뒤 `/topic/projects/{projectId}/resync`로 전송한다. snapshot 저장 실패 시 metadata와 version도 롤백한다.
+- 목록 preview에는 serverVersion이 없다. 수정 전에 collaboration snapshot에서 현재 serverVersion을 얻고, 성공 후 resync 또는 snapshot 재조회로 다음 수정에 사용할 version을 갱신한다. 충돌 시 snapshot을 다시 읽고 사용자가 변경 내용을 확인한 뒤 재시도한다.
+- PATCH 성공 후 반환된 preview를 목록에 반영하거나 목록을 다시 조회한다.
 
 ### 4.5 프로젝트 삭제
 

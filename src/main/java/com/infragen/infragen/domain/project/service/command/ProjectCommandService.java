@@ -6,6 +6,7 @@ import java.util.stream.Collectors;
 
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.infragen.infragen.domain.collaboration.event.ProjectRoomResyncEvent;
@@ -118,6 +119,40 @@ public class ProjectCommandService {
 
         log.info("프로젝트 수정 완료: id={}, serverVersion={}", projectId, serverVersion);
         return result;
+    }
+
+    /**
+     * owner가 프로젝트 이름·설명만 변경하고 graph는 보존한다.
+     * version·snapshot을 같은 transaction에 저장하고 commit 후 room을 재동기화한다.
+     */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public ProjectResDTO.ProjectPreviewResDTO updateMetadata(
+        Long projectId,
+        ProjectReqDTO.UpdateMetadata request,
+        Long memberId
+    ) {
+        if (!projectRepository.existsByIdAndMemberId(projectId, memberId)) {
+            throw new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND);
+        }
+
+        Long serverVersion = projectCollaborationVersionService.issueNextVersionForFullReplace(
+                projectId, request.baseVersion());
+
+        // 잠금을 기다리는 동안 commit된 metadata와 graph도 읽도록 잠금 이후에 조회한다.
+        Project project = projectRepository.findByIdAndMemberId(projectId, memberId)
+                .orElseThrow(() -> new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
+
+        String description = request.description() == null ? project.getDescription() : request.description();
+
+        project.updateInfo(request.title(), description);
+
+        List<ProjectNode> nodes = projectNodeRepository.findAllByProjectId(projectId);
+        List<ProjectEdge> edges = projectEdgeRepository.findAllByProjectId(projectId);
+        
+        eventPublisher.publishEvent(new ProjectRoomResyncEvent(projectId, serverVersion,
+                ProjectConverter.toProjectDetailResDTO(project, nodes, edges)));
+
+        return ProjectConverter.toProjectPreviewResDTO(project, "OWNER");
     }
 
     /**

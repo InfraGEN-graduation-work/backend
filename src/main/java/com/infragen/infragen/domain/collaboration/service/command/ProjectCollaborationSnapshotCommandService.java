@@ -65,8 +65,8 @@ public class ProjectCollaborationSnapshotCommandService {
     }
 
     /**
-     * owner-only PUT의 graph와 version을 원래 transaction의 snapshot으로 저장한다.
-     * 저장 실패는 PUT을 롤백시키며 commit 이후 room resync도 발행되지 않는다.
+     * owner-only PUT·metadata PATCH의 graph와 version을 원래 transaction의 snapshot으로 저장한다.
+     * 저장 실패는 원래 변경을 롤백시키며 commit 이후 room resync도 발행되지 않는다.
      */
     @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
     public void handleProjectReplacing(ProjectRoomResyncEvent event) {

@@ -38,7 +38,7 @@ public class ProjectCollaborationVersionService {
     }
 
     /**
-     * 전체 graph 교체 전에 client가 알고 있는 version과 현재 version이 같은지 확인하고 다음 version을 발급한다.
+     * 전체 graph 교체와 metadata 수정 전에 정확한 기준 version을 확인하고 다음 version을 발급한다.
      *
      * @param projectId version을 발급할 project 식별자
      * @param baseVersion 전체 교체 요청이 기준으로 삼은 version
@@ -75,9 +75,10 @@ public class ProjectCollaborationVersionService {
             String operationId,
             boolean requireExactBaseVersion
     ) {
-        Optional<ProjectCollaborationState> state = stateRepository.findByProjectId(projectId);
+        Optional<ProjectCollaborationState> state;
 
-        if (state.isPresent()) {
+        // 잠금 전 version을 미리 적재하면 잠금 대기 후에도 1차 캐시의 오래된 값을 사용할 수 있다.
+        if (stateRepository.existsByProjectId(projectId)) {
             state = stateRepository.findByProjectIdForUpdate(projectId);
         } else {
             Project project = projectRepository.findByIdForUpdate(projectId)

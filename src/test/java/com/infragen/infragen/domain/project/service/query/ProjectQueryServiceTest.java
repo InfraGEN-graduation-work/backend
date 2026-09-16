@@ -47,6 +47,9 @@ class ProjectQueryServiceTest {
     @Mock
     private ProjectEdgeRepository projectEdgeRepository;
 
+    @Mock
+    private ProjectAccessService projectAccessService;
+
     @InjectMocks
     private ProjectQueryService projectQueryService;
 
@@ -197,7 +200,8 @@ class ProjectQueryServiceTest {
                 .build();
         ReflectionTestUtils.setField(edge, "id", 2L);
 
-        when(projectRepository.findByIdAndMemberId(projectId, memberId)).thenReturn(Optional.of(project));
+        doNothing().when(projectAccessService).requireReadAccess(projectId, memberId);
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
         when(projectNodeRepository.findAllByProjectId(projectId)).thenReturn(List.of(node));
         when(projectEdgeRepository.findAllByProjectId(projectId)).thenReturn(List.of(edge));
 
@@ -212,7 +216,8 @@ class ProjectQueryServiceTest {
         assertEquals("Web Server", result.nodes().get(0).nodeName());
         assertEquals(1, result.edges().size());
 
-        verify(projectRepository).findByIdAndMemberId(projectId, memberId);
+        verify(projectAccessService).requireReadAccess(projectId, memberId);
+        verify(projectRepository).findById(projectId);
         verify(projectNodeRepository).findAllByProjectId(projectId);
         verify(projectEdgeRepository).findAllByProjectId(projectId);
     }
@@ -258,14 +263,67 @@ class ProjectQueryServiceTest {
         Long memberId = 1L;
         Long projectId = 100L;
 
-        when(projectRepository.findByIdAndMemberId(projectId, memberId)).thenReturn(Optional.empty());
+        doNothing().when(projectAccessService).requireReadAccess(projectId, memberId);
+        when(projectRepository.findById(projectId)).thenReturn(Optional.empty());
 
-        // when & then
+        // when
         ProjectException exception = assertThrows(ProjectException.class,
                 () -> projectQueryService.getProjectDetail(projectId, memberId));
 
+        // then
         assertEquals(ProjectErrorCode.PROJECT_NOT_FOUND, exception.getCode());
-        verify(projectRepository).findByIdAndMemberId(projectId, memberId);
+        verify(projectAccessService).requireReadAccess(projectId, memberId);
+        verify(projectRepository).findById(projectId);
         verify(projectNodeRepository, never()).findAllByProjectId(anyLong());
+    }
+
+    @Test
+    @DisplayName("협업자 읽기 권한이 있으면 상세 프로젝트를 조회한다")
+    void getProjectDetail_CollaboratorReadAccess_ReturnsProject() {
+        // given
+        Long projectId = 100L;
+        Long memberId = 7L;
+        Project project = Project.builder()
+                .title("Shared Project")
+                .description("Shared Desc")
+                .status(ProjectStatus.DRAFT)
+                .build();
+        ReflectionTestUtils.setField(project, "id", projectId);
+        doNothing().when(projectAccessService).requireReadAccess(projectId, memberId);
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+        when(projectNodeRepository.findAllByProjectId(projectId)).thenReturn(List.of());
+        when(projectEdgeRepository.findAllByProjectId(projectId)).thenReturn(List.of());
+
+        // when
+        ProjectResDTO.ProjectDetailResDTO result = projectQueryService.getProjectDetail(projectId, memberId);
+
+        // then
+        assertAll(
+                () -> assertEquals(projectId, result.projectId()),
+                () -> assertEquals("Shared Project", result.title()),
+                () -> assertTrue(result.nodes().isEmpty()),
+                () -> assertTrue(result.edges().isEmpty())
+        );
+        verify(projectAccessService).requireReadAccess(projectId, memberId);
+        verify(projectRepository).findById(projectId);
+    }
+
+    @Test
+    @DisplayName("읽기 권한이 없으면 상세 프로젝트를 조회하지 않는다")
+    void getProjectDetail_WithoutReadAccess_ThrowsException() {
+        // given
+        Long projectId = 100L;
+        Long memberId = 9L;
+        doThrow(new ProjectException(ProjectErrorCode.PROJECT_ACCESS_DENIED))
+                .when(projectAccessService).requireReadAccess(projectId, memberId);
+
+        // when
+        ProjectException exception = assertThrows(ProjectException.class,
+                () -> projectQueryService.getProjectDetail(projectId, memberId));
+
+        // then
+        assertEquals(ProjectErrorCode.PROJECT_ACCESS_DENIED, exception.getCode());
+        verify(projectAccessService).requireReadAccess(projectId, memberId);
+        verifyNoInteractions(projectRepository, projectNodeRepository, projectEdgeRepository);
     }
 }

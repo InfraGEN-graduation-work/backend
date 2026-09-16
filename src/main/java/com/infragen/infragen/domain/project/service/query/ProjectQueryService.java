@@ -24,6 +24,7 @@ public class ProjectQueryService {
     private final ProjectRepository projectRepository;
     private final ProjectNodeRepository projectNodeRepository;
     private final ProjectEdgeRepository projectEdgeRepository;
+    private final ProjectAccessService projectAccessService;
 
     /** 인증된 회원이 소유하거나 참여하는 프로젝트와 각 접근 역할을 반환한다. */
     @Transactional(readOnly = true)
@@ -40,9 +41,12 @@ public class ProjectQueryService {
             .orElseThrow(() -> new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
     }
 
+    /** 읽기 권한이 있는 회원에게 프로젝트와 저장된 graph를 반환한다. */
     @Transactional(readOnly = true)
     public ProjectResDTO.ProjectDetailResDTO getProjectDetail(Long projectId, Long memberId) {
-        Project project = getOwnedProject(projectId, memberId);
+        projectAccessService.requireReadAccess(projectId, memberId);
+        Project project = projectRepository.findById(projectId)
+            .orElseThrow(() -> new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
 
         List<ProjectNode> nodes = projectNodeRepository.findAllByProjectId(projectId);
         List<ProjectEdge> edges = projectEdgeRepository.findAllByProjectId(projectId);

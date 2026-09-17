@@ -131,7 +131,7 @@ class ProjectHistoryCommandServiceTest {
             .build();
         ReflectionTestUtils.setField(project, "id", projectId);
 
-        when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(project);
+        when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(project);
         when(projectHistoryRepository.countByProjectId(projectId)).thenReturn(1L);
         when(projectHistoryRepository.save(any(ProjectHistory.class))).thenAnswer(invocation -> {
             ProjectHistory history = invocation.getArgument(0);
@@ -173,7 +173,7 @@ class ProjectHistoryCommandServiceTest {
         assertEquals("cloud/Dockerfile", dockerfile.getFileName());
         assertEquals("projects/100/histories/v2/cloud/Dockerfile", dockerfile.getFilePath());
 
-        verify(projectQueryService).getOwnedProject(projectId, memberId);
+        verify(projectQueryService).getWriteableProject(projectId, memberId);
         verify(projectHistoryRepository).countByProjectId(projectId);
     }
 
@@ -189,14 +189,14 @@ class ProjectHistoryCommandServiceTest {
                 .build()
         );
 
-        when(projectQueryService.getOwnedProject(projectId, memberId))
+        when(projectQueryService.getWriteableProject(projectId, memberId))
             .thenThrow(new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
 
         ProjectException exception = assertThrows(ProjectException.class,
             () -> projectHistoryCommandService.saveGeneratedHistory(projectId, memberId, generatedFiles));
 
         assertEquals(ProjectErrorCode.PROJECT_NOT_FOUND, exception.getCode());
-        verify(projectQueryService).getOwnedProject(projectId, memberId);
+        verify(projectQueryService).getWriteableProject(projectId, memberId);
         verify(projectHistoryRepository, never()).countByProjectId(projectId);
         verify(projectHistoryRepository, never()).save(any(ProjectHistory.class));
     }

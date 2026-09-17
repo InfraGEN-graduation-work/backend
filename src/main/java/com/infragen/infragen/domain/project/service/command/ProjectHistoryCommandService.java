@@ -60,7 +60,7 @@ public class ProjectHistoryCommandService {
         log.info("생성 이력 저장 요청: projectId={}, memberId={}, fileCount={}",
             projectId, memberId, generatedFiles.size());
 
-        Project project = projectQueryService.getOwnedProject(projectId, memberId);
+        Project project = projectQueryService.getWriteableProject(projectId, memberId);
         String versionName = nextVersionName(projectId);
 
         ProjectHistory history = ProjectHistory.builder()

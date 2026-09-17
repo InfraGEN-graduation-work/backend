@@ -1,6 +1,7 @@
 package com.infragen.infragen.domain.project.service.query;
 
 import com.infragen.infragen.domain.member.entity.Member;
+import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.project.entity.Project;
 import com.infragen.infragen.domain.project.entity.ProjectCollaborator;
 import com.infragen.infragen.domain.project.enums.ProjectCollaboratorRole;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 
@@ -36,6 +38,7 @@ class ProjectCollaboratorQueryServiceTest {
         Project project = Project.builder()
                 .title("project")
                 .status(ProjectStatus.DRAFT)
+                .member(Member.builder().role(Role.ROLE_USER).isActive(true).build())
                 .build();
         ProjectCollaborator collaborator = ProjectCollaborator.builder()
                 .project(project)
@@ -51,5 +54,37 @@ class ProjectCollaboratorQueryServiceTest {
         // then
         assertEquals(1, result.collaborators().size());
         assertEquals(ProjectCollaboratorRole.EDITOR, result.collaborators().get(0).role());
+    }
+
+    @Test
+    @DisplayName("guest project owner는 guest collaborator 목록을 조회한다")
+    void getAll_GuestOwner_ReturnsGuestCollaborators() {
+        // given
+        Member guestOwner = Member.builder().role(Role.ROLE_GUEST).isActive(true).build();
+        Project guestProject = Project.builder()
+                .title("guest project")
+                .status(ProjectStatus.DRAFT)
+                .member(guestOwner)
+                .build();
+        Member invitedGuest = Member.builder()
+                .nickname("invited guest")
+                .role(Role.ROLE_GUEST)
+                .isActive(true)
+                .build();
+        ReflectionTestUtils.setField(invitedGuest, "id", 20L);
+        ProjectCollaborator collaborator = ProjectCollaborator.builder()
+                .project(guestProject)
+                .member(invitedGuest)
+                .role(ProjectCollaboratorRole.EDITOR)
+                .build();
+        when(projectQueryService.getOwnedProject(1L, 99L)).thenReturn(guestProject);
+        when(collaboratorRepository.findAllByProjectId(1L)).thenReturn(List.of(collaborator));
+
+        // when
+        var result = service.getAll(1L, 99L);
+
+        // then
+        assertEquals(20L, result.collaborators().getFirst().memberId());
+        assertEquals(ProjectCollaboratorRole.EDITOR, result.collaborators().getFirst().role());
     }
 }

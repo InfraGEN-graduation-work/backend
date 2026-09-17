@@ -8,14 +8,15 @@ import org.springframework.transaction.annotation.Transactional;
 import com.infragen.infragen.domain.project.converter.ProjectConverter;
 import com.infragen.infragen.domain.project.dto.response.ProjectResDTO;
 import com.infragen.infragen.domain.project.entity.Project;
-import com.infragen.infragen.domain.project.entity.ProjectNode;
 import com.infragen.infragen.domain.project.entity.ProjectEdge;
-import com.infragen.infragen.domain.project.repository.ProjectRepository;
-import com.infragen.infragen.domain.project.repository.projection.ProjectAccessPreview;
-import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
-import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
+import com.infragen.infragen.domain.project.entity.ProjectNode;
 import com.infragen.infragen.domain.project.exception.ProjectException;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
+import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
+import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
+import com.infragen.infragen.domain.project.repository.ProjectRepository;
+import com.infragen.infragen.domain.project.repository.projection.ProjectAccessPreview;
+
 import lombok.RequiredArgsConstructor;
 
 @Service
@@ -52,5 +53,18 @@ public class ProjectQueryService {
         List<ProjectEdge> edges = projectEdgeRepository.findAllByProjectId(projectId);
 
         return ProjectConverter.toProjectDetailResDTO(project, nodes, edges);
+    }
+
+    /**
+     * owner 또는 EDITOR collaborator의 graph 수정용 프로젝트를 반환한다.
+     *
+     * @throws ProjectException 쓰기 권한이 없거나 프로젝트가 존재하지 않는 경우
+     */
+    @Transactional(readOnly = true)
+    public Project getWriteableProject(Long projectId, Long memberId) {
+        projectAccessService.requireWriteAccess(projectId, memberId);
+
+        return projectRepository.findById(projectId)
+            .orElseThrow(() -> new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
     }
 }

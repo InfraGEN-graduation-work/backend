@@ -289,7 +289,7 @@ class ProjectCommandServiceTest {
                 "New Title", "New Desc", List.of(nodeReq), List.of(edgeReq), 0L
         );
 
-        when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(project);
+        when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(project);
         when(projectCollaborationVersionService.issueNextVersionForFullReplace(projectId, 0L)).thenReturn(1L);
         when(projectNodeRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(projectEdgeRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -307,7 +307,7 @@ class ProjectCommandServiceTest {
         assertEquals("node-1", result.edges().get(0).sourceNodeId());
         assertEquals("node-1", result.edges().get(0).targetNodeId());
 
-        verify(projectQueryService).getOwnedProject(projectId, memberId);
+        verify(projectQueryService).getWriteableProject(projectId, memberId);
         verify(projectCollaborationVersionService).issueNextVersionForFullReplace(projectId, 0L);
         verify(projectEdgeRepository).deleteByProjectId(projectId);
         verify(projectNodeRepository).deleteByProjectId(projectId);
@@ -338,7 +338,7 @@ class ProjectCommandServiceTest {
                 "Project", "Description", List.of(firstNode, secondNode), Collections.emptyList(), 0L
         );
 
-        when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(project);
+        when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(project);
         when(projectCollaborationVersionService.issueNextVersionForFullReplace(projectId, 0L)).thenReturn(1L);
         when(projectNodeRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -372,7 +372,7 @@ class ProjectCommandServiceTest {
         CollaborationException versionConflict = new CollaborationException(
                 CollaborationErrorCode.VERSION_CONFLICT
         );
-        when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(project);
+        when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(project);
         doThrow(versionConflict).when(projectCollaborationVersionService)
                 .issueNextVersionForFullReplace(projectId, 5L);
 
@@ -399,7 +399,7 @@ class ProjectCommandServiceTest {
                 "New Title", "New Desc", Collections.emptyList(), Collections.emptyList(), 0L
         );
 
-        when(projectQueryService.getOwnedProject(projectId, memberId))
+        when(projectQueryService.getWriteableProject(projectId, memberId))
             .thenThrow(new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
 
         // when & then
@@ -407,7 +407,7 @@ class ProjectCommandServiceTest {
                 () -> projectCommandService.updateProject(projectId, updateRequest, memberId));
 
         assertEquals(ProjectErrorCode.PROJECT_NOT_FOUND, exception.getCode());
-        verify(projectQueryService).getOwnedProject(projectId, memberId);
+        verify(projectQueryService).getWriteableProject(projectId, memberId);
         verify(projectEdgeRepository, never()).deleteByProjectId(anyLong());
     }
 
@@ -417,7 +417,8 @@ class ProjectCommandServiceTest {
         // given
         Long memberId = 1L;
         Long projectId = 100L;
-        Project project = Project.builder().build();
+        Member owner = Member.builder().role(Role.ROLE_USER).isActive(true).build();
+        Project project = Project.builder().member(owner).build();
 
         when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(project);
 
@@ -474,7 +475,8 @@ class ProjectCommandServiceTest {
         // given
         Long projectId = 100L;
         Long memberId = 1L;
-        Project project = Project.builder().build();
+        Member owner = Member.builder().role(Role.ROLE_USER).isActive(true).build();
+        Project project = Project.builder().member(owner).build();
         DataAccessResourceFailureException failure = new DataAccessResourceFailureException("snapshot delete failed");
         when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(project);
         doThrow(failure).when(collaborationSnapshotRepository).deleteByProjectId(projectId);
@@ -489,5 +491,37 @@ class ProjectCommandServiceTest {
         verifyNoInteractions(collaborationOperationRepository, collaborationStateRepository,
                 projectCollaboratorRepository, generatedFileRepository, projectHistoryRepository,
                 projectEdgeRepository, projectNodeRepository, projectRepository);
+    }
+
+    @Test
+    @DisplayName("guest는 프로젝트를 삭제할 수 없다")
+    void deleteProject_GuestOwner_ThrowsAccessDenied() {
+        // given
+        Long projectId = 100L;
+        Long guestId = 99L;
+        Member guest = Member.builder().role(Role.ROLE_GUEST).isActive(true).build();
+        Project project = Project.builder().member(guest).build();
+        when(projectQueryService.getOwnedProject(projectId, guestId)).thenReturn(project);
+
+        // when
+        ProjectException exception = assertThrows(
+                ProjectException.class,
+                () -> projectCommandService.deleteProject(projectId, guestId)
+        );
+
+        // then
+        assertEquals(ProjectErrorCode.PROJECT_ACCESS_DENIED, exception.getCode());
+        verifyNoInteractions(
+                checkpointFailureRepository,
+                collaborationSnapshotRepository,
+                collaborationOperationRepository,
+                collaborationStateRepository,
+                projectCollaboratorRepository,
+                generatedFileRepository,
+                projectHistoryRepository,
+                projectEdgeRepository,
+                projectNodeRepository,
+                projectRepository
+        );
     }
 }

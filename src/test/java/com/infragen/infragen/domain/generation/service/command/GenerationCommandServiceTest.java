@@ -38,6 +38,8 @@ import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
 import com.infragen.infragen.domain.parsing.service.ParsingService;
 import com.infragen.infragen.domain.project.service.command.ProjectHistoryCommandService;
+import com.infragen.infragen.domain.project.exception.ProjectException;
+import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 import com.infragen.infragen.domain.project.entity.ProjectNode;
 import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
@@ -103,7 +105,7 @@ class GenerationCommandServiceTest {
             .files(files)
             .build();
 
-        when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(null);
+        when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(null);
         when(projectNodeRepository.findAllByProjectId(projectId)).thenReturn(List.of(storedNode));
         when(projectEdgeRepository.findAllByProjectId(projectId)).thenReturn(List.of());
         when(parsingService.parsing(any(ParsingReqDTO.class), eq(projectId))).thenReturn(parsingResult);
@@ -128,7 +130,7 @@ class GenerationCommandServiceTest {
             () -> assertEquals("local/.env", result.files().get(1).fileName()),
             () -> assertEquals(files.get(1).content(), result.files().get(1).content())
         );
-        verify(projectQueryService).getOwnedProject(projectId, memberId);
+        verify(projectQueryService).getWriteableProject(projectId, memberId);
         ArgumentCaptor<ParsingReqDTO> parsingRequest = ArgumentCaptor.forClass(ParsingReqDTO.class);
         verify(parsingService).parsing(parsingRequest.capture(), eq(projectId));
         assertEquals("stored-node", parsingRequest.getValue().getNodes().get(0).getNodeId());
@@ -161,7 +163,7 @@ class GenerationCommandServiceTest {
             .files(files)
             .build();
 
-        when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(null);
+        when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(null);
         when(parsingService.parsing(any(ParsingReqDTO.class), eq(projectId))).thenReturn(parsingResult);
         when(iaCGenerationService.generate(parsingResult, OutputFormat.TERRAFORM, deploymentTarget))
             .thenReturn(bundle);
@@ -181,7 +183,7 @@ class GenerationCommandServiceTest {
             () -> assertEquals("cloud/Dockerfile", result.files().get(0).fileName()),
             () -> assertEquals(files.get(0).content(), result.files().get(0).content())
         );
-        verify(projectQueryService).getOwnedProject(projectId, memberId);
+        verify(projectQueryService).getWriteableProject(projectId, memberId);
         verify(parsingService).parsing(any(ParsingReqDTO.class), eq(projectId));
         verify(iaCGenerationService).generate(parsingResult, OutputFormat.TERRAFORM, deploymentTarget);
         verify(projectHistoryCommandService).saveGeneratedHistory(projectId, memberId, files);
@@ -376,6 +378,33 @@ class GenerationCommandServiceTest {
     }
 
     @Test
+    @DisplayName("쓰기 권한이 없는 VIEWER는 저장 graph 조회 전에 거부한다")
+    void generate_ViewerAccessDenied_BeforeStoredGraphLookup() {
+        // given
+        Long projectId = 1L;
+        Long viewerId = 7L;
+        ProjectException accessDenied = new ProjectException(ProjectErrorCode.PROJECT_ACCESS_DENIED);
+        when(projectQueryService.getWriteableProject(projectId, viewerId)).thenThrow(accessDenied);
+
+        // when
+        ProjectException exception = assertThrows(
+                ProjectException.class,
+                () -> generationCommandService.generate(projectId, localRequest(), viewerId)
+        );
+
+        // then
+        assertEquals(ProjectErrorCode.PROJECT_ACCESS_DENIED, exception.getCode());
+        verify(projectQueryService).getWriteableProject(projectId, viewerId);
+        verifyNoInteractions(
+                projectNodeRepository,
+                projectEdgeRepository,
+                parsingService,
+                iaCGenerationService,
+                projectHistoryCommandService
+        );
+    }
+
+    @Test
     @DisplayName("파싱 실패 — 생성과 이력 저장을 호출하지 않음")
     void generate_ParsingFailure_DoesNotGenerateOrSaveHistory() {
         // given
@@ -384,7 +413,7 @@ class GenerationCommandServiceTest {
         GenerateReqDTO.Request request = localRequest();
         ParsingException parsingException = new ParsingException(ParsingErrorCode.EMPTY_NODES);
 
-        when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(null);
+        when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(null);
         when(parsingService.parsing(any(ParsingReqDTO.class), eq(projectId))).thenThrow(parsingException);
 
         // when
@@ -399,7 +428,7 @@ class GenerationCommandServiceTest {
 
         // then
         assertEquals(ParsingErrorCode.EMPTY_NODES, exception.getCode());
-        verify(projectQueryService).getOwnedProject(projectId, memberId);
+        verify(projectQueryService).getWriteableProject(projectId, memberId);
         verify(parsingService).parsing(any(ParsingReqDTO.class), eq(projectId));
         verifyNoInteractions(iaCGenerationService, projectHistoryCommandService);
     }
@@ -416,7 +445,7 @@ class GenerationCommandServiceTest {
             IaCGenerationErrorCode.INVALID_COMPONENT_STATE
         );
 
-        when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(null);
+        when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(null);
         when(parsingService.parsing(any(ParsingReqDTO.class), eq(projectId))).thenReturn(parsingResult);
         when(iaCGenerationService.generate(parsingResult, OutputFormat.DOCKER_COMPOSE))
             .thenThrow(generationException);
@@ -433,7 +462,7 @@ class GenerationCommandServiceTest {
 
         // then
         assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
-        verify(projectQueryService).getOwnedProject(projectId, memberId);
+        verify(projectQueryService).getWriteableProject(projectId, memberId);
         verify(parsingService).parsing(any(ParsingReqDTO.class), eq(projectId));
         verify(iaCGenerationService).generate(parsingResult, OutputFormat.DOCKER_COMPOSE);
         verifyNoInteractions(projectHistoryCommandService);

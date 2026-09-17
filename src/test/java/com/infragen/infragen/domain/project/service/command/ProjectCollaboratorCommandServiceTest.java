@@ -1,6 +1,7 @@
 package com.infragen.infragen.domain.project.service.command;
 
 import com.infragen.infragen.domain.member.entity.Member;
+import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.project.dto.request.ProjectCollaboratorReqDTO;
 import com.infragen.infragen.domain.project.entity.Project;
 import com.infragen.infragen.domain.project.entity.ProjectCollaborator;
@@ -155,20 +156,116 @@ class ProjectCollaboratorCommandServiceTest {
         assertEquals(ProjectErrorCode.COLLABORATOR_NOT_FOUND, exception.getCode());
     }
 
+    @Test
+    @DisplayName("guest project owner는 다른 guest를 초대하고 관리할 수 있다")
+    void guestOwner_CanManageGuestCollaborators() {
+        // given
+        Project guestProject = project(1L, 99L, Role.ROLE_GUEST);
+        Member guestCollaborator = member(20L, "guest collaborator", Role.ROLE_GUEST);
+        ProjectCollaborator collaborator = ProjectCollaborator.builder()
+                .project(guestProject)
+                .member(guestCollaborator)
+                .role(ProjectCollaboratorRole.VIEWER)
+                .build();
+        when(projectQueryService.getOwnedProject(1L, 99L)).thenReturn(guestProject);
+        when(collaboratorRepository.findByProjectIdAndMemberId(1L, 20L))
+                .thenReturn(Optional.empty(), Optional.of(collaborator));
+        when(memberQueryService.findById(20L)).thenReturn(guestCollaborator);
+        when(collaboratorRepository.save(any(ProjectCollaborator.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(collaboratorRepository.deleteByProjectIdAndMemberId(1L, 20L)).thenReturn(1L);
+
+        // when
+        var added = service.add(
+                1L,
+                99L,
+                new ProjectCollaboratorReqDTO.Add(20L, ProjectCollaboratorRole.EDITOR)
+        );
+        service.changeRole(
+                1L,
+                99L,
+                20L,
+                new ProjectCollaboratorReqDTO.ChangeRole(ProjectCollaboratorRole.EDITOR)
+        );
+        service.delete(1L, 99L, 20L);
+
+        // then
+        assertEquals(20L, added.memberId());
+        assertEquals(ProjectCollaboratorRole.EDITOR, added.role());
+        assertEquals(ProjectCollaboratorRole.EDITOR, collaborator.getRole());
+        verify(collaboratorRepository).deleteByProjectIdAndMemberId(1L, 20L);
+    }
+
+    @Test
+    @DisplayName("guest project owner는 일반 회원을 collaborator로 초대하거나 관리할 수 없다")
+    void guestOwner_CannotManageRegularMember() {
+        // given
+        Project guestProject = project(1L, 99L, Role.ROLE_GUEST);
+        Member regularMember = member(20L, "regular member", Role.ROLE_USER);
+        ProjectCollaborator collaborator = ProjectCollaborator.builder()
+                .project(guestProject)
+                .member(regularMember)
+                .role(ProjectCollaboratorRole.VIEWER)
+                .build();
+        when(projectQueryService.getOwnedProject(1L, 99L)).thenReturn(guestProject);
+        when(collaboratorRepository.findByProjectIdAndMemberId(1L, 20L))
+                .thenReturn(Optional.empty(), Optional.of(collaborator));
+        when(memberQueryService.findById(20L)).thenReturn(regularMember);
+
+        // when
+        ProjectException addException = assertThrows(
+                ProjectException.class,
+                () -> service.add(
+                        1L,
+                        99L,
+                        new ProjectCollaboratorReqDTO.Add(20L, ProjectCollaboratorRole.EDITOR)
+                )
+        );
+        ProjectException changeException = assertThrows(
+                ProjectException.class,
+                () -> service.changeRole(
+                        1L,
+                        99L,
+                        20L,
+                        new ProjectCollaboratorReqDTO.ChangeRole(ProjectCollaboratorRole.EDITOR)
+                )
+        );
+        ProjectException deleteException = assertThrows(
+                ProjectException.class,
+                () -> service.delete(1L, 99L, 20L)
+        );
+
+        // then
+        assertEquals(ProjectErrorCode.PROJECT_ACCESS_DENIED, addException.getCode());
+        assertEquals(ProjectErrorCode.PROJECT_ACCESS_DENIED, changeException.getCode());
+        assertEquals(ProjectErrorCode.PROJECT_ACCESS_DENIED, deleteException.getCode());
+        verify(collaboratorRepository, never()).save(any(ProjectCollaborator.class));
+        verify(collaboratorRepository, never()).deleteByProjectIdAndMemberId(1L, 20L);
+    }
+
     private Project project(Long projectId, Long ownerId) {
+        return project(projectId, ownerId, Role.ROLE_USER);
+    }
+
+    private Project project(Long projectId, Long ownerId, Role role) {
         Project project = Project.builder()
                 .title("project")
                 .status(ProjectStatus.DRAFT)
-                .member(member(ownerId, "owner"))
+                .member(member(ownerId, "owner", role))
                 .build();
         ReflectionTestUtils.setField(project, "id", projectId);
         return project;
     }
 
     private Member member(Long memberId, String nickname) {
+        return member(memberId, nickname, Role.ROLE_USER);
+    }
+
+    private Member member(Long memberId, String nickname, Role role) {
         Member member = Member.builder()
                 .nickname(nickname)
                 .isActive(true)
+                .role(role)
                 .build();
         ReflectionTestUtils.setField(member, "id", memberId);
         return member;

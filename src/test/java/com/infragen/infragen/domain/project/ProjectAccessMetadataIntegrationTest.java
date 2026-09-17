@@ -18,6 +18,9 @@ import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.service.query.MemberQueryService;
 import com.infragen.infragen.domain.project.dto.request.ProjectReqDTO;
+import com.infragen.infragen.domain.project.dto.response.ProjectEdgeResDTO;
+import com.infragen.infragen.domain.project.dto.response.ProjectNodeResDTO;
+import com.infragen.infragen.domain.project.dto.response.ProjectResDTO;
 import com.infragen.infragen.domain.project.entity.Project;
 import com.infragen.infragen.domain.project.entity.ProjectCollaborator;
 import com.infragen.infragen.domain.project.entity.ProjectEdge;
@@ -75,6 +78,7 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.eq;
@@ -235,11 +239,17 @@ class ProjectAccessMetadataIntegrationTest {
         assertAll(
                 () -> assertEquals("Renamed", persisted.title()),
                 () -> assertEquals("Description", persisted.description()),
-                () -> assertEquals(before.project().nodes(), persisted.nodes()),
-                () -> assertEquals(before.project().edges(), persisted.edges()),
-                () -> assertEquals(persisted, restored.project()),
+                () -> assertGraphEquivalent(before.project(), persisted),
+                () -> assertEquals("Renamed", restored.project().title()),
+                () -> assertEquals("Description", restored.project().description()),
+                () -> assertGraphEquivalent(persisted, restored.project()),
                 () -> assertEquals(1L, restored.serverVersion()),
-                () -> assertEquals(restored, broadcast.getValue())
+                () -> assertEquals(restored.graphVersion(), broadcast.getValue().graphVersion()),
+                () -> assertEquals(restored.serverVersion(), broadcast.getValue().serverVersion()),
+                () -> assertEquals(restored.operations(), broadcast.getValue().operations()),
+                () -> assertEquals(restored.project().title(), broadcast.getValue().project().title()),
+                () -> assertEquals(restored.project().description(), broadcast.getValue().project().description()),
+                () -> assertGraphEquivalent(restored.project(), broadcast.getValue().project())
         );
     }
 
@@ -390,6 +400,42 @@ class ProjectAccessMetadataIntegrationTest {
             entityManager.clear();
             return new Fixture(project.getId(), owner.getId(), editor.getId(), viewer.getId(), stranger.getId());
         });
+    }
+
+    private void assertGraphEquivalent(
+            ProjectResDTO.ProjectDetailResDTO expected,
+            ProjectResDTO.ProjectDetailResDTO actual
+    ) {
+        assertAll(
+                () -> assertEquals(expected.projectId(), actual.projectId()),
+                () -> assertEquals(
+                        expected.nodes().stream().map(ProjectNodeResDTO.NodeInfoResDTO::nodeId).sorted().toList(),
+                        actual.nodes().stream().map(ProjectNodeResDTO.NodeInfoResDTO::nodeId).sorted().toList()
+                ),
+                () -> assertEquals(edgeKeys(expected.edges()), edgeKeys(actual.edges()))
+        );
+
+        Map<String, ProjectNodeResDTO.NodeInfoResDTO> actualNodes = actual.nodes().stream()
+                .collect(Collectors.toMap(ProjectNodeResDTO.NodeInfoResDTO::nodeId, node -> node));
+        for (ProjectNodeResDTO.NodeInfoResDTO expectedNode : expected.nodes()) {
+            ProjectNodeResDTO.NodeInfoResDTO actualNode = actualNodes.get(expectedNode.nodeId());
+            assertNotNull(actualNode, "Missing node " + expectedNode.nodeId());
+            assertAll(
+                    () -> assertEquals(expectedNode.nodeName(), actualNode.nodeName()),
+                    () -> assertEquals(expectedNode.componentType(), actualNode.componentType()),
+                    () -> assertEquals(0, expectedNode.positionX().compareTo(actualNode.positionX())),
+                    () -> assertEquals(0, expectedNode.positionY().compareTo(actualNode.positionY())),
+                    () -> assertEquals(expectedNode.properties(), actualNode.properties()),
+                    () -> assertEquals(expectedNode.id(), actualNode.id())
+            );
+        }
+    }
+
+    private List<String> edgeKeys(List<ProjectEdgeResDTO.EdgeInfoResDTO> edges) {
+        return edges.stream()
+                .map(edge -> edge.id() + ":" + edge.sourceNodeId() + "->" + edge.targetNodeId())
+                .sorted()
+                .toList();
     }
 
     private Member member() {

@@ -159,7 +159,7 @@ class ProjectFullReplaceSnapshotIntegrationTest {
         transactionManager.commits = 0;
         transactionManager.rollbacks = 0;
 
-        when(projectQueryService.getOwnedProject(1L, 2L)).thenReturn(project);
+        when(projectQueryService.getWriteableProject(1L, 2L)).thenReturn(project);
         when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
         when(versionService.issueNextVersionForFullReplace(1L, 50L)).thenAnswer(invocation -> {
             state.advanceServerVersion();

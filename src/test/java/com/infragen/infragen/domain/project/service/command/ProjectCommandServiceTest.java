@@ -22,6 +22,7 @@ import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
 import com.infragen.infragen.domain.project.repository.ProjectHistoryRepository;
 import com.infragen.infragen.domain.project.repository.GeneratedFileRepository;
 import com.infragen.infragen.domain.project.repository.ProjectCollaboratorRepository;
+import com.infragen.infragen.domain.project.repository.ProjectCollaboratorInvitationRepository;
 import com.infragen.infragen.domain.project.dto.request.ProjectNodeReqDTO;
 import com.infragen.infragen.domain.project.dto.request.ProjectEdgeReqDTO;
 import com.infragen.infragen.domain.project.exception.ProjectException;
@@ -90,6 +91,9 @@ class ProjectCommandServiceTest {
 
     @Mock
     private ProjectCollaboratorRepository projectCollaboratorRepository;
+
+    @Mock
+    private ProjectCollaboratorInvitationRepository projectCollaboratorInvitationRepository;
 
     @Mock
     private ProjectCollaborationStateRepository collaborationStateRepository;
@@ -427,7 +431,8 @@ class ProjectCommandServiceTest {
 
         // then
         InOrder deletion = inOrder(projectQueryService, checkpointFailureRepository, collaborationSnapshotRepository,
-                collaborationOperationRepository, collaborationStateRepository, projectCollaboratorRepository,
+                collaborationOperationRepository, collaborationStateRepository,
+                projectCollaboratorInvitationRepository, projectCollaboratorRepository,
                 generatedFileRepository, projectHistoryRepository, projectEdgeRepository, projectNodeRepository,
                 projectRepository);
         deletion.verify(projectQueryService).getOwnedProject(projectId, memberId);
@@ -435,6 +440,7 @@ class ProjectCommandServiceTest {
         deletion.verify(collaborationSnapshotRepository).deleteByProjectId(projectId);
         deletion.verify(collaborationOperationRepository).deleteByProjectId(projectId);
         deletion.verify(collaborationStateRepository).deleteByProjectId(projectId);
+        deletion.verify(projectCollaboratorInvitationRepository).deleteByProjectId(projectId);
         deletion.verify(projectCollaboratorRepository).deleteByProjectId(projectId);
         deletion.verify(generatedFileRepository).deleteByProjectId(projectId);
         deletion.verify(projectHistoryRepository).deleteByProjectId(projectId);
@@ -461,7 +467,8 @@ class ProjectCommandServiceTest {
         assertEquals(ProjectErrorCode.PROJECT_NOT_FOUND, exception.getCode());
         verify(projectQueryService).getOwnedProject(projectId, memberId);
         verifyNoInteractions(checkpointFailureRepository, collaborationSnapshotRepository,
-                collaborationOperationRepository, collaborationStateRepository, projectCollaboratorRepository);
+                collaborationOperationRepository, collaborationStateRepository,
+                projectCollaboratorInvitationRepository, projectCollaboratorRepository);
         verify(generatedFileRepository, never()).deleteByProjectId(anyLong());
         verify(projectHistoryRepository, never()).deleteByProjectId(anyLong());
         verify(projectEdgeRepository, never()).deleteByProjectId(anyLong());
@@ -489,8 +496,47 @@ class ProjectCommandServiceTest {
         assertSame(failure, thrown);
         verify(checkpointFailureRepository).deleteByProjectId(projectId);
         verifyNoInteractions(collaborationOperationRepository, collaborationStateRepository,
-                projectCollaboratorRepository, generatedFileRepository, projectHistoryRepository,
+                projectCollaboratorInvitationRepository, projectCollaboratorRepository,
+                generatedFileRepository, projectHistoryRepository,
                 projectEdgeRepository, projectNodeRepository, projectRepository);
+    }
+
+    @Test
+    @DisplayName("초대 삭제가 실패하면 이후 종속 데이터와 프로젝트 삭제를 중단한다")
+    void deleteProject_InvitationDeletionFails_StopsDeletion() {
+        // given
+        Long projectId = 100L;
+        Long memberId = 1L;
+        Project project = Project.builder()
+                .member(Member.builder().role(Role.ROLE_USER).isActive(true).build())
+                .build();
+        DataAccessResourceFailureException failure = new DataAccessResourceFailureException(
+                "invitation delete failed"
+        );
+        when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(project);
+        doThrow(failure).when(projectCollaboratorInvitationRepository).deleteByProjectId(projectId);
+
+        // when
+        DataAccessResourceFailureException thrown = assertThrows(
+                DataAccessResourceFailureException.class,
+                () -> projectCommandService.deleteProject(projectId, memberId)
+        );
+
+        // then
+        assertSame(failure, thrown);
+        verify(checkpointFailureRepository).deleteByProjectId(projectId);
+        verify(collaborationSnapshotRepository).deleteByProjectId(projectId);
+        verify(collaborationOperationRepository).deleteByProjectId(projectId);
+        verify(collaborationStateRepository).deleteByProjectId(projectId);
+        verify(projectCollaboratorInvitationRepository).deleteByProjectId(projectId);
+        verifyNoInteractions(
+                projectCollaboratorRepository,
+                generatedFileRepository,
+                projectHistoryRepository,
+                projectEdgeRepository,
+                projectNodeRepository,
+                projectRepository
+        );
     }
 
     @Test
@@ -516,6 +562,7 @@ class ProjectCommandServiceTest {
                 collaborationSnapshotRepository,
                 collaborationOperationRepository,
                 collaborationStateRepository,
+                projectCollaboratorInvitationRepository,
                 projectCollaboratorRepository,
                 generatedFileRepository,
                 projectHistoryRepository,

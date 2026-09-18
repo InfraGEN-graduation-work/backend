@@ -34,6 +34,16 @@ public class MemberQueryService {
                 .orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
     }
 
+    /**
+     * 초대코드에 해당하는 활성 회원을 조회한다.
+     *
+     * @throws MemberException 코드에 해당하는 활성 회원이 없는 경우
+     */
+    public Member findByInvitationCode(String invitationCode) {
+        return memberRepository.findByInvitationCode(invitationCode)
+                .orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
+    }
+
     public MemberResDTO.MemberResultDTO getMe(Long memberId) {
         return MemberConverter.toResultDTO(findById(memberId));
     }

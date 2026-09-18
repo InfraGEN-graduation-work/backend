@@ -30,6 +30,7 @@ import com.infragen.infragen.domain.project.exception.ProjectException;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.repository.GeneratedFileRepository;
 import com.infragen.infragen.domain.project.repository.ProjectCollaboratorRepository;
+import com.infragen.infragen.domain.project.repository.ProjectCollaboratorInvitationRepository;
 import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
 import com.infragen.infragen.domain.project.repository.ProjectHistoryRepository;
 import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
@@ -53,6 +54,7 @@ public class ProjectCommandService {
     private final ProjectCollaborationVersionService projectCollaborationVersionService;
     private final ApplicationEventPublisher eventPublisher;
     private final ProjectCollaboratorRepository projectCollaboratorRepository;
+    private final ProjectCollaboratorInvitationRepository projectCollaboratorInvitationRepository;
     private final ProjectCollaborationStateRepository collaborationStateRepository;
     private final ProjectCollaborationOperationRepository collaborationOperationRepository;
     private final ProjectCollaborationSnapshotRepository collaborationSnapshotRepository;
@@ -176,6 +178,7 @@ public class ProjectCommandService {
         collaborationSnapshotRepository.deleteByProjectId(projectId);
         collaborationOperationRepository.deleteByProjectId(projectId);
         collaborationStateRepository.deleteByProjectId(projectId);
+        projectCollaboratorInvitationRepository.deleteByProjectId(projectId);
         projectCollaboratorRepository.deleteByProjectId(projectId);
 
         // generated file은 history를, edge는 node를 참조하므로 자식부터 삭제한다.

@@ -6,7 +6,15 @@ import com.infragen.infragen.domain.member.enums.Role;
 
 import lombok.Builder;
 
-public class MemberResDTO {
+public final class MemberResDTO {
+    private MemberResDTO() {
+    }
+
+    @Builder
+    public record InvitationCode(
+            String inviteCode
+    ) {}
+
     @Builder
     public record MemberResultDTO(
             Long id,

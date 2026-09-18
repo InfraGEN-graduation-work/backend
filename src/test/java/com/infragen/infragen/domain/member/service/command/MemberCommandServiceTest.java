@@ -9,6 +9,7 @@ import com.infragen.infragen.domain.member.enums.SocialProvider;
 import com.infragen.infragen.domain.member.exception.MemberException;
 import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
+import com.infragen.infragen.domain.project.repository.ProjectCollaboratorInvitationRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -36,6 +37,9 @@ class MemberCommandServiceTest {
 
     @Mock
     private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private ProjectCollaboratorInvitationRepository invitationRepository;
 
     @Mock
     private TokenService tokenService;
@@ -299,7 +303,8 @@ class MemberCommandServiceTest {
         memberCommandService.withdrawMember(1L);
 
         // then
-        var inOrder = inOrder(member, tokenService);
+        var inOrder = inOrder(invitationRepository, member, tokenService);
+        inOrder.verify(invitationRepository).deleteAllByMemberId(1L);
         inOrder.verify(member).withdraw();
         inOrder.verify(tokenService).deleteRefreshToken(1L);
     }
@@ -316,6 +321,7 @@ class MemberCommandServiceTest {
         // then
         assertEquals(MemberErrorCode.MEMBER_NOT_FOUND, exception.getCode());
         verify(member, never()).withdraw();
+        verify(invitationRepository, never()).deleteAllByMemberId(anyLong());
         verifyNoInteractions(tokenService);
     }
 
@@ -333,6 +339,7 @@ class MemberCommandServiceTest {
         // then
         assertEquals(MemberErrorCode.GUEST_ACTION_NOT_ALLOWED, exception.getCode());
         verify(member, never()).withdraw();
+        verify(invitationRepository, never()).deleteAllByMemberId(anyLong());
         verify(tokenService, never()).deleteRefreshToken(99L);
     }
 

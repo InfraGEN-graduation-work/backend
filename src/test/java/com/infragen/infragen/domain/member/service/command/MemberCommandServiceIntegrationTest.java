@@ -8,6 +8,12 @@ import com.infragen.infragen.domain.member.enums.SocialProvider;
 import com.infragen.infragen.domain.member.exception.MemberException;
 import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
+import com.infragen.infragen.domain.project.entity.Project;
+import com.infragen.infragen.domain.project.entity.ProjectCollaboratorInvitation;
+import com.infragen.infragen.domain.project.enums.ProjectStatus;
+import com.infragen.infragen.domain.project.enums.ProjectCollaboratorRole;
+import com.infragen.infragen.domain.project.repository.ProjectCollaboratorInvitationRepository;
+import com.infragen.infragen.domain.project.repository.ProjectRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +27,8 @@ import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
+
+import java.time.LocalDateTime;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.doThrow;
@@ -60,6 +68,12 @@ class MemberCommandServiceIntegrationTest {
     private MemberRepository memberRepository;
 
     @Autowired
+    private ProjectRepository projectRepository;
+
+    @Autowired
+    private ProjectCollaboratorInvitationRepository invitationRepository;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @MockitoBean
@@ -67,6 +81,8 @@ class MemberCommandServiceIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        invitationRepository.deleteAll();
+        projectRepository.deleteAll();
         memberRepository.deleteAll();
     }
 
@@ -124,6 +140,26 @@ class MemberCommandServiceIntegrationTest {
                 .role(Role.ROLE_USER)
                 .isActive(true)
                 .build());
+        Member owner = memberRepository.save(Member.builder()
+                .email("owner@test.com")
+                .password("password")
+                .nickname("owner")
+                .role(Role.ROLE_USER)
+                .isActive(true)
+                .build());
+        Project project = projectRepository.save(Project.builder()
+                .title("project-title")
+                .description("project-description")
+                .status(ProjectStatus.DRAFT)
+                .member(owner)
+                .build());
+        invitationRepository.save(ProjectCollaboratorInvitation.builder()
+                .project(project)
+                .invitedBy(owner)
+                .invitee(member)
+                .role(ProjectCollaboratorRole.VIEWER)
+                .expiresAt(LocalDateTime.now().plusHours(24))
+                .build());
 
         memberCommandService.withdrawMember(member.getId());
 
@@ -134,7 +170,8 @@ class MemberCommandServiceIntegrationTest {
         assertAll(
                 () -> assertEquals(0, active),
                 () -> assertNotNull(deletedAt),
-                () -> assertTrue(memberRepository.findById(member.getId()).isEmpty())
+                () -> assertTrue(memberRepository.findById(member.getId()).isEmpty()),
+                () -> assertEquals(0L, invitationRepository.count())
         );
         verify(tokenService).deleteRefreshToken(member.getId());
     }
@@ -149,6 +186,26 @@ class MemberCommandServiceIntegrationTest {
                 .role(Role.ROLE_USER)
                 .isActive(true)
                 .build());
+        Member owner = memberRepository.save(Member.builder()
+                .email("owner-failure@test.com")
+                .password("password")
+                .nickname("owner")
+                .role(Role.ROLE_USER)
+                .isActive(true)
+                .build());
+        Project project = projectRepository.save(Project.builder()
+                .title("project-failure")
+                .description("project-description")
+                .status(ProjectStatus.DRAFT)
+                .member(owner)
+                .build());
+        invitationRepository.save(ProjectCollaboratorInvitation.builder()
+                .project(project)
+                .invitedBy(owner)
+                .invitee(member)
+                .role(ProjectCollaboratorRole.VIEWER)
+                .expiresAt(LocalDateTime.now().plusHours(24))
+                .build());
         doThrow(new RedisConnectionFailureException("Redis unavailable"))
                 .when(tokenService).deleteRefreshToken(member.getId());
 
@@ -162,7 +219,8 @@ class MemberCommandServiceIntegrationTest {
                 () -> assertEquals("withdraw-failure@test.com", unchanged.getEmail()),
                 () -> assertEquals("nickname", unchanged.getNickname()),
                 () -> assertTrue(unchanged.getIsActive()),
-                () -> assertNull(unchanged.getDeletedAt())
+                () -> assertNull(unchanged.getDeletedAt()),
+                () -> assertEquals(1L, invitationRepository.count())
         );
     }
 }

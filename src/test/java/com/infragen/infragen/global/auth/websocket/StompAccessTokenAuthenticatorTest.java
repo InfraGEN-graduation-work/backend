@@ -51,6 +51,25 @@ class StompAccessTokenAuthenticatorTest {
     }
 
     @Test
+    @DisplayName("유효한 ROLE_GUEST access token도 STOMP principal로 인증한다")
+    void authenticate_ActiveGuest_ReturnsGuestAuthority() {
+        // given
+        String token = "guest-access-token";
+        Claims claims = claims("42", "access");
+        when(jwtUtil.getClaims(token)).thenReturn(claims);
+        when(redisUtil.isBlackList(token)).thenReturn(false);
+        when(customUserDetailsService.loadUserByUsername("42"))
+                .thenReturn(userDetails(42L, true, Role.ROLE_GUEST));
+
+        // when
+        Authentication result = authenticator().authenticate(token);
+
+        // then
+        assertEquals(42L, ((CustomUserDetails) result.getPrincipal()).getMemberId());
+        assertEquals("ROLE_GUEST", result.getAuthorities().iterator().next().getAuthority());
+    }
+
+    @Test
     @DisplayName("만료되거나 손상된 token을 유효하지 않은 token으로 거부한다")
     void authenticate_ExpiredOrMalformedToken_ThrowsInvalidToken() {
         // given
@@ -99,10 +118,14 @@ class StompAccessTokenAuthenticatorTest {
     }
 
     private CustomUserDetails userDetails(Long memberId, boolean active) {
+        return userDetails(memberId, active, Role.ROLE_USER);
+    }
+
+    private CustomUserDetails userDetails(Long memberId, boolean active, Role role) {
         return new CustomUserDetails(
                 MemberResDTO.MemberResultDTO.builder()
                         .id(memberId)
-                        .role(Role.ROLE_USER)
+                        .role(role)
                         .isActive(active)
                         .build()
         );

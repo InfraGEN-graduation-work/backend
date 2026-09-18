@@ -6,6 +6,7 @@ import com.infragen.infragen.domain.member.converter.MemberConverter;
 import com.infragen.infragen.domain.member.dto.request.MemberReqDTO;
 import com.infragen.infragen.domain.member.dto.response.MemberResDTO;
 import com.infragen.infragen.domain.member.entity.Member;
+import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.enums.SocialProvider;
 import com.infragen.infragen.domain.member.exception.MemberException;
 import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
@@ -61,9 +62,28 @@ public class MemberCommandService {
             );
     }
 
+    /** 요청마다 서로 다른 guest member를 생성한다. */
+    @Transactional
+    public MemberResDTO.MemberResultDTO createGuestMember() {
+        String guestIdentifier = UUID.randomUUID().toString();
+        String email = "guest-" + guestIdentifier + "@guest.infragen.local";
+        String nickname = "게스트-" + guestIdentifier.substring(0, 8);
+        String randomPassword = UUID.randomUUID().toString();
+        String encodedPassword = passwordEncoder.encode(randomPassword);
+
+        Member guestMember = MemberConverter.toGuestEntity(
+                email,
+                nickname,
+                encodedPassword
+        );
+
+        return MemberConverter.toResultDTO(memberRepository.save(guestMember));
+    }
+
     public MemberResDTO.MemberResultDTO updateMember(Long memberId, MemberReqDTO.UpdateMember request) {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
+        ensureNotGuest(member);
         if (member.getSocialProvider() != null && request.password() != null) {
             throw new MemberException(MemberErrorCode.CANNOT_CHANGE_SOCIAL_PASSWORD);
         }
@@ -79,7 +99,14 @@ public class MemberCommandService {
     public void withdrawMember(Long memberId) {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
+        ensureNotGuest(member);
         member.withdraw();
         tokenService.deleteRefreshToken(memberId);
+    }
+
+    private void ensureNotGuest(Member member) {
+        if (member.getRole() == Role.ROLE_GUEST) {
+            throw new MemberException(MemberErrorCode.GUEST_ACTION_NOT_ALLOWED);
+        }
     }
 }

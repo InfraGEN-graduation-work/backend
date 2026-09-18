@@ -112,6 +112,33 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("게스트 로그인 - guest member 정보로 토큰 발급")
+    void guestLogin_Success() {
+        // given
+        MemberResDTO.MemberResultDTO guestMember = MemberResDTO.MemberResultDTO.builder()
+                .id(99L)
+                .role(Role.ROLE_GUEST)
+                .build();
+        AuthResDTO.TokenResultDTO tokens = new AuthResDTO.TokenResultDTO(
+                "guest_access_token",
+                "guest_refresh_token"
+        );
+        when(memberCommandService.createGuestMember()).thenReturn(guestMember);
+        when(tokenService.issueTokens(99L, Role.ROLE_GUEST)).thenReturn(tokens);
+
+        // when
+        AuthResDTO.TokenResultDTO result = authService.guestLogin();
+
+        // then
+        assertAll(
+                () -> assertEquals("guest_access_token", result.getAccessToken()),
+                () -> assertEquals("guest_refresh_token", result.getRefreshToken())
+        );
+        verify(memberCommandService).createGuestMember();
+        verify(tokenService).issueTokens(99L, Role.ROLE_GUEST);
+    }
+
+    @Test
     @DisplayName("소셜 로그인 - 신규 가입 시나리오 성공 검증")
     void socialLogin_NewMember_Success() {
         // given
@@ -187,5 +214,33 @@ class AuthServiceTest {
         verify(tokenService).consumeRefreshToken(refreshToken);
 
         assertThrows(AuthException.class, () -> authService.reissueToken(refreshToken));
+    }
+
+    @Test
+    @DisplayName("게스트 refresh token 재발급 - guest role로 access token 재발급")
+    void reissueToken_GuestMember_PreservesGuestRole() {
+        // given
+        String refreshToken = "guest-refresh-token";
+        Member guestMember = Member.builder()
+                .role(Role.ROLE_GUEST)
+                .isActive(true)
+                .build();
+        ReflectionTestUtils.setField(guestMember, "id", 99L);
+        AuthResDTO.TokenResultDTO tokens = new AuthResDTO.TokenResultDTO(
+                "new-guest-access-token",
+                "new-guest-refresh-token"
+        );
+
+        when(tokenService.consumeRefreshToken(refreshToken)).thenReturn(99L);
+        when(memberQueryService.findById(99L)).thenReturn(guestMember);
+        when(tokenService.issueTokens(99L, Role.ROLE_GUEST)).thenReturn(tokens);
+
+        // when
+        AuthResDTO.TokenResultDTO result = authService.reissueToken(refreshToken);
+
+        // then
+        assertEquals("new-guest-access-token", result.getAccessToken());
+        verify(tokenService).consumeRefreshToken(refreshToken);
+        verify(tokenService).issueTokens(99L, Role.ROLE_GUEST);
     }
 }

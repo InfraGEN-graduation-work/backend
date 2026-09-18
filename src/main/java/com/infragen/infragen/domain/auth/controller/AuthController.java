@@ -44,6 +44,15 @@ public class AuthController {
         return handleTokenResponse(tokens, response, AuthSuccessCode.LOGIN_SUCCESS);
     }
 
+    // guest member를 생성한 뒤 일반 로그인과 동일한 token 응답을 반환한다.
+    @PostMapping("/guest")
+    public ApiResponse<AuthResDTO.AccessTokenResultDTO> guestLogin(
+        HttpServletResponse response
+    ) {
+        AuthResDTO.TokenResultDTO tokens = authService.guestLogin();
+        return handleTokenResponse(tokens, response, AuthSuccessCode.GUEST_LOGIN_SUCCESS);
+    }
+
     // 소셜 로그인
     @PostMapping("/login/{provider}")
     public ApiResponse<AuthResDTO.AccessTokenResultDTO> socialLogin(

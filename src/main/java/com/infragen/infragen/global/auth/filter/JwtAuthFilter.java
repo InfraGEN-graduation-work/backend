@@ -20,6 +20,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
@@ -55,7 +56,16 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             String memberId = claims.getSubject();
 
             if (memberId != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                UserDetails userDetails = customUserDetailsService.loadUserByUsername(memberId);
+                UserDetails userDetails;
+                try {
+                    userDetails = customUserDetailsService.loadUserByUsername(memberId);
+                } catch (UsernameNotFoundException | NumberFormatException exception) {
+                    throw new AuthException(AuthErrorCode.TOKEN_INVALID);
+                }
+
+                if (!userDetails.isEnabled()) {
+                    throw new AuthException(AuthErrorCode.TOKEN_INVALID);
+                }
 
                 if (jwtUtil.validateToken(token)) {
                     Authentication auth = new UsernamePasswordAuthenticationToken(

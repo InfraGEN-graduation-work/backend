@@ -1,6 +1,7 @@
 package com.infragen.infragen.domain.project.service.command;
 
 import com.infragen.infragen.domain.member.entity.Member;
+import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.service.query.MemberQueryService;
 import com.infragen.infragen.domain.project.converter.ProjectCollaboratorConverter;
 import com.infragen.infragen.domain.project.dto.request.ProjectCollaboratorReqDTO;
@@ -40,6 +41,7 @@ public class ProjectCollaboratorCommandService {
         }
 
         Member member = memberQueryService.findById(request.memberId());
+        ensureGuestOwnerOnlyManagesGuests(project, member);
         return ProjectCollaboratorConverter.toDetail(collaboratorRepository.save(
                 ProjectCollaborator.builder()
                         .project(project)
@@ -59,8 +61,9 @@ public class ProjectCollaboratorCommandService {
             Long memberId,
             ProjectCollaboratorReqDTO.ChangeRole request
     ) {
-        projectQueryService.getOwnedProject(projectId, ownerId);
+        Project project = projectQueryService.getOwnedProject(projectId, ownerId);
         ProjectCollaborator collaborator = findCollaborator(projectId, memberId);
+        ensureGuestOwnerOnlyManagesGuests(project, collaborator.getMember());
         collaborator.changeRole(request.role());
     }
 
@@ -69,7 +72,11 @@ public class ProjectCollaboratorCommandService {
      */
     @Transactional
     public void delete(Long projectId, Long ownerId, Long memberId) {
-        projectQueryService.getOwnedProject(projectId, ownerId);
+        Project project = projectQueryService.getOwnedProject(projectId, ownerId);
+        if (project.getMember().getRole() == Role.ROLE_GUEST) {
+            ProjectCollaborator collaborator = findCollaborator(projectId, memberId);
+            ensureGuestOwnerOnlyManagesGuests(project, collaborator.getMember());
+        }
         if (collaboratorRepository.deleteByProjectIdAndMemberId(projectId, memberId) == 0) {
             throw new ProjectException(ProjectErrorCode.COLLABORATOR_NOT_FOUND);
         }
@@ -78,5 +85,12 @@ public class ProjectCollaboratorCommandService {
     private ProjectCollaborator findCollaborator(Long projectId, Long memberId) {
         return collaboratorRepository.findByProjectIdAndMemberId(projectId, memberId)
                 .orElseThrow(() -> new ProjectException(ProjectErrorCode.COLLABORATOR_NOT_FOUND));
+    }
+
+    private void ensureGuestOwnerOnlyManagesGuests(Project project, Member collaboratorMember) {
+        if (project.getMember().getRole() == Role.ROLE_GUEST
+                && collaboratorMember.getRole() != Role.ROLE_GUEST) {
+            throw new ProjectException(ProjectErrorCode.PROJECT_ACCESS_DENIED);
+        }
     }
 }

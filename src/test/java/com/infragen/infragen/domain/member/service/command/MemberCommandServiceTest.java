@@ -2,7 +2,9 @@ package com.infragen.infragen.domain.member.service.command;
 
 import com.infragen.infragen.domain.auth.service.TokenService;
 import com.infragen.infragen.domain.member.dto.request.MemberReqDTO;
+import com.infragen.infragen.domain.member.dto.response.MemberResDTO;
 import com.infragen.infragen.domain.member.entity.Member;
+import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.enums.SocialProvider;
 import com.infragen.infragen.domain.member.exception.MemberException;
 import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
@@ -10,13 +12,18 @@ import com.infragen.infragen.domain.member.repository.MemberRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Optional;
+import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
@@ -53,6 +60,36 @@ class MemberCommandServiceTest {
         verify(member).updateProfile("newNickname", "encodedPassword");
         assertEquals(1L, result.id());
         assertEquals("newNickname", result.nickname());
+    }
+
+    @Test
+    void createGuestMember_CreatesUniqueGuestMembers() {
+        // given
+        when(passwordEncoder.encode(anyString())).thenReturn("encodedGuestPassword");
+        when(memberRepository.save(any(Member.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        MemberResDTO.MemberResultDTO first = memberCommandService.createGuestMember();
+        MemberResDTO.MemberResultDTO second = memberCommandService.createGuestMember();
+
+        // then
+        ArgumentCaptor<Member> memberCaptor = ArgumentCaptor.forClass(Member.class);
+        verify(memberRepository, times(2)).save(memberCaptor.capture());
+        List<Member> savedMembers = memberCaptor.getAllValues();
+
+        assertAll(
+                () -> assertEquals(Role.ROLE_GUEST, first.role()),
+                () -> assertEquals(Role.ROLE_GUEST, second.role()),
+                () -> assertNotEquals(first.email(), second.email()),
+                () -> assertTrue(savedMembers.get(0).getEmail().startsWith("guest-")),
+                () -> assertTrue(savedMembers.get(1).getEmail().startsWith("guest-")),
+                () -> assertEquals(Role.ROLE_GUEST, savedMembers.get(0).getRole()),
+                () -> assertEquals(Role.ROLE_GUEST, savedMembers.get(1).getRole()),
+                () -> assertTrue(savedMembers.get(0).getIsActive()),
+                () -> assertTrue(savedMembers.get(1).getIsActive())
+        );
+        verify(passwordEncoder, times(2)).encode(anyString());
     }
 
     @Test
@@ -122,6 +159,26 @@ class MemberCommandServiceTest {
     }
 
     @Test
+    void updateMember_GuestMember_ThrowsForbidden() {
+        // given
+        when(memberRepository.findById(99L)).thenReturn(Optional.of(guestMember()));
+
+        // when
+        MemberException exception = assertThrows(
+                MemberException.class,
+                () -> memberCommandService.updateMember(
+                        99L,
+                        new MemberReqDTO.UpdateMember("new-name", null)
+                )
+        );
+
+        // then
+        assertEquals(MemberErrorCode.GUEST_ACTION_NOT_ALLOWED, exception.getCode());
+        verifyNoInteractions(passwordEncoder);
+        verify(tokenService, never()).deleteRefreshToken(99L);
+    }
+
+    @Test
     void withdrawMember_Success() {
         // given
         when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
@@ -148,5 +205,32 @@ class MemberCommandServiceTest {
         assertEquals(MemberErrorCode.MEMBER_NOT_FOUND, exception.getCode());
         verify(member, never()).withdraw();
         verifyNoInteractions(tokenService);
+    }
+
+    @Test
+    void withdrawMember_GuestMember_ThrowsForbidden() {
+        // given
+        when(memberRepository.findById(99L)).thenReturn(Optional.of(guestMember()));
+
+        // when
+        MemberException exception = assertThrows(
+                MemberException.class,
+                () -> memberCommandService.withdrawMember(99L)
+        );
+
+        // then
+        assertEquals(MemberErrorCode.GUEST_ACTION_NOT_ALLOWED, exception.getCode());
+        verify(member, never()).withdraw();
+        verify(tokenService, never()).deleteRefreshToken(99L);
+    }
+
+    private Member guestMember() {
+        return Member.builder()
+                .email("guest-99@guest.infragen.local")
+                .password("encoded")
+                .nickname("Guest 99")
+                .role(Role.ROLE_GUEST)
+                .isActive(true)
+                .build();
     }
 }

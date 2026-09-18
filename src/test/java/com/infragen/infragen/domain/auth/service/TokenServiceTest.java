@@ -52,6 +52,26 @@ class TokenServiceTest {
     }
 
     @Test
+    @DisplayName("게스트 token 발급 - guest role을 access token에 전달하고 member별 refresh token을 저장")
+    void issueTokens_GuestRole_PreservesRoleAndMemberScope() {
+        // given
+        when(jwtUtil.createAccessToken(99L, Role.ROLE_GUEST)).thenReturn("guest_access_token");
+        when(jwtUtil.createRefreshToken(99L)).thenReturn("guest_refresh_token");
+        when(jwtUtil.getExpirationTime("guest_refresh_token")).thenReturn(2000L);
+
+        // when
+        AuthResDTO.TokenResultDTO result = tokenService.issueTokens(99L, Role.ROLE_GUEST);
+
+        // then
+        assertAll(
+                () -> assertEquals("guest_access_token", result.getAccessToken()),
+                () -> assertEquals("guest_refresh_token", result.getRefreshToken())
+        );
+        verify(jwtUtil).createAccessToken(99L, Role.ROLE_GUEST);
+        verify(redisUtil).set("RT:99", "guest_refresh_token", Duration.ofMillis(2000L));
+    }
+
+    @Test
     @DisplayName("로그아웃 토큰 subject 검증 - 빈 subject면 인증 예외 발생")
     void extractMemberIdForLogout_BlankSubject_ThrowsAuthException() {
         // given

@@ -53,6 +53,13 @@ public class AuthService {
         }
     }
 
+    /** guest member를 생성하고 기존 access·refresh token 발급 흐름을 사용한다. */
+    public AuthResDTO.TokenResultDTO guestLogin() {
+        MemberResDTO.MemberResultDTO guestMember = memberCommandService.createGuestMember();
+
+        return tokenService.issueTokens(guestMember.id(), guestMember.role());
+    }
+
     // 소셜 로그인
     public AuthResDTO.TokenResultDTO socialLogin(String provider, AuthReqDTO.SocialLoginDTO request) {
         SocialProvider socialProvider = SocialProvider.fromString(provider);

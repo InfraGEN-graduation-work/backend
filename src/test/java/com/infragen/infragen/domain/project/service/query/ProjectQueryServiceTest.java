@@ -257,6 +257,46 @@ class ProjectQueryServiceTest {
     }
 
     @Test
+    @DisplayName("쓰기 권한이 있는 EDITOR도 저장용 프로젝트를 조회한다")
+    void getWriteableProject_Editor_ReturnsProject() {
+        // given
+        Long projectId = 100L;
+        Long editorId = 7L;
+        Project project = Project.builder().title("Shared").build();
+        ReflectionTestUtils.setField(project, "id", projectId);
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project));
+
+        // when
+        Project result = projectQueryService.getWriteableProject(projectId, editorId);
+
+        // then
+        assertEquals(project, result);
+        verify(projectAccessService).requireWriteAccess(projectId, editorId);
+        verify(projectRepository).findById(projectId);
+    }
+
+    @Test
+    @DisplayName("쓰기 권한이 없는 VIEWER는 프로젝트 graph 조회 전에 거부한다")
+    void getWriteableProject_Viewer_RejectsBeforeProjectLookup() {
+        // given
+        Long projectId = 100L;
+        Long viewerId = 8L;
+        doThrow(new ProjectException(ProjectErrorCode.PROJECT_ACCESS_DENIED))
+                .when(projectAccessService).requireWriteAccess(projectId, viewerId);
+
+        // when
+        ProjectException exception = assertThrows(
+                ProjectException.class,
+                () -> projectQueryService.getWriteableProject(projectId, viewerId)
+        );
+
+        // then
+        assertEquals(ProjectErrorCode.PROJECT_ACCESS_DENIED, exception.getCode());
+        verify(projectAccessService).requireWriteAccess(projectId, viewerId);
+        verify(projectRepository, never()).findById(projectId);
+    }
+
+    @Test
     @DisplayName("프로젝트 상세 조회 - 존재하지 않거나 타인 프로젝트 조회 시 예외 발생")
     void getProjectDetail_NotFound_ThrowsException() {
         // given

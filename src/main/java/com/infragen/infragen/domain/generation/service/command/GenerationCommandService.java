@@ -56,6 +56,7 @@ public class GenerationCommandService {
         Long memberId
     ) {
         validateRequest(request);
+        projectQueryService.getWriteableProject(projectId, memberId);
         return generateAndSave(projectId, storedGraph(projectId), memberId,
             parsingResult -> generateBundle(request, parsingResult));
     }
@@ -121,7 +122,6 @@ public class GenerationCommandService {
     ) {
         log.info("인프라 코드 생성 요청: projectId={}, memberId={}", projectId, memberId);
 
-        projectQueryService.getOwnedProject(projectId, memberId);
         ParsingResultDTO parsingResult = parsingService.parsing(request, projectId);
         IaCFileDTO.BundleResDTO bundle = bundleGenerator.apply(parsingResult);
 

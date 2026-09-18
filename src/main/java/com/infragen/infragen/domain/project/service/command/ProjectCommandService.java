@@ -16,6 +16,7 @@ import com.infragen.infragen.domain.collaboration.repository.ProjectCollaboratio
 import com.infragen.infragen.domain.collaboration.repository.ProjectCollaborationStateRepository;
 import com.infragen.infragen.domain.collaboration.service.command.ProjectCollaborationVersionService;
 import com.infragen.infragen.domain.member.entity.Member;
+import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.service.query.MemberQueryService;
 import com.infragen.infragen.domain.project.converter.ProjectConverter;
 import com.infragen.infragen.domain.project.converter.ProjectEdgeConverter;
@@ -79,7 +80,9 @@ public class ProjectCommandService {
     ) {
         log.info("프로젝트 수정 요청: id={}, memberId={}", projectId, memberId);
 
-        Project project = projectQueryService.getOwnedProject(projectId, memberId);
+        // owner 또는 EDITOR collaborator의 graph 수정용 프로젝트를 반환한다.
+        Project project = projectQueryService.getWriteableProject(projectId, memberId);
+
         Long serverVersion = projectCollaborationVersionService.issueNextVersionForFullReplace(
                 projectId,
                 request.baseVersion()
@@ -164,6 +167,9 @@ public class ProjectCommandService {
         log.info("프로젝트 삭제: id={}, memberId={}", projectId, memberId);
 
         Project project = projectQueryService.getOwnedProject(projectId, memberId);
+        if (project.getMember().getRole() == Role.ROLE_GUEST) {
+            throw new ProjectException(ProjectErrorCode.PROJECT_ACCESS_DENIED);
+        }
 
         // project를 참조하는 협업 기록을 부모 삭제 전에 정리한다.
         checkpointFailureRepository.deleteByProjectId(projectId);

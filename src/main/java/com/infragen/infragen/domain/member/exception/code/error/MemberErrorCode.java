@@ -28,6 +28,11 @@ public enum MemberErrorCode implements BaseErrorCode {
             "소셜 로그인 회원은 비밀번호를 변경할 수 없습니다.",
             "MEMBER400_2"
     ),
+    GUEST_ACTION_NOT_ALLOWED(
+            HttpStatus.FORBIDDEN,
+            "게스트 계정에서는 회원 정보를 변경할 수 없습니다.",
+            "MEMBER403_1"
+    ),
     ;
 
     private final HttpStatus httpStatus;

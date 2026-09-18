@@ -37,11 +37,6 @@ public enum ProjectSuccessCode implements BaseSuccessCode {
         "프로젝트 collaborator 조회에 성공했습니다.",
         "PROJECT200_5"
     ),
-    PROJECT_COLLABORATOR_ADD_SUCCESS(
-        HttpStatus.CREATED,
-        "프로젝트 collaborator 등록에 성공했습니다.",
-        "PROJECT201_2"
-    ),
     PROJECT_COLLABORATOR_ROLE_UPDATE_SUCCESS(
         HttpStatus.OK,
         "프로젝트 collaborator 역할 변경에 성공했습니다.",
@@ -56,6 +51,31 @@ public enum ProjectSuccessCode implements BaseSuccessCode {
         HttpStatus.OK,
         "프로젝트 이름과 설명 수정에 성공했습니다.",
         "PROJECT200_8"
+    ),
+    PROJECT_COLLABORATOR_INVITATION_SENT_LIST_GET_SUCCESS(
+        HttpStatus.OK,
+        "프로젝트 발신 초대 목록 조회에 성공했습니다.",
+        "PROJECT200_9"
+    ),
+    PROJECT_COLLABORATOR_INVITATION_RECEIVED_LIST_GET_SUCCESS(
+        HttpStatus.OK,
+        "받은 프로젝트 초대 목록 조회에 성공했습니다.",
+        "PROJECT200_10"
+    ),
+    PROJECT_COLLABORATOR_INVITATION_SEND_SUCCESS(
+        HttpStatus.CREATED,
+        "프로젝트 초대 발신에 성공했습니다.",
+        "PROJECT201_3"
+    ),
+    PROJECT_COLLABORATOR_INVITATION_ACCEPT_SUCCESS(
+        HttpStatus.OK,
+        "프로젝트 초대 수락에 성공했습니다.",
+        "PROJECT200_11"
+    ),
+    PROJECT_COLLABORATOR_INVITATION_DECLINE_SUCCESS(
+        HttpStatus.OK,
+        "프로젝트 초대 거절에 성공했습니다.",
+        "PROJECT200_12"
     ),
     ;
     private final HttpStatus httpStatus;

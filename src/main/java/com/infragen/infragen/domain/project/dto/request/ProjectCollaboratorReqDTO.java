@@ -12,12 +12,6 @@ public final class ProjectCollaboratorReqDTO {
     private ProjectCollaboratorReqDTO() {
     }
 
-    public record Add(
-            @NotNull Long memberId,
-            @NotNull ProjectCollaboratorRole role
-    ) {
-    }
-
     public record ChangeRole(
             @NotNull ProjectCollaboratorRole role
     ) {

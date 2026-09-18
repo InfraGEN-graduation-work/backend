@@ -3,9 +3,14 @@ package com.infragen.infragen.domain.project.controller;
 import com.infragen.infragen.domain.member.dto.response.MemberResDTO;
 import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.project.dto.request.ProjectCollaboratorReqDTO;
+import com.infragen.infragen.domain.project.dto.response.ProjectCollaboratorInvitationResDTO;
 import com.infragen.infragen.domain.project.dto.response.ProjectCollaboratorResDTO;
 import com.infragen.infragen.domain.project.enums.ProjectCollaboratorRole;
+import com.infragen.infragen.domain.project.exception.ProjectException;
+import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.service.command.ProjectCollaboratorCommandService;
+import com.infragen.infragen.domain.project.service.command.ProjectCollaboratorInvitationCommandService;
+import com.infragen.infragen.domain.project.service.query.ProjectCollaboratorInvitationQueryService;
 import com.infragen.infragen.domain.project.service.query.ProjectCollaboratorQueryService;
 import com.infragen.infragen.global.apiPayload.handler.GeneralExceptionAdvice;
 import com.infragen.infragen.global.auth.CustomUserDetails;
@@ -36,6 +41,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -66,6 +72,12 @@ class ProjectCollaboratorControllerWebTest {
 
     @MockitoBean
     private ProjectCollaboratorCommandService collaboratorCommandService;
+
+    @MockitoBean
+    private ProjectCollaboratorInvitationQueryService invitationQueryService;
+
+    @MockitoBean
+    private ProjectCollaboratorInvitationCommandService invitationCommandService;
 
     @SpringBootConfiguration
     @EnableAutoConfiguration
@@ -110,25 +122,112 @@ class ProjectCollaboratorControllerWebTest {
     }
 
     @Test
-    @DisplayName("collaborator 등록 요청은 201과 등록 결과를 반환한다")
-    void addCollaborator_ReturnsCreated() throws Exception {
+    @DisplayName("owner의 발신 초대 목록 조회는 항목과 성공 코드를 반환한다")
+    void getSentInvitations_Owner_ReturnsList() throws Exception {
         // given
-        when(collaboratorCommandService.add(eq(1L), eq(7L), any(ProjectCollaboratorReqDTO.Add.class)))
-                .thenReturn(ProjectCollaboratorResDTO.Detail.builder()
-                        .memberId(8L)
-                        .nickname("editor")
-                        .role(ProjectCollaboratorRole.EDITOR)
-                        .build());
+        when(invitationQueryService.getSentInvitations(1L, 7L)).thenReturn(
+                ProjectCollaboratorInvitationResDTO.SentList.builder()
+                        .invitations(List.of(ProjectCollaboratorInvitationResDTO.SentItem.builder()
+                                .invitationId(21L)
+                                .inviteeNickname("guest-editor")
+                                .role(ProjectCollaboratorRole.EDITOR)
+                                .status(ProjectCollaboratorInvitationResDTO.InvitationStatus.PENDING)
+                                .build()))
+                        .build()
+        );
 
-        // when & then
-        mockMvc.perform(post(BASE_URL, 1L)
-                        .with(authenticatedAs(7L))
-                        .contentType(APPLICATION_JSON)
-                        .content("{\"memberId\":8,\"role\":\"EDITOR\"}"))
-                .andExpect(status().isCreated())
+        // when
+        var response = mockMvc.perform(get(BASE_URL + "/invitations", 1L)
+                .with(authenticatedAs(7L)));
+
+        // then
+        response.andExpect(status().isOk())
                 .andExpect(jsonPath("$.isSuccess").value(true))
-                .andExpect(jsonPath("$.code").value("PROJECT201_2"))
-                .andExpect(jsonPath("$.result.memberId").value(8));
+                .andExpect(jsonPath("$.code").value("PROJECT200_9"))
+                .andExpect(jsonPath("$.result.invitations[0].invitationId").value(21))
+                .andExpect(jsonPath("$.result.invitations[0].inviteeNickname").value("guest-editor"))
+                .andExpect(jsonPath("$.result.invitations[0].status").value("PENDING"));
+        verify(invitationQueryService).getSentInvitations(1L, 7L);
+    }
+
+    @Test
+    @DisplayName("소유하지 않은 프로젝트의 발신 초대 목록은 조회할 수 없다")
+    void getSentInvitations_NotOwned_ReturnsNotFound() throws Exception {
+        // given
+        when(invitationQueryService.getSentInvitations(1L, 9L))
+                .thenThrow(new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
+
+        // when
+        var response = mockMvc.perform(get(BASE_URL + "/invitations", 1L)
+                .with(authenticatedAs(9L)));
+
+        // then
+        response.andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.isSuccess").value(false))
+                .andExpect(jsonPath("$.code").value("PROJECT404_1"));
+        verify(invitationQueryService).getSentInvitations(1L, 9L);
+    }
+
+    @Test
+    @DisplayName("초대 발신 요청은 초대를 만들고 201 성공 응답을 반환한다")
+    void inviteCollaborator_ValidRequest_ReturnsCreated() throws Exception {
+        // given
+        String requestBody = "{\"inviteeCode\":\"A1B2C3D4\",\"role\":\"EDITOR\"}";
+
+        // when
+        var response = mockMvc.perform(post(BASE_URL + "/invitations", 1L)
+                .with(authenticatedAs(7L))
+                .contentType(APPLICATION_JSON)
+                .content(requestBody));
+
+        // then
+        response.andExpect(status().isCreated())
+                .andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.code").value("PROJECT201_3"));
+        verify(invitationCommandService).invite(
+                1L,
+                7L,
+                "A1B2C3D4",
+                ProjectCollaboratorRole.EDITOR
+        );
+    }
+
+    @Test
+    @DisplayName("형식이 잘못된 초대코드는 초대 발신에 사용할 수 없다")
+    void inviteCollaborator_InvalidInviteeCode_ReturnsBadRequest() throws Exception {
+        // given
+        String requestBody = "{\"inviteeCode\":\"bad\",\"role\":\"EDITOR\"}";
+
+        // when
+        var response = mockMvc.perform(post(BASE_URL + "/invitations", 1L)
+                .with(authenticatedAs(7L))
+                .contentType(APPLICATION_JSON)
+                .content(requestBody));
+
+        // then
+        response.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.isSuccess").value(false))
+                .andExpect(jsonPath("$.code").value("COMMON400_1"));
+        verifyNoInteractions(invitationCommandService);
+    }
+
+    @Test
+    @DisplayName("초대 역할이 없으면 초대 발신 요청을 거부한다")
+    void inviteCollaborator_WithoutRole_ReturnsBadRequest() throws Exception {
+        // given
+        String requestBody = "{\"inviteeCode\":\"A1B2C3D4\"}";
+
+        // when
+        var response = mockMvc.perform(post(BASE_URL + "/invitations", 1L)
+                .with(authenticatedAs(7L))
+                .contentType(APPLICATION_JSON)
+                .content(requestBody));
+
+        // then
+        response.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.isSuccess").value(false))
+                .andExpect(jsonPath("$.code").value("COMMON400_1"));
+        verifyNoInteractions(invitationCommandService);
     }
 
     @Test
@@ -157,18 +256,25 @@ class ProjectCollaboratorControllerWebTest {
     }
 
     @Test
-    @DisplayName("collaborator 등록 요청에 memberId가 없으면 validation 오류를 반환한다")
-    void addCollaborator_WithoutMemberId_ReturnsBadRequest() throws Exception {
-        // when & then
-        mockMvc.perform(post(BASE_URL, 1L)
+    @DisplayName("memberId 직접 등록 요청은 초대코드 사용 오류를 반환한다")
+    void postMemberIdAdd_Disabled_ReturnsForbidden() throws Exception {
+        // given
+        String requestBody = "{\"memberId\":8,\"role\":\"EDITOR\"}";
+        doThrow(new ProjectException(ProjectErrorCode.PROJECT_ACCESS_DENIED))
+                .when(collaboratorCommandService)
+                .rejectMemberIdAddition(1L, 7L);
+
+        // when
+        var response = mockMvc.perform(post(BASE_URL, 1L)
                         .with(authenticatedAs(7L))
                         .contentType(APPLICATION_JSON)
-                        .content("{\"role\":\"EDITOR\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.isSuccess").value(false))
-                .andExpect(jsonPath("$.code").value("COMMON400_1"));
+                        .content(requestBody));
 
-        verifyNoInteractions(collaboratorCommandService);
+        // then
+        response.andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.isSuccess").value(false))
+                .andExpect(jsonPath("$.code").value("PROJECT403_1"));
+        verify(collaboratorCommandService).rejectMemberIdAddition(1L, 7L);
     }
 
     private static RequestPostProcessor authenticatedAs(Long memberId) {

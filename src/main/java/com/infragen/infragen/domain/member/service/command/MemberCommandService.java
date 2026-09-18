@@ -24,6 +24,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional
 public class MemberCommandService {
+    private static final int MAX_INVITATION_CODE_GENERATION_ATTEMPTS = 10;
+
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
@@ -35,6 +37,7 @@ public class MemberCommandService {
         }
         String encodedPassword = passwordEncoder.encode(request.getPassword());
         Member newMember = MemberConverter.toEntity(request, encodedPassword);
+        ensureUniqueInvitationCode(newMember);
 
         return MemberConverter.toResultDTO(memberRepository.save(newMember));
     }
@@ -55,6 +58,7 @@ public class MemberCommandService {
                     String randomPassword = UUID.randomUUID().toString();
                     String encodedPassword = passwordEncoder.encode(randomPassword);
                     Member newMember = MemberConverter.toSocialEntity(email, nickname, socialId, provider, encodedPassword);
+                    ensureUniqueInvitationCode(newMember);
 
                     log.info("신규 소셜 회원 생성: provider={}, socialId={}", provider, socialId);
                     return MemberConverter.toResultDTO(memberRepository.save(newMember));
@@ -76,8 +80,24 @@ public class MemberCommandService {
                 nickname,
                 encodedPassword
         );
+        ensureUniqueInvitationCode(guestMember);
 
         return MemberConverter.toResultDTO(memberRepository.save(guestMember));
+    }
+
+    /** 현재 회원의 초대코드를 보장한다. 구형 또는 누락된 코드는 row lock 아래에서 교체한다. */
+    @Transactional
+    public MemberResDTO.InvitationCode ensureInvitationCode(Long memberId) {
+        Member member = memberRepository.findByIdForUpdate(memberId)
+                .orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
+        String previousCode = member.getInvitationCode();
+        String invitationCode = member.ensureInvitationCode();
+
+        if (!invitationCode.equals(previousCode)) {
+            ensureUniqueInvitationCode(member);
+        }
+
+        return MemberConverter.toInvitationCode(member.getInvitationCode());
     }
 
     public MemberResDTO.MemberResultDTO updateMember(Long memberId, MemberReqDTO.UpdateMember request) {
@@ -108,5 +128,18 @@ public class MemberCommandService {
         if (member.getRole() == Role.ROLE_GUEST) {
             throw new MemberException(MemberErrorCode.GUEST_ACTION_NOT_ALLOWED);
         }
+    }
+
+    private void ensureUniqueInvitationCode(Member member) {
+        for (int attempt = 0; attempt < MAX_INVITATION_CODE_GENERATION_ATTEMPTS; attempt++) {
+            if (memberRepository.countRowsByInvitationCode(member.getInvitationCode()) == 0) {
+                return;
+            }
+            if (member.getId() != null) {
+                throw new MemberException(MemberErrorCode.INVITATION_CODE_GENERATION_FAILED);
+            }
+            member.regenerateInvitationCode();
+        }
+        throw new MemberException(MemberErrorCode.INVITATION_CODE_GENERATION_FAILED);
     }
 }

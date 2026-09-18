@@ -6,7 +6,7 @@ import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.enums.SocialProvider;
 
-public class MemberConverter {
+public final class MemberConverter {
     private MemberConverter() {
     }
 
@@ -23,6 +23,12 @@ public class MemberConverter {
                 .role(member.getRole())
                 .isActive(member.getIsActive())
                 .createdAt(member.getCreatedAt())
+                .build();
+    }
+
+    public static MemberResDTO.InvitationCode toInvitationCode(String invitationCode) {
+        return MemberResDTO.InvitationCode.builder()
+                .inviteCode(invitationCode)
                 .build();
     }
 

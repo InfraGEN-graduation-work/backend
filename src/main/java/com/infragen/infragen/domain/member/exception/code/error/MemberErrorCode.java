@@ -18,6 +18,11 @@ public enum MemberErrorCode implements BaseErrorCode {
             "이미 가입된 이메일입니다.",
             "MEMBER409_1"
     ),
+    INVITATION_CODE_IMMUTABLE(
+            HttpStatus.CONFLICT,
+            "저장된 초대코드는 변경할 수 없습니다.",
+            "MEMBER409_2"
+    ),
     INVALID_SOCIAL_PROVIDER(
             HttpStatus.BAD_REQUEST,
             "해당 이메일은 다른 소셜 로그인으로 가입되어 있습니다.",
@@ -32,6 +37,11 @@ public enum MemberErrorCode implements BaseErrorCode {
             HttpStatus.FORBIDDEN,
             "게스트 계정에서는 회원 정보를 변경할 수 없습니다.",
             "MEMBER403_1"
+    ),
+    INVITATION_CODE_GENERATION_FAILED(
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            "초대코드 발급에 실패했습니다.",
+            "MEMBER500_1"
     ),
     ;
 

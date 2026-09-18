@@ -17,6 +17,14 @@ public interface MemberControllerDocs {
             @AuthenticationPrincipal CustomUserDetails userDetails
     );
 
+    @Operation(
+            summary = "내 초대코드 발급 또는 조회",
+            description = "인증된 회원의 초대코드를 보장하고 본인 코드만 반환합니다."
+    )
+    ApiResponse<MemberResDTO.InvitationCode> ensureInvitationCode(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    );
+
     @Operation(summary = "로그아웃 API", description = "액세스 토큰을 블랙리스트에 등록하고 리프레시 토큰을 삭제합니다.")
     ApiResponse<String> logout(
             @AuthenticationPrincipal CustomUserDetails userDetails,

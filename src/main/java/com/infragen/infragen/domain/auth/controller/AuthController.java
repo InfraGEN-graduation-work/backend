@@ -6,6 +6,8 @@ import com.infragen.infragen.domain.auth.exception.AuthException;
 import com.infragen.infragen.domain.auth.exception.code.error.AuthErrorCode;
 import com.infragen.infragen.domain.auth.exception.code.success.AuthSuccessCode;
 import com.infragen.infragen.domain.auth.service.AuthService;
+import com.infragen.infragen.domain.auth.service.EmailVerificationService;
+import com.infragen.infragen.domain.auth.controller.docs.AuthControllerDocs;
 import com.infragen.infragen.global.apiPayload.ApiResponse;
 import com.infragen.infragen.global.auth.RefreshTokenCookieWriter;
 import com.infragen.infragen.global.properties.JwtProperties;
@@ -19,10 +21,18 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/auth")
-public class AuthController {
+public class AuthController implements AuthControllerDocs {
+    private final EmailVerificationService emailVerificationService;
     private final AuthService authService;
     private final JwtProperties jwtProperties;
     private final RefreshTokenCookieWriter refreshTokenCookieWriter;
+
+    @Override
+    @PostMapping("/email/code")
+    public ApiResponse<Void> sendEmailCode(@RequestBody @Valid AuthReqDTO.SendEmailCode request) {
+        emailVerificationService.sendCode(request.email());
+        return ApiResponse.onSuccess(AuthSuccessCode.EMAIL_CODE_SEND_SUCCESS, null);
+    }
 
     // 일반 회원가입
     @PostMapping("/signup") 

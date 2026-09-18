@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 @Getter
 @AllArgsConstructor
 public enum AuthSuccessCode implements BaseSuccessCode {
+    EMAIL_CODE_SEND_SUCCESS(HttpStatus.OK, "인증 메일을 발송했습니다.", "AUTH200_4"),
     SIGNUP_SUCCESS(HttpStatus.CREATED, "회원가입에 성공했습니다.", "AUTH201_1"),
     LOGIN_SUCCESS(HttpStatus.OK, "로그인에 성공했습니다.", "AUTH200_1"),
     GUEST_LOGIN_SUCCESS(HttpStatus.OK, "게스트 로그인에 성공했습니다.", "AUTH200_2"),

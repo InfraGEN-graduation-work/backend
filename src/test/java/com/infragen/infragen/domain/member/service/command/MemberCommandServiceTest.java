@@ -1,6 +1,10 @@
 package com.infragen.infragen.domain.member.service.command;
 
 import com.infragen.infragen.domain.auth.service.TokenService;
+import com.infragen.infragen.domain.auth.service.EmailVerificationService;
+import com.infragen.infragen.domain.auth.dto.request.AuthReqDTO;
+import com.infragen.infragen.domain.auth.exception.AuthException;
+import com.infragen.infragen.domain.auth.exception.code.error.AuthErrorCode;
 import com.infragen.infragen.domain.member.dto.request.MemberReqDTO;
 import com.infragen.infragen.domain.member.dto.response.MemberResDTO;
 import com.infragen.infragen.domain.member.entity.Member;
@@ -29,6 +33,43 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class MemberCommandServiceTest {
+    @Mock
+    private EmailVerificationService emailVerificationService;
+
+    @Test
+    void createMember_InvalidEmailCode_DoesNotCreateMember() {
+        // given
+        var request = AuthReqDTO.SignupDTO.builder().email("user@example.com")
+                .password("password123").nickname("user").verificationCode("123456").build();
+        doThrow(new AuthException(AuthErrorCode.EMAIL_CODE_INVALID))
+                .when(emailVerificationService).verifyAndConsume("user@example.com", "123456");
+
+        // when
+        AuthException error = assertThrows(AuthException.class, () -> memberCommandService.createMember(request));
+
+        // then
+        assertEquals(AuthErrorCode.EMAIL_CODE_INVALID, error.getCode());
+        verify(memberRepository, never()).save(any());
+        verifyNoInteractions(passwordEncoder);
+    }
+
+    @Test
+    void createMember_ValidEmailCode_VerifiesBeforeSaving() {
+        // given
+        var request = AuthReqDTO.SignupDTO.builder().email("user@example.com")
+                .password("password123").nickname("user").verificationCode("012345").build();
+        when(passwordEncoder.encode("password123")).thenReturn("encoded");
+        when(memberRepository.save(any(Member.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        var result = memberCommandService.createMember(request);
+
+        // then
+        var order = inOrder(emailVerificationService, memberRepository);
+        order.verify(emailVerificationService).verifyAndConsume("user@example.com", "012345");
+        order.verify(memberRepository).save(any(Member.class));
+        assertEquals("user@example.com", result.email());
+    }
 
     @Mock
     private MemberRepository memberRepository;

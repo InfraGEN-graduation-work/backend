@@ -15,7 +15,7 @@ public class EmailVerificationRepository {
             if redis.call('EXISTS', KEYS[2]) == 1 then return 0 end
             local count = tonumber(redis.call('GET', KEYS[3]) or '0')
             if count >= 10 then return 0 end
-            redis.call('SET', KEYS[2], ARGV[1], 'EX', 60)
+            redis.call('SET', KEYS[2], ARGV[1], 'EX', 30)
             count = redis.call('INCR', KEYS[3])
             if count == 1 then redis.call('EXPIRE', KEYS[3], 3600) end
             redis.call('DEL', KEYS[1])

@@ -4,8 +4,6 @@ import com.infragen.infragen.domain.auth.client.VerificationMailClient;
 import com.infragen.infragen.domain.auth.exception.AuthException;
 import com.infragen.infragen.domain.auth.exception.code.error.AuthErrorCode;
 import com.infragen.infragen.domain.auth.repository.EmailVerificationRepository;
-import com.infragen.infragen.domain.member.exception.MemberException;
-import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
 import com.infragen.infragen.global.properties.JwtProperties;
 import org.junit.jupiter.api.BeforeEach;
@@ -58,16 +56,16 @@ class EmailVerificationServiceTest {
     }
 
     @Test
-    void sendCode_DuplicateEmail_DoesNotSend() {
+    void sendCode_ExistingEmail_DoesNotRevealMembershipOrSend() {
         // given
         when(memberRepository.existsByEmail("user@example.com")).thenReturn(true);
 
         // when
-        MemberException error = assertThrows(MemberException.class, () -> service.sendCode("user@example.com"));
+        service.sendCode("user@example.com");
 
         // then
-        assertEquals(MemberErrorCode.DUPLICATE_EMAIL, error.getCode());
-        verifyNoInteractions(repository, mailClient);
+        verifyNoInteractions(repository);
+        verifyNoInteractions(mailClient);
     }
 
     @Test

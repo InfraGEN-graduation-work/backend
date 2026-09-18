@@ -4,8 +4,6 @@ import com.infragen.infragen.domain.auth.client.VerificationMailClient;
 import com.infragen.infragen.domain.auth.exception.AuthException;
 import com.infragen.infragen.domain.auth.exception.code.error.AuthErrorCode;
 import com.infragen.infragen.domain.auth.repository.EmailVerificationRepository;
-import com.infragen.infragen.domain.member.exception.MemberException;
-import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
 import com.infragen.infragen.global.properties.JwtProperties;
 import java.nio.charset.StandardCharsets;
@@ -36,7 +34,7 @@ public class EmailVerificationService {
 
     public void sendCode(String email) {
         if (memberRepository.existsByEmail(email)) {
-            throw new MemberException(MemberErrorCode.DUPLICATE_EMAIL);
+            return;
         }
         String emailKey = digest("email:" + canonicalEmail(email));
         String requestId = UUID.randomUUID().toString();

@@ -87,6 +87,22 @@ class AuthControllerEmailWebTest {
     }
 
     @Test
+    void signup_EmailOver100Characters_RejectsBeforeService() throws Exception {
+        // given
+        String email = "a".repeat(89) + "@example.com";
+        var request = post("/api/v1/auth/signup").contentType(APPLICATION_JSON)
+                .content("{\"email\":\"" + email + "\",\"password\":\"password123\","
+                        + "\"nickname\":\"user\",\"verificationCode\":\"012345\"}");
+
+        // when
+        var response = mockMvc.perform(request);
+
+        // then
+        response.andExpect(status().isBadRequest());
+        verifyNoInteractions(authService);
+    }
+
+    @Test
     void sendEmailCode_Throttled_Returns429() throws Exception {
         // given
         doThrow(new AuthException(AuthErrorCode.EMAIL_CODE_RATE_LIMITED))
@@ -99,6 +115,21 @@ class AuthControllerEmailWebTest {
 
         // then
         response.andExpect(status().isTooManyRequests()).andExpect(jsonPath("$.code").value("AUTH429_1"));
+    }
+
+    @Test
+    void sendEmailCode_ExistingEmail_ReturnsSameSuccessResponseWithoutSendingCode() throws Exception {
+        // given
+        doNothing().when(emailVerificationService).sendCode("existing@example.com");
+        var request = post("/api/v1/auth/email/code").contentType(APPLICATION_JSON)
+                .content("{\"email\":\"existing@example.com\"}");
+
+        // when
+        var response = mockMvc.perform(request);
+
+        // then
+        response.andExpect(status().isOk()).andExpect(jsonPath("$.code").value("AUTH200_4"));
+        verify(emailVerificationService).sendCode("existing@example.com");
     }
 
     @ParameterizedTest

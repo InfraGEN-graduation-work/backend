@@ -2,6 +2,7 @@ package com.infragen.infragen.domain.member.service.command;
 
 import com.infragen.infragen.domain.auth.dto.request.AuthReqDTO;
 import com.infragen.infragen.domain.auth.service.TokenService;
+import com.infragen.infragen.domain.auth.service.EmailVerificationService;
 import com.infragen.infragen.domain.member.converter.MemberConverter;
 import com.infragen.infragen.domain.member.dto.request.MemberReqDTO;
 import com.infragen.infragen.domain.member.dto.response.MemberResDTO;
@@ -27,12 +28,14 @@ public class MemberCommandService {
     private final MemberRepository memberRepository;
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
+    private final EmailVerificationService emailVerificationService;
 
     // 일반 회원가입
     public MemberResDTO.MemberResultDTO createMember(AuthReqDTO.SignupDTO request) {
         if (memberRepository.existsByEmail(request.getEmail())) {
             throw new MemberException(MemberErrorCode.DUPLICATE_EMAIL);
         }
+        emailVerificationService.verifyAndConsume(request.getEmail(), request.getVerificationCode());
         String encodedPassword = passwordEncoder.encode(request.getPassword());
         Member newMember = MemberConverter.toEntity(request, encodedPassword);
 

@@ -9,6 +9,9 @@ import org.springframework.http.HttpStatus;
 @Getter
 @AllArgsConstructor
 public enum AuthErrorCode implements BaseErrorCode {
+    EMAIL_CODE_INVALID(HttpStatus.BAD_REQUEST, "인증번호가 일치하지 않거나 만료되었습니다.", "AUTH400_3"),
+    EMAIL_CODE_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "인증 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.", "AUTH429_1"),
+    EMAIL_SEND_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "인증 메일을 발송하지 못했습니다. 잠시 후 다시 시도해주세요.", "AUTH503_1"),
     TOKEN_INVALID(
         HttpStatus.UNAUTHORIZED,
         "유효하지 않은 토큰입니다.",

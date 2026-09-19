@@ -27,6 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.infragen.infragen.domain.auth.dto.response.AuthResDTO;
 import com.infragen.infragen.domain.auth.service.AuthService;
+import com.infragen.infragen.domain.auth.service.EmailVerificationService;
 import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
@@ -80,6 +81,9 @@ class AuthControllerSecurityWebTest {
 
     @MockitoBean
     private AuthService authService;
+
+    @MockitoBean
+    private EmailVerificationService emailVerificationService;
 
     @MockitoBean
     private RedisUtil redisUtil;

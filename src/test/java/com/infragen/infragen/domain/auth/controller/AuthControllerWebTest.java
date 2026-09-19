@@ -25,6 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.infragen.infragen.domain.auth.dto.response.AuthResDTO;
 import com.infragen.infragen.domain.auth.service.AuthService;
+import com.infragen.infragen.domain.auth.service.EmailVerificationService;
 import com.infragen.infragen.global.apiPayload.handler.GeneralExceptionAdvice;
 import com.infragen.infragen.global.auth.RefreshTokenCookieWriter;
 import com.infragen.infragen.global.properties.JwtProperties;
@@ -44,6 +45,9 @@ class AuthControllerWebTest {
 
     @MockitoBean
     private AuthService authService;
+
+    @MockitoBean
+    private EmailVerificationService emailVerificationService;
 
     @MockitoBean
     private JwtProperties jwtProperties;

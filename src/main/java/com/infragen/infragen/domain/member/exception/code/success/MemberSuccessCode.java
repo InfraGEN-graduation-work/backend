@@ -28,6 +28,11 @@ public enum MemberSuccessCode implements BaseSuccessCode {
             "회원 탈퇴가 완료되었습니다.",
             "MEMBER200_4"
     ),
+    MEMBER_INVITATION_CODE_ENSURE_SUCCESS(
+            HttpStatus.OK,
+            "초대코드 조회에 성공했습니다.",
+            "MEMBER200_5"
+    ),
     ;
 
     private final HttpStatus httpStatus;

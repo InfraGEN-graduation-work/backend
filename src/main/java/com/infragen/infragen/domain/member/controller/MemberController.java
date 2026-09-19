@@ -41,6 +41,18 @@ public class MemberController implements MemberControllerDocs {
         return ApiResponse.onSuccess(MemberSuccessCode.MEMBER_GET_SUCCESS, result);
     }
 
+    /** 본인 초대코드를 보장하고 기존 유효 코드는 그대로 반환한다. */
+    @Override
+    @PostMapping("/me/invitation-code")
+    public ApiResponse<MemberResDTO.InvitationCode> ensureInvitationCode(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        return ApiResponse.onSuccess(
+                MemberSuccessCode.MEMBER_INVITATION_CODE_ENSURE_SUCCESS,
+                memberCommandService.ensureInvitationCode(userDetails.getMemberId())
+        );
+    }
+
     @Override
     @PostMapping("/logout")
     public ApiResponse<String> logout(

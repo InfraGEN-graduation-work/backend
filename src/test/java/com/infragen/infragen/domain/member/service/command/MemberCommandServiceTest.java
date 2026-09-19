@@ -13,6 +13,7 @@ import com.infragen.infragen.domain.member.enums.SocialProvider;
 import com.infragen.infragen.domain.member.exception.MemberException;
 import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
+import com.infragen.infragen.domain.project.repository.ProjectCollaboratorInvitationRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -20,6 +21,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
 import java.util.List;
@@ -78,6 +80,9 @@ class MemberCommandServiceTest {
     private PasswordEncoder passwordEncoder;
 
     @Mock
+    private ProjectCollaboratorInvitationRepository invitationRepository;
+
+    @Mock
     private TokenService tokenService;
 
     @Mock
@@ -128,9 +133,120 @@ class MemberCommandServiceTest {
                 () -> assertEquals(Role.ROLE_GUEST, savedMembers.get(0).getRole()),
                 () -> assertEquals(Role.ROLE_GUEST, savedMembers.get(1).getRole()),
                 () -> assertTrue(savedMembers.get(0).getIsActive()),
-                () -> assertTrue(savedMembers.get(1).getIsActive())
+                () -> assertTrue(savedMembers.get(1).getIsActive()),
+                () -> assertTrue(savedMembers.get(0).getInvitationCode().matches("[A-Z0-9]{8}")),
+                () -> assertTrue(savedMembers.get(1).getInvitationCode().matches("[A-Z0-9]{8}")),
+                () -> assertNotEquals(
+                        savedMembers.get(0).getInvitationCode(),
+                        savedMembers.get(1).getInvitationCode()
+                )
         );
         verify(passwordEncoder, times(2)).encode(anyString());
+    }
+
+    @Test
+    void ensureInvitationCode_LegacyGuest_IssuesCodeOnce() {
+        // given
+        Member legacyGuest = guestMember();
+        ReflectionTestUtils.setField(legacyGuest, "invitationCode", "0123456789abcdef0123456789abcdef");
+
+        // when
+        String issuedCode = legacyGuest.ensureInvitationCode();
+        String repeatedCode = legacyGuest.ensureInvitationCode();
+
+        // then
+        assertAll(
+                () -> assertTrue(issuedCode.matches("[A-Z0-9]{8}")),
+                () -> assertNotEquals("0123456789abcdef0123456789abcdef", issuedCode),
+                () -> assertEquals(issuedCode, repeatedCode)
+        );
+    }
+
+    @Test
+    void ensureInvitationCode_ExistingMember_ReturnsStoredCode() {
+        // given
+        Member existingMember = Member.builder().role(Role.ROLE_USER).build();
+        String expectedCode = existingMember.getInvitationCode();
+        when(memberRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(existingMember));
+
+        // when
+        MemberResDTO.InvitationCode result = memberCommandService.ensureInvitationCode(1L);
+
+        // then
+        assertEquals(expectedCode, result.inviteCode());
+        verify(memberRepository).findByIdForUpdate(1L);
+        verify(memberRepository, never()).countRowsByInvitationCode(anyString());
+    }
+
+    @Test
+    void ensureInvitationCode_LegacyMember_ReplacesOldCodeAndPersistsCandidate() {
+        // given
+        Member legacyMember = Member.builder().role(Role.ROLE_USER).build();
+        ReflectionTestUtils.setField(legacyMember, "invitationCode", "0123456789abcdef0123456789abcdef");
+        when(memberRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(legacyMember));
+        when(memberRepository.countRowsByInvitationCode(anyString())).thenReturn(0L);
+
+        // when
+        MemberResDTO.InvitationCode result = memberCommandService.ensureInvitationCode(2L);
+
+        // then
+        assertAll(
+                () -> assertTrue(result.inviteCode().matches("[A-Z0-9]{8}")),
+                () -> assertEquals(result.inviteCode(), legacyMember.getInvitationCode()),
+                () -> assertNotEquals("0123456789abcdef0123456789abcdef", result.inviteCode())
+        );
+        verify(memberRepository).findByIdForUpdate(2L);
+        verify(memberRepository).countRowsByInvitationCode(result.inviteCode());
+    }
+
+    @Test
+    void createGuestMember_CodeCollision_RegeneratesBeforeSave() {
+        // given
+        when(passwordEncoder.encode(anyString())).thenReturn("encodedGuestPassword");
+        when(memberRepository.countRowsByInvitationCode(anyString())).thenReturn(1L, 0L);
+        when(memberRepository.save(any(Member.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        memberCommandService.createGuestMember();
+
+        // then
+        verify(memberRepository, times(2)).countRowsByInvitationCode(anyString());
+        verify(memberRepository).save(argThat(member -> member.getInvitationCode().matches("[A-Z0-9]{8}")));
+    }
+
+    @Test
+    void createRegularMember_AssignsInvitationCode() {
+        // given
+        Member regularMember = Member.builder()
+                .role(Role.ROLE_USER)
+                .build();
+
+        // when
+        String invitationCode = regularMember.getInvitationCode();
+
+        // then
+        assertTrue(invitationCode.matches("[A-Z0-9]{8}"));
+    }
+
+    @Test
+    void regenerateInvitationCode_PersistedMember_KeepsOriginalCode() {
+        // given
+        Member persistedMember = Member.builder()
+                .role(Role.ROLE_USER)
+                .build();
+        ReflectionTestUtils.setField(persistedMember, "id", 7L);
+        String originalCode = persistedMember.getInvitationCode();
+
+        // when
+        MemberException exception = assertThrows(
+                MemberException.class,
+                persistedMember::regenerateInvitationCode
+        );
+
+        // then
+        assertEquals(MemberErrorCode.INVITATION_CODE_IMMUTABLE, exception.getCode());
+        assertEquals(originalCode, persistedMember.getInvitationCode());
     }
 
     @Test
@@ -228,7 +344,8 @@ class MemberCommandServiceTest {
         memberCommandService.withdrawMember(1L);
 
         // then
-        var inOrder = inOrder(member, tokenService);
+        var inOrder = inOrder(invitationRepository, member, tokenService);
+        inOrder.verify(invitationRepository).deleteAllByMemberId(1L);
         inOrder.verify(member).withdraw();
         inOrder.verify(tokenService).deleteRefreshToken(1L);
     }
@@ -245,6 +362,7 @@ class MemberCommandServiceTest {
         // then
         assertEquals(MemberErrorCode.MEMBER_NOT_FOUND, exception.getCode());
         verify(member, never()).withdraw();
+        verify(invitationRepository, never()).deleteAllByMemberId(anyLong());
         verifyNoInteractions(tokenService);
     }
 
@@ -262,6 +380,7 @@ class MemberCommandServiceTest {
         // then
         assertEquals(MemberErrorCode.GUEST_ACTION_NOT_ALLOWED, exception.getCode());
         verify(member, never()).withdraw();
+        verify(invitationRepository, never()).deleteAllByMemberId(anyLong());
         verify(tokenService, never()).deleteRefreshToken(99L);
     }
 

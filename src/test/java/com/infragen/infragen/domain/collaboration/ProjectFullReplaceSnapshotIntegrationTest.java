@@ -28,6 +28,7 @@ import com.infragen.infragen.domain.project.entity.Project;
 import com.infragen.infragen.domain.project.enums.ProjectStatus;
 import com.infragen.infragen.domain.project.repository.GeneratedFileRepository;
 import com.infragen.infragen.domain.project.repository.ProjectCollaboratorRepository;
+import com.infragen.infragen.domain.project.repository.ProjectCollaboratorInvitationRepository;
 import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
 import com.infragen.infragen.domain.project.repository.ProjectHistoryRepository;
 import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
@@ -127,6 +128,8 @@ class ProjectFullReplaceSnapshotIntegrationTest {
     private ProjectCollaborationCheckpointFailureRepository checkpointFailureRepository;
     @MockitoBean
     private ProjectCollaboratorRepository collaboratorRepository;
+    @MockitoBean
+    private ProjectCollaboratorInvitationRepository invitationRepository;
     @MockitoBean
     private SimpMessagingTemplate messagingTemplate;
 

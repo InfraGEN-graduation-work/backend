@@ -55,6 +55,7 @@ import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
 import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
 import com.infragen.infragen.domain.project.repository.ProjectRepository;
 import com.infragen.infragen.domain.project.repository.ProjectCollaboratorRepository;
+import com.infragen.infragen.domain.project.repository.ProjectCollaboratorInvitationRepository;
 import com.infragen.infragen.global.enums.ComponentType;
 import com.infragen.infragen.global.auth.CustomUserDetails;
 
@@ -258,6 +259,9 @@ class GenerateApiIntegrationTest {
     private ProjectCollaboratorRepository projectCollaboratorRepository;
 
     @Autowired
+    private ProjectCollaboratorInvitationRepository projectCollaboratorInvitationRepository;
+
+    @Autowired
     private ProjectCollaborationCheckpointFailureRepository checkpointFailureRepository;
 
     @Autowired
@@ -292,6 +296,7 @@ class GenerateApiIntegrationTest {
         collaborationSnapshotRepository.deleteAllInBatch();
         collaborationOperationRepository.deleteAllInBatch();
         collaborationStateRepository.deleteAllInBatch();
+        projectCollaboratorInvitationRepository.deleteAllInBatch();
         projectCollaboratorRepository.deleteAllInBatch();
         projectRepository.deleteAllInBatch();
         memberRepository.deleteAllInBatch();
@@ -416,7 +421,6 @@ class GenerateApiIntegrationTest {
         GuestSession guestB = issueGuestSession();
         Long guestAProjectId = createGuestProject(guestA.accessToken(), "guest-a-project");
         Long guestBProjectId = createGuestProject(guestB.accessToken(), "guest-b-project");
-        Long guestBMemberId = getMemberId(guestB.accessToken());
 
         // when
         var saveResponse = mockMvc.perform(put("/api/v1/projects/{projectId}", guestAProjectId)
@@ -434,10 +438,32 @@ class GenerateApiIntegrationTest {
                 .header("Authorization", "Bearer " + guestB.accessToken()));
         var guestBPreInviteDetail = mockMvc.perform(get("/api/v1/projects/{projectId}", guestAProjectId)
                 .header("Authorization", "Bearer " + guestB.accessToken()));
-        var inviteGuestB = mockMvc.perform(post("/api/v1/projects/{projectId}/collaborators", guestAProjectId)
+        String inviteeCode = objectMapper.readTree(mockMvc.perform(
+                        post("/api/v1/members/me/invitation-code")
+                                .header("Authorization", "Bearer " + guestB.accessToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("MEMBER200_5"))
+                .andReturn()
+                .getResponse()
+                .getContentAsString()).path("result").path("inviteCode").asText();
+        var inviteGuestB = mockMvc.perform(post("/api/v1/projects/{projectId}/collaborators/invitations", guestAProjectId)
                 .header("Authorization", "Bearer " + reissuedGuestAToken)
                 .contentType(APPLICATION_JSON)
-                .content("{\"memberId\":" + guestBMemberId + ",\"role\":\"EDITOR\"}"));
+                .content("{\"inviteeCode\":\"" + inviteeCode + "\",\"role\":\"EDITOR\"}"));
+        String receivedInvitations = mockMvc.perform(get(
+                        "/api/v1/project-collaborator-invitations/received")
+                .header("Authorization", "Bearer " + guestB.accessToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("PROJECT200_10"))
+                .andExpect(jsonPath("$.result.invitations.length()").value(1))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        Long invitationId = objectMapper.readTree(receivedInvitations)
+                .path("result").path("invitations").get(0).path("invitationId").asLong();
+        var acceptGuestB = mockMvc.perform(post(
+                        "/api/v1/project-collaborator-invitations/{invitationId}/accept", invitationId)
+                .header("Authorization", "Bearer " + guestB.accessToken()));
         var guestACollaborators = mockMvc.perform(get(
                         "/api/v1/projects/{projectId}/collaborators", guestAProjectId)
                 .header("Authorization", "Bearer " + reissuedGuestAToken));
@@ -477,13 +503,14 @@ class GenerateApiIntegrationTest {
                 .andExpect(jsonPath("$.code").value("PROJECT403_1"));
         inviteGuestB
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.code").value("PROJECT201_2"))
-                .andExpect(jsonPath("$.result.memberId").value(guestBMemberId))
-                .andExpect(jsonPath("$.result.role").value("EDITOR"));
+                .andExpect(jsonPath("$.code").value("PROJECT201_3"));
+        acceptGuestB
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("PROJECT200_11"));
         guestACollaborators
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.collaborators.length()").value(1))
-                .andExpect(jsonPath("$.result.collaborators[0].memberId").value(guestBMemberId));
+                .andExpect(jsonPath("$.result.collaborators[0].role").value("EDITOR"));
         guestBEditorSave
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("PROJECT200_3"));

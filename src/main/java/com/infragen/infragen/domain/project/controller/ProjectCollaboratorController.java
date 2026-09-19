@@ -1,10 +1,14 @@
 package com.infragen.infragen.domain.project.controller;
 
 import com.infragen.infragen.domain.project.controller.docs.ProjectCollaboratorControllerDocs;
+import com.infragen.infragen.domain.project.dto.request.ProjectCollaboratorInvitationReqDTO;
 import com.infragen.infragen.domain.project.dto.request.ProjectCollaboratorReqDTO;
+import com.infragen.infragen.domain.project.dto.response.ProjectCollaboratorInvitationResDTO;
 import com.infragen.infragen.domain.project.dto.response.ProjectCollaboratorResDTO;
 import com.infragen.infragen.domain.project.exception.code.success.ProjectSuccessCode;
 import com.infragen.infragen.domain.project.service.command.ProjectCollaboratorCommandService;
+import com.infragen.infragen.domain.project.service.command.ProjectCollaboratorInvitationCommandService;
+import com.infragen.infragen.domain.project.service.query.ProjectCollaboratorInvitationQueryService;
 import com.infragen.infragen.domain.project.service.query.ProjectCollaboratorQueryService;
 import com.infragen.infragen.global.apiPayload.ApiResponse;
 import com.infragen.infragen.global.auth.CustomUserDetails;
@@ -28,6 +32,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class ProjectCollaboratorController implements ProjectCollaboratorControllerDocs {
     private final ProjectCollaboratorQueryService collaboratorQueryService;
     private final ProjectCollaboratorCommandService collaboratorCommandService;
+    private final ProjectCollaboratorInvitationCommandService invitationCommandService;
+    private final ProjectCollaboratorInvitationQueryService invitationQueryService;
 
     @Override
     @GetMapping
@@ -41,18 +47,46 @@ public class ProjectCollaboratorController implements ProjectCollaboratorControl
         );
     }
 
+    /** owner만 프로젝트에서 발신한 초대 목록을 확인한다. */
     @Override
-    @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<ProjectCollaboratorResDTO.Detail> addCollaborator(
+    @GetMapping("/invitations")
+    public ApiResponse<ProjectCollaboratorInvitationResDTO.SentList> getSentInvitations(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @PathVariable Long projectId,
-            @Valid @RequestBody ProjectCollaboratorReqDTO.Add request
+            @PathVariable Long projectId
     ) {
         return ApiResponse.onSuccess(
-                ProjectSuccessCode.PROJECT_COLLABORATOR_ADD_SUCCESS,
-                collaboratorCommandService.add(projectId, userDetails.getMemberId(), request)
+                ProjectSuccessCode.PROJECT_COLLABORATOR_INVITATION_SENT_LIST_GET_SUCCESS,
+                invitationQueryService.getSentInvitations(projectId, userDetails.getMemberId())
         );
+    }
+
+    /** 인증된 owner가 초대 대상을 지정하고 PENDING 초대를 생성한다. */
+    @Override
+    @PostMapping("/invitations")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<Void> inviteCollaborator(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long projectId,
+            @Valid @RequestBody ProjectCollaboratorInvitationReqDTO.Create request
+    ) {
+        invitationCommandService.invite(
+                projectId,
+                userDetails.getMemberId(),
+                request.inviteeCode(),
+                request.role()
+        );
+        return ApiResponse.onSuccess(ProjectSuccessCode.PROJECT_COLLABORATOR_INVITATION_SEND_SUCCESS, null);
+    }
+
+    /** 숫자 memberId 직접 등록 요청을 거부하고 초대코드 발신 경로를 사용하게 한다. */
+    @Override
+    @PostMapping
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public void rejectMemberIdAddition(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long projectId
+    ) {
+        collaboratorCommandService.rejectMemberIdAddition(projectId, userDetails.getMemberId());
     }
 
     @Override

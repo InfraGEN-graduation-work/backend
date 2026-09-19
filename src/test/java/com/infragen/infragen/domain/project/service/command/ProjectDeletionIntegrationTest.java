@@ -15,18 +15,25 @@ import com.infragen.infragen.domain.member.repository.MemberRepository;
 import com.infragen.infragen.domain.project.entity.GeneratedFile;
 import com.infragen.infragen.domain.project.entity.Project;
 import com.infragen.infragen.domain.project.entity.ProjectCollaborator;
+import com.infragen.infragen.domain.project.entity.ProjectCollaboratorInvitation;
 import com.infragen.infragen.domain.project.entity.ProjectEdge;
 import com.infragen.infragen.domain.project.entity.ProjectHistory;
 import com.infragen.infragen.domain.project.entity.ProjectNode;
+import com.infragen.infragen.domain.project.enums.ProjectCollaboratorInvitationStatus;
 import com.infragen.infragen.domain.project.enums.ProjectCollaboratorRole;
 import com.infragen.infragen.domain.project.enums.ProjectStatus;
+import com.infragen.infragen.domain.project.exception.ProjectException;
+import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.repository.ProjectCollaboratorRepository;
+import com.infragen.infragen.domain.project.repository.ProjectCollaboratorInvitationRepository;
 import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
 import com.infragen.infragen.domain.project.repository.ProjectHistoryRepository;
 import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
 import com.infragen.infragen.domain.project.repository.ProjectRepository;
+import com.infragen.infragen.domain.project.service.command.ProjectCollaboratorInvitationCommandService;
 import com.infragen.infragen.global.enums.ComponentType;
 import com.infragen.infragen.global.util.JwtUtil;
+import jakarta.persistence.EntityManagerFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,24 +44,35 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.mysql.MySQLContainer;
 import org.testcontainers.utility.DockerImageName;
 import tools.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -66,11 +84,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ProjectDeletionIntegrationTest {
     private static final List<String> PROJECT_CHILD_TABLES = List.of(
             "project_collaboration_checkpoint_failure", "project_collaboration_snapshot",
-            "project_collaboration_operation", "project_collaboration_state", "project_collaborator",
+            "project_collaboration_operation", "project_collaboration_state",
+            "project_collaborator_invitation", "project_collaborator",
             "project_history", "project_edge", "project_node");
 
     @Container
-    private static final MySQLContainer<?> MYSQL = new MySQLContainer<>(DockerImageName.parse(
+    private static final MySQLContainer MYSQL = new MySQLContainer(DockerImageName.parse(
             "mysql:8.4.6@sha256:869218921e61d6c3c89820955d63cca42971f0e3e6c1e2792247bbd944ebc6e9")
             .asCompatibleSubstituteFor("mysql"))
             .withDatabaseName("infragen_project_deletion_test")
@@ -115,6 +134,14 @@ class ProjectDeletionIntegrationTest {
     private ProjectHistoryRepository historyRepository;
     @Autowired
     private ProjectCollaboratorRepository collaboratorRepository;
+    @Autowired
+    private ProjectCollaboratorInvitationRepository invitationRepository;
+    @Autowired
+    private ProjectCollaboratorInvitationCommandService invitationCommandService;
+    @Autowired
+    private EntityManagerFactory entityManagerFactory;
+    @Autowired
+    private PlatformTransactionManager transactionManager;
     @Autowired
     private ProjectCollaborationStateRepository stateRepository;
     @Autowired
@@ -232,6 +259,140 @@ class ProjectDeletionIntegrationTest {
         }
     }
 
+    @Test
+    @DisplayName("초대 목록 fetch graph는 실제 MySQL에서 화면 표시 연관 데이터를 함께 읽는다")
+    void invitationRepository_EntityGraphsLoadDisplayAssociations() {
+        // given
+        Member owner = saveMember();
+        Member invitee = saveMember();
+        ProjectFixture fixture = saveProjectWithDependencies(owner, invitee);
+
+        // when
+        List<ProjectCollaboratorInvitation> sent = invitationRepository
+                .findAllByProjectIdOrderByCreatedAtDescIdDesc(fixture.project().getId());
+        List<ProjectCollaboratorInvitation> received = invitationRepository
+                .findAllByInviteeIdOrderByCreatedAtDescIdDesc(invitee.getId());
+        var persistenceUnitUtil = entityManagerFactory.getPersistenceUnitUtil();
+
+        // then
+        assertAll(
+                () -> assertEquals(1, sent.size()),
+                () -> assertTrue(persistenceUnitUtil.isLoaded(sent.get(0), "invitee")),
+                () -> assertEquals(invitee.getNickname(), sent.get(0).getInvitee().getNickname()),
+                () -> assertEquals(1, received.size()),
+                () -> assertTrue(persistenceUnitUtil.isLoaded(received.get(0), "project")),
+                () -> assertTrue(persistenceUnitUtil.isLoaded(received.get(0), "invitedBy")),
+                () -> assertEquals(fixture.project().getTitle(), received.get(0).getProject().getTitle()),
+                () -> assertEquals(owner.getNickname(), received.get(0).getInvitedBy().getNickname())
+        );
+    }
+
+    @Test
+    @DisplayName("초대 응답용 잠금 조회는 실제 MySQL에서 초대 대상 회원으로 범위를 제한한다")
+    void invitationRepository_FindForUpdate_UsesInviteeScope() {
+        // given
+        Member owner = saveMember();
+        Member invitee = saveMember();
+        ProjectFixture fixture = saveProjectWithDependencies(owner, invitee);
+        Long invitationId = invitationRepository
+                .findAllByProjectIdOrderByCreatedAtDescIdDesc(fixture.project().getId()).get(0).getId();
+
+        // when
+        List<Optional<ProjectCollaboratorInvitation>> results = new TransactionTemplate(transactionManager)
+                .execute(status -> List.of(
+                        invitationRepository.findByIdAndInviteeIdForUpdate(invitationId, invitee.getId()),
+                        invitationRepository.findByIdAndInviteeIdForUpdate(invitationId, owner.getId())
+                ));
+
+        // then
+        assertAll(
+                () -> assertEquals(invitationId, results.get(0).orElseThrow().getId()),
+                () -> assertTrue(results.get(1).isEmpty())
+        );
+    }
+
+    @Test
+    @DisplayName("같은 초대를 동시에 수락·거절하면 하나의 응답만 성공하고 결과가 일치한다")
+    void respondToInvitation_ConcurrentAcceptAndDecline_OnlyOneSucceeds() throws Exception {
+        // given
+        Member owner = saveMember();
+        Member invitee = saveMember();
+        Project project = saveProject(owner);
+        ProjectCollaboratorInvitation invitation = invitationRepository.saveAndFlush(
+                ProjectCollaboratorInvitation.builder()
+                        .project(project)
+                        .invitedBy(owner)
+                        .invitee(invitee)
+                        .role(ProjectCollaboratorRole.EDITOR)
+                        .expiresAt(LocalDateTime.now().plusHours(24))
+                        .build()
+        );
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        try {
+            // when
+            Future<Boolean> accepted = executor.submit(() -> respondAfterBarrier(
+                    ready,
+                    start,
+                    () -> invitationCommandService.accept(invitation.getId(), invitee.getId())
+            ));
+            Future<Boolean> declined = executor.submit(() -> respondAfterBarrier(
+                    ready,
+                    start,
+                    () -> invitationCommandService.decline(invitation.getId(), invitee.getId())
+            ));
+            assertTrue(ready.await(10, TimeUnit.SECONDS), "두 응답 작업이 시작 준비를 마쳐야 한다");
+            start.countDown();
+
+            boolean acceptSucceeded = accepted.get(10, TimeUnit.SECONDS);
+            boolean declineSucceeded = declined.get(10, TimeUnit.SECONDS);
+            ProjectCollaboratorInvitation storedInvitation = invitationRepository.findById(invitation.getId())
+                    .orElseThrow();
+            boolean collaboratorExists = collaboratorRepository
+                    .existsByProjectIdAndMemberId(project.getId(), invitee.getId());
+
+            // then
+            assertNotEquals(acceptSucceeded, declineSucceeded);
+            if (acceptSucceeded) {
+                assertAll(
+                        () -> assertEquals(ProjectCollaboratorInvitationStatus.ACCEPTED,
+                                storedInvitation.getStatus()),
+                        () -> assertTrue(collaboratorExists)
+                );
+            } else {
+                assertAll(
+                        () -> assertEquals(ProjectCollaboratorInvitationStatus.DECLINED,
+                                storedInvitation.getStatus()),
+                        () -> assertFalse(collaboratorExists)
+                );
+            }
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(10, TimeUnit.SECONDS), "응답 작업이 종료되어야 한다");
+        }
+    }
+
+    private boolean respondAfterBarrier(CountDownLatch ready, CountDownLatch start, Runnable response)
+            throws InterruptedException, TimeoutException {
+        ready.countDown();
+        if (!start.await(10, TimeUnit.SECONDS)) {
+            throw new TimeoutException("동시 초대 응답 작업의 시작 대기 시간이 초과됐다.");
+        }
+
+        try {
+            response.run();
+            return true;
+        } catch (ProjectException exception) {
+            if (exception.getCode() != ProjectErrorCode.COLLABORATOR_INVITATION_UNAVAILABLE) {
+                throw exception;
+            }
+            return false;
+        }
+    }
+
     private ProjectFixture saveProjectWithDependencies(Member owner, Member editor) {
         Project project = saveProject(owner);
         ProjectNode database = nodeRepository.saveAndFlush(ProjectNode.builder().project(project)
@@ -248,6 +409,13 @@ class ProjectDeletionIntegrationTest {
         history = historyRepository.saveAndFlush(history);
         collaboratorRepository.saveAndFlush(ProjectCollaborator.builder().project(project)
                 .member(editor).role(ProjectCollaboratorRole.EDITOR).build());
+        invitationRepository.saveAndFlush(ProjectCollaboratorInvitation.builder()
+                .project(project)
+                .invitedBy(owner)
+                .invitee(editor)
+                .role(ProjectCollaboratorRole.VIEWER)
+                .expiresAt(LocalDateTime.now().plusHours(24))
+                .build());
         ProjectCollaborationState state = new ProjectCollaborationState(project);
         state.advanceServerVersion();
         stateRepository.saveAndFlush(state);

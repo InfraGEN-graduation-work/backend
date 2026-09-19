@@ -62,6 +62,21 @@ public enum ProjectErrorCode implements BaseErrorCode {
             "프로젝트 소유자는 collaborator로 등록할 수 없습니다.",
             "PROJECT400_6"
     ),
+    COLLABORATOR_INVITATION_TARGET_UNAVAILABLE(
+            HttpStatus.BAD_REQUEST,
+            "초대할 수 없는 회원입니다.",
+            "PROJECT400_7"
+    ),
+    COLLABORATOR_INVITATION_ALREADY_PENDING(
+            HttpStatus.CONFLICT,
+            "이미 대기 중인 프로젝트 초대가 있습니다.",
+            "PROJECT409_3"
+    ),
+    COLLABORATOR_INVITATION_UNAVAILABLE(
+            HttpStatus.NOT_FOUND,
+            "응답할 수 없는 프로젝트 초대입니다.",
+            "PROJECT404_3"
+    ),
     ;
     private final HttpStatus httpStatus;
     private final String message;

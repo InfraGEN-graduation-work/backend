@@ -22,6 +22,16 @@ public interface ProjectCollaboratorInvitationRepository
     @Query("DELETE FROM ProjectCollaboratorInvitation invitation WHERE invitation.project.id = :projectId")
     void deleteByProjectId(@Param("projectId") Long projectId);
 
+    /** 회원 탈퇴 transaction에서 관련된 초대 레코드를 먼저 정리한다. */
+    @Modifying(flushAutomatically = true)
+    @Query(value = """
+            DELETE FROM project_collaborator_invitation
+            WHERE invitee_member_id = :memberId
+               OR invited_by_member_id = :memberId
+               OR responded_by_member_id = :memberId
+            """, nativeQuery = true)
+    void deleteAllByMemberId(@Param("memberId") Long memberId);
+
     /**
      * 프로젝트의 발신 초대를 최신순으로 조회한다.
      */

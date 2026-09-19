@@ -11,6 +11,7 @@ import com.infragen.infragen.domain.member.enums.SocialProvider;
 import com.infragen.infragen.domain.member.exception.MemberException;
 import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
+import com.infragen.infragen.domain.project.repository.ProjectCollaboratorInvitationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -27,6 +28,7 @@ public class MemberCommandService {
     private static final int MAX_INVITATION_CODE_GENERATION_ATTEMPTS = 10;
 
     private final MemberRepository memberRepository;
+    private final ProjectCollaboratorInvitationRepository invitationRepository;
     private final PasswordEncoder passwordEncoder;
     private final TokenService tokenService;
 
@@ -120,6 +122,7 @@ public class MemberCommandService {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
         ensureNotGuest(member);
+        invitationRepository.deleteAllByMemberId(memberId);
         member.withdraw();
         tokenService.deleteRefreshToken(memberId);
     }

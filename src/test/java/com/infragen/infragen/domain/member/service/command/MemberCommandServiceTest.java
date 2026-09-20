@@ -182,9 +182,10 @@ class MemberCommandServiceTest {
     void ensureInvitationCode_LegacyMember_ReplacesOldCodeAndPersistsCandidate() {
         // given
         Member legacyMember = Member.builder().role(Role.ROLE_USER).build();
+        ReflectionTestUtils.setField(legacyMember, "id", 2L);
         ReflectionTestUtils.setField(legacyMember, "invitationCode", "0123456789abcdef0123456789abcdef");
         when(memberRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(legacyMember));
-        when(memberRepository.countRowsByInvitationCode(anyString())).thenReturn(0L);
+        when(memberRepository.countRowsByInvitationCodeExcludingMember(anyString(), eq(2L))).thenReturn(0L);
 
         // when
         MemberResDTO.InvitationCode result = memberCommandService.ensureInvitationCode(2L);
@@ -196,7 +197,7 @@ class MemberCommandServiceTest {
                 () -> assertNotEquals("0123456789abcdef0123456789abcdef", result.inviteCode())
         );
         verify(memberRepository).findByIdForUpdate(2L);
-        verify(memberRepository).countRowsByInvitationCode(result.inviteCode());
+        verify(memberRepository).countRowsByInvitationCodeExcludingMember(result.inviteCode(), 2L);
     }
 
     @Test

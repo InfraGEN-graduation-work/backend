@@ -34,4 +34,15 @@ public interface MemberRepository extends JpaRepository<@NonNull Member,@NonNull
             nativeQuery = true
     )
     long countRowsByInvitationCode(@Param("invitationCode") String invitationCode);
+
+    /** 기존 회원의 코드 갱신 시 자기 자신은 중복 후보에서 제외한다. */
+    @Query(
+            value = "SELECT COUNT(*) FROM member "
+                    + "WHERE invitation_code = :invitationCode AND id <> :memberId",
+            nativeQuery = true
+    )
+    long countRowsByInvitationCodeExcludingMember(
+            @Param("invitationCode") String invitationCode,
+            @Param("memberId") Long memberId
+    );
 }

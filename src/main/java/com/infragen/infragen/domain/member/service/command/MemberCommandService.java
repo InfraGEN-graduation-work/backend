@@ -138,7 +138,11 @@ public class MemberCommandService {
 
     private void ensureUniqueInvitationCode(Member member) {
         for (int attempt = 0; attempt < MAX_INVITATION_CODE_GENERATION_ATTEMPTS; attempt++) {
-            if (memberRepository.countRowsByInvitationCode(member.getInvitationCode()) == 0) {
+            long duplicateCount = member.getId() == null
+                    ? memberRepository.countRowsByInvitationCode(member.getInvitationCode())
+                    : memberRepository.countRowsByInvitationCodeExcludingMember(
+                            member.getInvitationCode(), member.getId());
+            if (duplicateCount == 0) {
                 return;
             }
             if (member.getId() != null) {

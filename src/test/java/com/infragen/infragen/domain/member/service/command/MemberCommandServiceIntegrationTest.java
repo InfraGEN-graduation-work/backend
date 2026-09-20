@@ -2,6 +2,7 @@ package com.infragen.infragen.domain.member.service.command;
 
 import com.infragen.infragen.domain.auth.service.TokenService;
 import com.infragen.infragen.domain.member.dto.request.MemberReqDTO;
+import com.infragen.infragen.domain.member.dto.response.MemberResDTO;
 import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.enums.SocialProvider;
@@ -23,6 +24,7 @@ import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -102,6 +104,27 @@ class MemberCommandServiceIntegrationTest {
         Member updated = memberRepository.findById(member.getId()).orElseThrow();
         assertEquals("newNickname", updated.getNickname());
         assertNotEquals("newPassword123", updated.getPassword());
+    }
+
+    @Test
+    void ensureInvitationCode_LegacyMember_DoesNotCountItselfAfterAutoFlush() {
+        // given
+        Member member = memberRepository.saveAndFlush(Member.builder()
+                .email("legacy-code@test.com")
+                .password("password")
+                .nickname("legacy")
+                .role(Role.ROLE_USER)
+                .isActive(true)
+                .build());
+        ReflectionTestUtils.setField(member, "invitationCode", "0123456789abcdef0123456789abcdef");
+
+        // when
+        MemberResDTO.InvitationCode result = memberCommandService.ensureInvitationCode(member.getId());
+
+        // then
+        assertTrue(result.inviteCode().matches("[A-Z0-9]{8}"));
+        assertEquals(result.inviteCode(), memberRepository.findById(member.getId()).orElseThrow()
+                .getInvitationCode());
     }
 
     @Test

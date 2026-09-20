@@ -5,6 +5,8 @@ import com.infragen.infragen.domain.auth.exception.AuthException;
 import com.infragen.infragen.domain.auth.exception.code.error.AuthErrorCode;
 import com.infragen.infragen.domain.auth.service.AuthService;
 import com.infragen.infragen.domain.auth.service.EmailVerificationService;
+import com.infragen.infragen.domain.member.exception.MemberException;
+import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
 import com.infragen.infragen.global.apiPayload.handler.GeneralExceptionAdvice;
 import com.infragen.infragen.global.auth.AuthenticationEntryPointImpl;
@@ -118,9 +120,10 @@ class AuthControllerEmailWebTest {
     }
 
     @Test
-    void sendEmailCode_ExistingEmail_ReturnsSameSuccessResponseWithoutSendingCode() throws Exception {
+    void sendEmailCode_ExistingEmail_ReturnsConflict() throws Exception {
         // given
-        doNothing().when(emailVerificationService).sendCode("existing@example.com");
+        doThrow(new MemberException(MemberErrorCode.DUPLICATE_EMAIL))
+                .when(emailVerificationService).sendCode("existing@example.com");
         var request = post("/api/v1/auth/email/code").contentType(APPLICATION_JSON)
                 .content("{\"email\":\"existing@example.com\"}");
 
@@ -128,7 +131,10 @@ class AuthControllerEmailWebTest {
         var response = mockMvc.perform(request);
 
         // then
-        response.andExpect(status().isOk()).andExpect(jsonPath("$.code").value("AUTH200_4"));
+        response.andExpect(status().isConflict())
+                .andExpect(jsonPath("$.isSuccess").value(false))
+                .andExpect(jsonPath("$.code").value("MEMBER409_1"))
+                .andExpect(jsonPath("$.message").value("이미 가입된 이메일입니다."));
         verify(emailVerificationService).sendCode("existing@example.com");
     }
 

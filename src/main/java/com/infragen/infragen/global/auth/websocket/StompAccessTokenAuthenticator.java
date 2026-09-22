@@ -10,13 +10,12 @@ import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
 public class StompAccessTokenAuthenticator {
-    private static final String ACCESS_CATEGORY = "access";
-
     private final JwtUtil jwtUtil;
     private final RedisUtil redisUtil;
     private final CustomUserDetailsService customUserDetailsService;
@@ -27,9 +26,9 @@ public class StompAccessTokenAuthenticator {
     public Authentication authenticate(String token) {
         Claims claims = parseClaims(token);
         String category = claims.get("category", String.class);
-        if (!ACCESS_CATEGORY.equals(category) || redisUtil.isBlackList(token)) {
+        if (!JwtUtil.ACCESS_TOKEN_CATEGORY.equals(category) || redisUtil.isBlackList(token)) {
             throw new AuthException(
-                    ACCESS_CATEGORY.equals(category)
+                    JwtUtil.ACCESS_TOKEN_CATEGORY.equals(category)
                             ? AuthErrorCode.TOKEN_BLACKLIST
                             : AuthErrorCode.TOKEN_INVALID
             );
@@ -40,8 +39,13 @@ public class StompAccessTokenAuthenticator {
             throw new AuthException(AuthErrorCode.TOKEN_INVALID);
         }
 
-        CustomUserDetails userDetails = (CustomUserDetails)
-                customUserDetailsService.loadUserByUsername(memberId);
+        CustomUserDetails userDetails;
+        try {
+            userDetails = (CustomUserDetails)
+                    customUserDetailsService.loadUserByUsername(memberId);
+        } catch (UsernameNotFoundException | NumberFormatException exception) {
+            throw new AuthException(AuthErrorCode.TOKEN_INVALID);
+        }
         if (!userDetails.isEnabled()) {
             throw new AuthException(AuthErrorCode.TOKEN_INVALID);
         }

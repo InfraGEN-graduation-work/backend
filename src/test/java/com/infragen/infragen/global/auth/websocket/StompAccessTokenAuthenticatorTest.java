@@ -15,6 +15,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -104,6 +105,67 @@ class StompAccessTokenAuthenticatorTest {
 
         // then
         assertEquals(AuthErrorCode.TOKEN_BLACKLIST, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("refresh category token은 STOMP access token으로 인증하지 않는다")
+    void authenticate_RefreshCategory_ThrowsInvalidToken() {
+        // given
+        String token = "refresh-token";
+        Claims claims = mock(Claims.class);
+        when(claims.get("category", String.class)).thenReturn("refresh");
+        when(jwtUtil.getClaims(token)).thenReturn(claims);
+
+        // when
+        AuthException exception = assertThrows(
+                AuthException.class,
+                () -> authenticator().authenticate(token)
+        );
+
+        // then
+        assertEquals(AuthErrorCode.TOKEN_INVALID, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 회원의 access token은 인증하지 않는다")
+    void authenticate_MissingMember_ThrowsInvalidToken() {
+        // given
+        String token = "missing-member-token";
+        Claims claims = claims("999", "access");
+        when(jwtUtil.getClaims(token)).thenReturn(claims);
+        when(redisUtil.isBlackList(token)).thenReturn(false);
+        when(customUserDetailsService.loadUserByUsername("999"))
+                .thenThrow(new UsernameNotFoundException("missing member"));
+
+        // when
+        AuthException exception = assertThrows(
+                AuthException.class,
+                () -> authenticator().authenticate(token)
+        );
+
+        // then
+        assertEquals(AuthErrorCode.TOKEN_INVALID, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("숫자가 아닌 member ID를 가진 access token은 인증하지 않는다")
+    void authenticate_NonNumericMemberId_ThrowsInvalidToken() {
+        // given
+        String token = "non-numeric-member-token";
+        Claims claims = claims("member-1", "access");
+        when(jwtUtil.getClaims(token)).thenReturn(claims);
+        when(redisUtil.isBlackList(token)).thenReturn(false);
+        when(customUserDetailsService.loadUserByUsername("member-1"))
+                .thenThrow(new NumberFormatException("member-1"));
+
+        // when
+        AuthException exception = assertThrows(
+                AuthException.class,
+                () -> authenticator().authenticate(token)
+        );
+
+        // then
+        assertEquals(AuthErrorCode.TOKEN_INVALID, exception.getCode());
     }
 
     private StompAccessTokenAuthenticator authenticator() {

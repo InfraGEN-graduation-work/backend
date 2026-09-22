@@ -1,31 +1,43 @@
 package com.infragen.infragen.global.util;
 
-import org.springframework.stereotype.Component;
-import lombok.extern.slf4j.Slf4j;
-import java.time.Duration;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Date;
+
 import javax.crypto.SecretKey;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.security.Keys;
-import io.jsonwebtoken.ExpiredJwtException;
+
+import org.springframework.stereotype.Component;
+
+import com.infragen.infragen.domain.auth.exception.AuthException;
+import com.infragen.infragen.domain.auth.exception.code.error.AuthErrorCode;
 import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.global.properties.JwtProperties;
+
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Component
 public class JwtUtil {
+    public static final String ACCESS_TOKEN_CATEGORY = "access";
+    public static final String REFRESH_TOKEN_CATEGORY = "refresh";
+
     private final SecretKey secretKey;
     private final Duration accessExpiration;
     private final Duration refreshExpiration;
     private final Duration devExpiration;
+    private final String issuer;
 
     public JwtUtil(JwtProperties jwtProperties) {
         this.secretKey = Keys.hmacShaKeyFor(jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8));
         this.accessExpiration = Duration.ofMillis(jwtProperties.getAccessToken().getExpirationTime());
         this.refreshExpiration = Duration.ofMillis(jwtProperties.getRefreshToken().getExpirationTime());
         this.devExpiration = Duration.ofMillis(jwtProperties.getDevToken().getExpirationTime());
+        this.issuer = requireIssuer(jwtProperties.getIssuer());
     }
 
     // 토큰 생성
@@ -33,6 +45,7 @@ public class JwtUtil {
         Date now = new Date();
         Date validity = new Date(now.getTime() + expiration.toMillis());
         return Jwts.builder()
+                .issuer(issuer)
                 .subject(memberId.toString())
                 .issuedAt(now)
                 .expiration(validity)
@@ -69,11 +82,20 @@ public class JwtUtil {
 
     // jwt 파싱 및 클레임 추출
     public Claims getClaims(String token) {
-        return Jwts.parser()
-                .verifyWith(secretKey)
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
+        try {
+            Claims claims = Jwts.parser()
+                    .requireIssuer(issuer) // 토큰의 발급자(issuer)가 일치하는지 확인
+                    .verifyWith(secretKey)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+            validateSubject(claims);
+            return claims;
+        } catch (ExpiredJwtException exception) {
+            throw exception;
+        } catch (JwtException | IllegalArgumentException exception) {
+            throw new AuthException(AuthErrorCode.TOKEN_INVALID);
+        }
     }
 
     /**
@@ -95,16 +117,36 @@ public class JwtUtil {
 
     // 액세스 토큰 생성
     public String createAccessToken(Long memberId, Role role) {
-        return createToken(memberId, accessExpiration, role, "access");
+        return createToken(memberId, accessExpiration, role, ACCESS_TOKEN_CATEGORY);
     }
 
     // 리프레쉬 토큰 생성
     public String createRefreshToken(Long memberId) {
-        return createToken(memberId, refreshExpiration, Role.ROLE_USER, "refresh");
+        return createToken(memberId, refreshExpiration, Role.ROLE_USER, REFRESH_TOKEN_CATEGORY);
     }
 
     // 개발자 전용 임시 토큰 생성
     public String createDevToken(Long memberId) {
-        return createToken(memberId, devExpiration, Role.ROLE_USER, "access");
+        return createToken(memberId, devExpiration, Role.ROLE_USER, ACCESS_TOKEN_CATEGORY);
+    }
+
+    private String requireIssuer(String issuer) {
+        if (issuer == null || issuer.isBlank()) {
+            throw new IllegalStateException("jwt.issuer 설정이 필요합니다.");
+        }
+        return issuer;
+    }
+
+    private void validateSubject(Claims claims) {
+        String subject = claims.getSubject();
+        if (subject == null || subject.isBlank()) {
+            throw new AuthException(AuthErrorCode.TOKEN_INVALID);
+        }
+
+        try {
+            Long.parseLong(subject);
+        } catch (NumberFormatException exception) {
+            throw new AuthException(AuthErrorCode.TOKEN_INVALID);
+        }
     }
 }

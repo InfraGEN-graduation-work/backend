@@ -578,7 +578,11 @@ class GenerateApiIntegrationTest {
                 .andExpect(jsonPath("$.code").value("AUTH200_2"))
                 .andReturn();
         String response = result.getResponse().getContentAsString();
-        String refreshCookie = result.getResponse().getHeader("Set-Cookie").split(";", 2)[0];
+        String refreshCookie = result.getResponse().getHeaders("Set-Cookie").stream()
+                .filter(cookie -> cookie.startsWith("refresh_token="))
+                .findFirst()
+                .orElseThrow()
+                .split(";", 2)[0];
         String refreshToken = refreshCookie.substring("refresh_token=".length());
         return new GuestSession(
                 objectMapper.readTree(response).path("result").path("accessToken").asText(),
@@ -587,8 +591,17 @@ class GenerateApiIntegrationTest {
     }
 
     private String reissueGuestToken(String refreshToken) throws Exception {
+        String csrfToken = mockMvc.perform(get("/api/v1/auth/csrf"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getHeader("X-XSRF-TOKEN");
         String response = mockMvc.perform(post("/api/v1/auth/reissue")
-                        .cookie(new Cookie("refresh_token", refreshToken)))
+                        .cookie(
+                                new Cookie("refresh_token", refreshToken),
+                                new Cookie("XSRF-TOKEN", csrfToken)
+                        )
+                        .header("X-XSRF-TOKEN", csrfToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("AUTH200_3"))
                 .andReturn()

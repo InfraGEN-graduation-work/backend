@@ -40,7 +40,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(controllers = AuthController.class, properties = {
         "cors.allowed-origins=http://localhost",
-        "jwt.secret=email-test-secret-email-test-secret-email-test-secret"
+        "jwt.secret=email-test-secret-email-test-secret-email-test-secret",
+        "jwt.issuer=infra-gen"
 })
 @ContextConfiguration(classes = AuthControllerEmailWebTest.Config.class)
 class AuthControllerEmailWebTest {

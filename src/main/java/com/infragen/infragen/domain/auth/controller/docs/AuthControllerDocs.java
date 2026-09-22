@@ -10,4 +10,7 @@ public interface AuthControllerDocs {
 
     @Operation(summary = "일반 회원가입", description = "이메일로 받은 verificationCode 6자리가 필요합니다. 인증번호는 한 번만 사용할 수 있습니다.")
     ApiResponse<Void> signup(AuthReqDTO.SignupDTO request);
+
+    @Operation(summary = "CSRF token 발급", description = "refresh token 재발급 전에 XSRF-TOKEN cookie를 발급합니다.")
+    ApiResponse<Void> issueCsrfToken();
 }

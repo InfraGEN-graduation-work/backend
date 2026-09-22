@@ -44,6 +44,13 @@ public class AuthController implements AuthControllerDocs {
         return ApiResponse.onSuccess(AuthSuccessCode.SIGNUP_SUCCESS, null);
     }
 
+    /** refresh token 재발급 전에 브라우저가 CSRF cookie를 확보하도록 한다. */
+    @Override
+    @GetMapping("/csrf")
+    public ApiResponse<Void> issueCsrfToken() {
+        return ApiResponse.onSuccess(AuthSuccessCode.CSRF_TOKEN_ISSUE_SUCCESS, null);
+    }
+
     // 일반 로그인
     @PostMapping("/login")
     public ApiResponse<AuthResDTO.AccessTokenResultDTO> login(

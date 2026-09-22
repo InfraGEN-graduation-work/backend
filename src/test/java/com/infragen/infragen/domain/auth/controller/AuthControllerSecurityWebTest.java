@@ -3,15 +3,21 @@ package com.infragen.infragen.domain.auth.controller;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.List;
 import java.util.Optional;
+import java.nio.charset.StandardCharsets;
+import java.util.Date;
 
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -48,6 +54,7 @@ import com.infragen.infragen.global.util.RedisUtil;
 @WebMvcTest(controllers = {AuthController.class, com.infragen.infragen.domain.project.controller.ProjectController.class}, properties = {
         "cors.allowed-origins=http://localhost",
         "jwt.secret=guest-security-test-secret-guest-security-test-secret",
+        "jwt.issuer=infra-gen",
         "jwt.access-token.expiration-time=60000",
         "jwt.refresh-token.expiration-time=120000",
         "jwt.dev-token.expiration-time=60000"
@@ -157,6 +164,121 @@ class AuthControllerSecurityWebTest {
         // then
         response.andExpect(status().isUnauthorized());
         verifyNoInteractions(projectQueryService);
+    }
+
+    @Test
+    @DisplayName("access가 아닌 category token은 보호 API에서 거부")
+    void protectedApi_NonAccessCategoryToken_ReturnsUnauthorized() throws Exception {
+        // given
+        String token = signedToken(
+                "guest-security-test-secret-guest-security-test-secret",
+                "refresh"
+        );
+
+        // when
+        var response = mockMvc.perform(get("/api/v1/projects")
+                .header("Authorization", "Bearer " + token));
+
+        // then
+        response
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH401_1"));
+        verifyNoInteractions(projectQueryService);
+    }
+
+    @Test
+    @DisplayName("서명이 잘못된 token은 500이 아닌 401로 거부")
+    void protectedApi_InvalidSignature_ReturnsUnauthorized() throws Exception {
+        // given
+        String token = signedToken(
+                "different-secret-different-secret-different-secret-1234567890",
+                "access"
+        );
+
+        // when
+        var response = mockMvc.perform(get("/api/v1/projects")
+                .header("Authorization", "Bearer " + token));
+
+        // then
+        response
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH401_1"));
+        verifyNoInteractions(projectQueryService);
+    }
+
+    @Test
+    @DisplayName("refresh token 재발급은 CSRF token 없이 처리하지 않는다")
+    void reissueToken_MissingCsrfToken_ReturnsForbidden() throws Exception {
+        // when
+        var response = mockMvc.perform(post("/api/v1/auth/reissue")
+                .cookie(new jakarta.servlet.http.Cookie("refresh_token", "refresh-token")));
+
+        // then
+        response
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("AUTH403_1"));
+        verifyNoInteractions(authService);
+    }
+
+    @Test
+    @DisplayName("안전한 요청 응답에 프론트가 사용할 CSRF cookie를 발급한다")
+    void safeRequest_IssuesCsrfCookie() throws Exception {
+        // when
+        var response = mockMvc.perform(get("/api/v1/projects")).andReturn().getResponse();
+
+        // then
+        assertNotNull(response.getHeader("Set-Cookie"));
+    }
+
+    @Test
+    @DisplayName("CSRF bootstrap endpoint는 cookie를 발급하고 공개 응답을 반환한다")
+    void csrfEndpoint_IssuesCookie() throws Exception {
+        // when
+        var response = mockMvc.perform(get("/api/v1/auth/csrf"));
+
+        // then
+        response
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("AUTH200_5"))
+                .andExpect(header().exists("X-XSRF-TOKEN"))
+                .andExpect(result -> assertNotNull(result.getResponse().getHeader("Set-Cookie")));
+    }
+
+    @Test
+    @DisplayName("CSRF cookie와 header가 일치하면 refresh token 재발급을 허용한다")
+    void reissueToken_MatchingCsrfToken_Succeeds() throws Exception {
+        // given
+        when(authService.reissueToken("refresh-token"))
+                .thenReturn(new AuthResDTO.TokenResultDTO("new-access-token", "new-refresh-token"));
+        String setCookie = mockMvc.perform(get("/api/v1/projects"))
+                .andReturn().getResponse().getHeader("Set-Cookie");
+        String csrfToken = setCookie.substring("XSRF-TOKEN=".length(), setCookie.indexOf(';'));
+
+        // when
+        var response = mockMvc.perform(post("/api/v1/auth/reissue")
+                .cookie(
+                        new jakarta.servlet.http.Cookie("refresh_token", "refresh-token"),
+                        new jakarta.servlet.http.Cookie("XSRF-TOKEN", csrfToken)
+                )
+                .header("X-XSRF-TOKEN", csrfToken));
+
+        // then
+        response
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("AUTH200_3"));
+        verify(authService).reissueToken("refresh-token");
+    }
+
+    private String signedToken(String secret, String category) {
+        Date now = new Date();
+        return Jwts.builder()
+                .issuer("infra-gen")
+                .subject("42")
+                .issuedAt(now)
+                .expiration(new Date(now.getTime() + 60_000L))
+                .claim("category", category)
+                .signWith(Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8)))
+                .compact();
     }
 
     private Member member(Long memberId, Role role, boolean active) {

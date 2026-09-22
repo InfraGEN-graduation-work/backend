@@ -45,7 +45,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             Claims claims = jwtUtil.getClaims(token);
             String category = claims.get("category", String.class);
 
-            if (category == null || category.equals("refresh")) {
+            if (!JwtUtil.ACCESS_TOKEN_CATEGORY.equals(category)) {
                 throw new AuthException(AuthErrorCode.TOKEN_INVALID);
             }
 
@@ -55,7 +55,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
             String memberId = claims.getSubject();
 
-            if (memberId != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            if (SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails;
                 try {
                     userDetails = customUserDetailsService.loadUserByUsername(memberId);
@@ -67,15 +67,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                     throw new AuthException(AuthErrorCode.TOKEN_INVALID);
                 }
 
-                if (jwtUtil.validateToken(token)) {
-                    Authentication auth = new UsernamePasswordAuthenticationToken(
-                            userDetails,
-                            null,
-                            userDetails.getAuthorities()
-                    );
+                Authentication auth = new UsernamePasswordAuthenticationToken(
+                        userDetails,
+                        null,
+                        userDetails.getAuthorities()
+                );
 
-                    SecurityContextHolder.getContext().setAuthentication(auth);
-                }
+                SecurityContextHolder.getContext().setAuthentication(auth);
             }
         }
 

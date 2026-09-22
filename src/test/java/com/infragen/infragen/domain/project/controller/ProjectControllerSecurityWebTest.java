@@ -47,6 +47,7 @@ import static org.springframework.http.MediaType.APPLICATION_JSON;
 @WebMvcTest(controllers = ProjectController.class, properties = {
         "cors.allowed-origins=http://localhost",
         "jwt.secret=issue55-test-secret-issue55-test-secret-issue55-test-secret",
+        "jwt.issuer=infra-gen",
         "jwt.access-token.expiration-time=60000",
         "jwt.refresh-token.expiration-time=120000",
         "jwt.dev-token.expiration-time=60000"

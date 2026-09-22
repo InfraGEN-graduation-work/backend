@@ -149,19 +149,40 @@ UX:
 
 성공 시 일반 로그인과 동일하게 accessToken body와 refresh cookie를 받는다.
 
-### 3.4 토큰 재발급
+### 3.4 CSRF token 준비
+
+    GET /api/v1/auth/csrf
+
+refresh token 재발급 전에 호출한다. 응답에는 다음 값이 함께 제공된다.
+
+- `XSRF-TOKEN` cookie
+- `X-XSRF-TOKEN` response header
+
+프론트와 API의 host가 다르면 cookie를 JavaScript에서 읽을 수 없으므로 response header 값을 우선 사용한다.
+이 값은 refresh token이 아니며 CSRF 검증용 값이다.
+
+현재 배포 origin은 frontend `https://infragen1.vercel.app`, backend `https://infragen.p-e.kr`이다.
+두 주소는 서로 다른 site이므로 `credentials: include`, backend CORS 허용 origin, `SameSite=None; Secure` cookie가 모두 필요하다.
+브라우저의 third-party cookie 차단 정책에 따라 refresh cookie가 차단될 수 있으므로 실제 배포 브라우저에서 재발급을 확인한다.
+
+### 3.5 토큰 재발급
 
     POST /api/v1/auth/reissue
 
-요청 body는 없다. refresh_token cookie를 포함해야 한다.
+요청 body는 없다. 다음 값을 함께 전송해야 한다.
+
+- `refresh_token` HttpOnly cookie
+- bootstrap response의 `X-XSRF-TOKEN` 값을 `X-XSRF-TOKEN` request header에 복사
+- 같은 origin에서 cookie를 읽을 수 있으면 `XSRF-TOKEN` cookie 값을 fallback으로 사용할 수 있다.
 
 UX:
 
 - access token 만료 시 한 번만 재발급을 시도한다.
 - 재발급 성공 시 원래 요청을 재시도한다.
 - 재발급 실패 시 저장된 accessToken을 제거하고 로그인 화면으로 이동한다.
+- CSRF token이 없거나 header와 cookie 값이 다르면 `403 AUTH403_1`을 반환한다.
 
-### 3.5 내 정보와 로그아웃
+### 3.6 내 정보와 로그아웃
 
     GET /api/v1/members/me
     POST /api/v1/members/logout

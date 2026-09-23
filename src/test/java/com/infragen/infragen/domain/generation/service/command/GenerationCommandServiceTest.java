@@ -11,6 +11,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,12 +39,14 @@ import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
 import com.infragen.infragen.domain.parsing.service.ParsingService;
 import com.infragen.infragen.domain.project.service.command.ProjectHistoryCommandService;
+import com.infragen.infragen.domain.project.entity.Project;
 import com.infragen.infragen.domain.project.exception.ProjectException;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 import com.infragen.infragen.domain.project.entity.ProjectNode;
 import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
 import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
+import com.infragen.infragen.domain.project.repository.ProjectRepository;
 import com.infragen.infragen.global.enums.ComponentType;
 import java.util.Map;
 
@@ -59,6 +62,9 @@ class GenerationCommandServiceTest {
 
     @Mock
     private ProjectEdgeRepository projectEdgeRepository;
+
+    @Mock
+    private ProjectRepository projectRepository;
 
     @Mock
     private ParsingService parsingService;
@@ -105,6 +111,7 @@ class GenerationCommandServiceTest {
             .files(files)
             .build();
 
+        givenLockedProject(projectId);
         when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(null);
         when(projectNodeRepository.findAllByProjectId(projectId)).thenReturn(List.of(storedNode));
         when(projectEdgeRepository.findAllByProjectId(projectId)).thenReturn(List.of());
@@ -163,6 +170,7 @@ class GenerationCommandServiceTest {
             .files(files)
             .build();
 
+        givenLockedProject(projectId);
         when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(null);
         when(parsingService.parsing(any(ParsingReqDTO.class), eq(projectId))).thenReturn(parsingResult);
         when(iaCGenerationService.generate(parsingResult, OutputFormat.TERRAFORM, deploymentTarget))
@@ -384,6 +392,7 @@ class GenerationCommandServiceTest {
         Long projectId = 1L;
         Long viewerId = 7L;
         ProjectException accessDenied = new ProjectException(ProjectErrorCode.PROJECT_ACCESS_DENIED);
+        givenLockedProject(projectId);
         when(projectQueryService.getWriteableProject(projectId, viewerId)).thenThrow(accessDenied);
 
         // when
@@ -413,6 +422,7 @@ class GenerationCommandServiceTest {
         GenerateReqDTO.Request request = localRequest();
         ParsingException parsingException = new ParsingException(ParsingErrorCode.EMPTY_NODES);
 
+        givenLockedProject(projectId);
         when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(null);
         when(parsingService.parsing(any(ParsingReqDTO.class), eq(projectId))).thenThrow(parsingException);
 
@@ -445,6 +455,7 @@ class GenerationCommandServiceTest {
             IaCGenerationErrorCode.INVALID_COMPONENT_STATE
         );
 
+        givenLockedProject(projectId);
         when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(null);
         when(parsingService.parsing(any(ParsingReqDTO.class), eq(projectId))).thenReturn(parsingResult);
         when(iaCGenerationService.generate(parsingResult, OutputFormat.DOCKER_COMPOSE))
@@ -466,6 +477,11 @@ class GenerationCommandServiceTest {
         verify(parsingService).parsing(any(ParsingReqDTO.class), eq(projectId));
         verify(iaCGenerationService).generate(parsingResult, OutputFormat.DOCKER_COMPOSE);
         verifyNoInteractions(projectHistoryCommandService);
+    }
+
+    private void givenLockedProject(Long projectId) {
+        when(projectRepository.findByIdForUpdate(projectId))
+            .thenReturn(Optional.of(Project.builder().build()));
     }
 
     private GenerateReqDTO.Request localRequest() {

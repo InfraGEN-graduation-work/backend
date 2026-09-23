@@ -13,7 +13,10 @@ import com.infragen.infragen.domain.project.dto.response.ProjectHistoryResDTO;
 import com.infragen.infragen.domain.project.entity.GeneratedFile;
 import com.infragen.infragen.domain.project.entity.Project;
 import com.infragen.infragen.domain.project.entity.ProjectHistory;
+import com.infragen.infragen.domain.project.exception.ProjectException;
+import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.repository.ProjectHistoryRepository;
+import com.infragen.infragen.domain.project.repository.ProjectRepository;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 
 import lombok.RequiredArgsConstructor;
@@ -25,6 +28,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ProjectHistoryCommandService {
     private final ProjectQueryService projectQueryService;
     private final ProjectHistoryRepository projectHistoryRepository;
+    private final ProjectRepository projectRepository;
 
     // 프로젝트 히스토리 생성
     @Transactional
@@ -35,7 +39,8 @@ public class ProjectHistoryCommandService {
     ) {
         log.info("프로젝트 히스토리 생성 요청: projectId={}, memberId={}", projectId, memberId);
 
-        Project project = projectQueryService.getOwnedProject(projectId, memberId);
+        Project project = lockProjectForVersionAllocation(projectId);
+        projectQueryService.getOwnedProject(projectId, memberId);
         String versionName = nextVersionName(projectId);
 
         ProjectHistory history = ProjectHistory.builder()
@@ -60,7 +65,8 @@ public class ProjectHistoryCommandService {
         log.info("생성 이력 저장 요청: projectId={}, memberId={}, fileCount={}",
             projectId, memberId, generatedFiles.size());
 
-        Project project = projectQueryService.getWriteableProject(projectId, memberId);
+        Project project = lockProjectForVersionAllocation(projectId);
+        projectQueryService.getWriteableProject(projectId, memberId);
         String versionName = nextVersionName(projectId);
 
         ProjectHistory history = ProjectHistory.builder()
@@ -81,7 +87,12 @@ public class ProjectHistoryCommandService {
     }
 
     private String nextVersionName(Long projectId) {
-        long count = projectHistoryRepository.countByProjectId(projectId);
-        return "v" + (count + 1);
+        long historyCount = projectHistoryRepository.countByProjectIdForUpdate(projectId);
+        return "v" + (historyCount + 1);
+    }
+
+    private Project lockProjectForVersionAllocation(Long projectId) {
+        return projectRepository.findByIdForUpdate(projectId)
+            .orElseThrow(() -> new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
     }
 }

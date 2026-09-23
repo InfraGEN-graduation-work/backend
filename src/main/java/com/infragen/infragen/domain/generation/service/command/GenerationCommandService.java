@@ -20,10 +20,13 @@ import com.infragen.infragen.domain.generation.validator.DeploymentTargetValidat
 import com.infragen.infragen.domain.parsing.dto.request.ParsingReqDTO;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.service.ParsingService;
-import com.infragen.infragen.domain.project.service.command.ProjectHistoryCommandService;
 import com.infragen.infragen.domain.project.converter.ProjectGraphParsingConverter;
+import com.infragen.infragen.domain.project.exception.ProjectException;
+import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
 import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
+import com.infragen.infragen.domain.project.repository.ProjectRepository;
+import com.infragen.infragen.domain.project.service.command.ProjectHistoryCommandService;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 
 import lombok.RequiredArgsConstructor;
@@ -36,6 +39,7 @@ public class GenerationCommandService {
     private final ProjectQueryService projectQueryService;
     private final ProjectNodeRepository projectNodeRepository;
     private final ProjectEdgeRepository projectEdgeRepository;
+    private final ProjectRepository projectRepository;
     private final ParsingService parsingService;
     private final IaCGenerationService iaCGenerationService;
     private final ProjectHistoryCommandService projectHistoryCommandService;
@@ -56,6 +60,7 @@ public class GenerationCommandService {
         Long memberId
     ) {
         validateRequest(request);
+        lockProjectForGeneration(projectId);
         projectQueryService.getWriteableProject(projectId, memberId);
         return generateAndSave(projectId, storedGraph(projectId), memberId,
             parsingResult -> generateBundle(request, parsingResult));
@@ -86,6 +91,7 @@ public class GenerationCommandService {
             parsingResult,
             OutputFormat.DOCKER_COMPOSE
         ).files());
+        
         return IaCFileDTO.BundleResDTO.builder()
             .files(List.copyOf(files))
             .build();
@@ -172,6 +178,12 @@ public class GenerationCommandService {
                 .toList())
             .historyId(historyId)
             .build();
+    }
+
+    // 프로젝트를 잠금 읽기로 조회하여 다른 트랜잭션에서 history 개수를 조회할 수 없도록 한다.
+    private void lockProjectForGeneration(Long projectId) {
+        projectRepository.findByIdForUpdate(projectId)
+            .orElseThrow(() -> new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
     }
 
 }

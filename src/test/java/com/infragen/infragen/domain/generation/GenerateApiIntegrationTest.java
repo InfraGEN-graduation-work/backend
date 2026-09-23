@@ -12,6 +12,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.AfterEach;
@@ -347,6 +350,49 @@ class GenerateApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("동시 Generate 요청은 같은 project에서 중복 없는 history version을 저장한다")
+    void generate_ConcurrentSameProject_SavesSequentialHistoryVersions() throws Exception {
+        // given
+        Member owner = saveMember("concurrent-owner@infragen.test");
+        Project project = saveProject(owner, "concurrent-generate-project");
+        saveDurableGraph(project, false);
+        CountDownLatch start = new CountDownLatch(1);
+
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(() -> generateAfterStart(project, owner, start));
+            var second = executor.submit(() -> generateAfterStart(project, owner, start));
+
+            // when
+            start.countDown();
+            List<ResultActions> results = List.of(
+                first.get(30, TimeUnit.SECONDS),
+                second.get(30, TimeUnit.SECONDS)
+            );
+
+            // then
+            results.forEach(result -> {
+                try {
+                    result
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.code").value("GENERATION200_1"))
+                        .andExpect(jsonPath("$.result.historyId").isNumber());
+                } catch (Exception exception) {
+                    throw new AssertionError("동시 Generate 요청이 성공해야 한다", exception);
+                }
+            });
+        }
+
+        List<ProjectHistory> histories = projectHistoryRepository
+            .findAllByProjectIdOrderByCreatedAtDesc(project.getId());
+        assertEquals(2, histories.size());
+        assertEquals(List.of("v1", "v2"), histories.stream()
+            .map(ProjectHistory::getVersionName)
+            .sorted()
+            .toList());
+        assertEquals(4, generatedFileRepository.count());
+    }
+
+    @Test
     @DisplayName("MySQL + Redis 프로젝트 생성 — Compose·.env·history 저장")
     void generate_MysqlAndRedisProject_SavesAllGeneratedContracts() throws Exception {
         // given
@@ -640,6 +686,20 @@ class GenerateApiIntegrationTest {
             .status(ProjectStatus.DRAFT)
             .member(member)
             .build());
+    }
+
+    private ResultActions generateAfterStart(
+        Project project,
+        Member owner,
+        CountDownLatch start
+    ) throws Exception {
+        if (!start.await(10, TimeUnit.SECONDS)) {
+            throw new AssertionError("동시 Generate 요청 시작 대기 초과");
+        }
+        return mockMvc.perform(post(GENERATE_URL, project.getId())
+            .with(authenticatedAs(owner))
+            .contentType(APPLICATION_JSON)
+            .content(REQUEST_JSON));
     }
 
     private void saveDurableGraph(Project project, boolean includeRedis) {

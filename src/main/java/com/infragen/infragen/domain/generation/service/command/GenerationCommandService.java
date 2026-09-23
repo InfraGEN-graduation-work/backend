@@ -5,7 +5,11 @@ import java.util.List;
 import java.util.function.Function;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.infragen.infragen.domain.generation.dto.request.DeploymentTargetReqDTO;
 import com.infragen.infragen.domain.generation.dto.request.GenerateReqDTO;
@@ -40,6 +44,7 @@ public class GenerationCommandService {
     private final ProjectNodeRepository projectNodeRepository;
     private final ProjectEdgeRepository projectEdgeRepository;
     private final ProjectRepository projectRepository;
+    private final PlatformTransactionManager transactionManager;
     private final ParsingService parsingService;
     private final IaCGenerationService iaCGenerationService;
     private final ProjectHistoryCommandService projectHistoryCommandService;
@@ -53,14 +58,13 @@ public class GenerationCommandService {
      * @param memberId 요청 회원 식별자
      * @return 생성 파일과 history 식별자
      */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public GenerateResDTO.GenerateResultResDTO generate(
         Long projectId,
         GenerateReqDTO.Request request,
         Long memberId
     ) {
         validateRequest(request);
-        lockProjectForGeneration(projectId);
         projectQueryService.getWriteableProject(projectId, memberId);
         return generateAndSave(projectId, storedGraph(projectId), memberId,
             parsingResult -> generateBundle(request, parsingResult));
@@ -135,10 +139,16 @@ public class GenerationCommandService {
     }
 
     private ParsingReqDTO storedGraph(Long projectId) {
-        return ProjectGraphParsingConverter.toParsingReqDTO(
-                projectNodeRepository.findAllByProjectId(projectId),
-                projectEdgeRepository.findAllByProjectId(projectId)
-        );
+        TransactionTemplate snapshotTransaction = new TransactionTemplate(transactionManager);
+        snapshotTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        snapshotTransaction.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
+        snapshotTransaction.setReadOnly(true);
+
+        // node와 edge를 읽는 사이 graph 교체가 commit되어 서로 다른 상태가 섞이지 않게 한다.
+        return snapshotTransaction.execute(status -> ProjectGraphParsingConverter.toParsingReqDTO(
+            projectNodeRepository.findAllByProjectId(projectId),
+            projectEdgeRepository.findAllByProjectId(projectId)
+        ));
     }
 
     private void validateCloudTarget(
@@ -163,6 +173,7 @@ public class GenerationCommandService {
         Long memberId,
         IaCFileDTO.BundleResDTO bundle
     ) {
+        lockProjectBeforeHistoryCreation(projectId);
         Long historyId = projectHistoryCommandService.saveGeneratedHistory(
             projectId, memberId, bundle.files());
 
@@ -180,8 +191,7 @@ public class GenerationCommandService {
             .build();
     }
 
-    // 프로젝트를 잠금 읽기로 조회하여 다른 트랜잭션에서 history 개수를 조회할 수 없도록 한다.
-    private void lockProjectForGeneration(Long projectId) {
+    private void lockProjectBeforeHistoryCreation(Long projectId) {
         projectRepository.findByIdForUpdate(projectId)
             .orElseThrow(() -> new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
     }

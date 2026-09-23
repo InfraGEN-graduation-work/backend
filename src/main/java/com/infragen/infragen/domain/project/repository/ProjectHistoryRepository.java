@@ -15,7 +15,7 @@ public interface ProjectHistoryRepository extends JpaRepository<ProjectHistory, 
     Optional<ProjectHistory> findByIdAndProjectId(Long id, Long projectId);
 
     /**
-     * version 발급을 위해 현재 project history 개수를 잠금 읽기로 조회한다.
+     * version 발급을 위해 project와 해당 history 행을 잠그며 현재 history 개수를 조회한다.
      * LEFT JOIN으로 history가 없어도 project row는 반환되므로 history.id만 count한다.
      *
      * @param projectId 개수를 조회하고 잠글 project 식별자
@@ -26,7 +26,7 @@ public interface ProjectHistoryRepository extends JpaRepository<ProjectHistory, 
         FROM project project
         LEFT JOIN project_history history ON history.project_id = project.id
         WHERE project.id = :projectId
-        FOR UPDATE OF project
+        FOR UPDATE OF project, history
         """, nativeQuery = true)
     long countByProjectIdForUpdate(@Param("projectId") Long projectId);
 

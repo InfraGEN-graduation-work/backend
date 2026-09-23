@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -83,9 +85,10 @@ class ProjectHistoryCommandServiceTest {
         assertEquals("Initial commit", result.description());
         assertNotNull(result.createdAt());
 
-        verify(projectQueryService).getOwnedProject(projectId, memberId);
-        verify(projectRepository).findByIdForUpdate(projectId);
-        verify(projectHistoryRepository).countByProjectIdForUpdate(projectId);
+        InOrder lockOrder = inOrder(projectQueryService, projectRepository, projectHistoryRepository);
+        lockOrder.verify(projectQueryService).getOwnedProject(projectId, memberId);
+        lockOrder.verify(projectRepository).findByIdForUpdate(projectId);
+        lockOrder.verify(projectHistoryRepository).countByProjectIdForUpdate(projectId);
         verify(projectHistoryRepository).save(any(ProjectHistory.class));
     }
 
@@ -98,15 +101,13 @@ class ProjectHistoryCommandServiceTest {
 
         when(projectQueryService.getOwnedProject(projectId, memberId))
             .thenThrow(new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
-        Project project = Project.builder().build();
-        when(projectRepository.findByIdForUpdate(projectId)).thenReturn(Optional.of(project));
 
         ProjectException exception = assertThrows(ProjectException.class,
                 () -> projectHistoryCommandService.createHistory(projectId, request, memberId));
 
         assertEquals(ProjectErrorCode.PROJECT_NOT_FOUND, exception.getCode());
         verify(projectQueryService).getOwnedProject(projectId, memberId);
-        verify(projectRepository).findByIdForUpdate(projectId);
+        verify(projectRepository, never()).findByIdForUpdate(projectId);
         verify(projectHistoryRepository, never()).countByProjectIdForUpdate(projectId);
         verify(projectHistoryRepository, never()).save(any(ProjectHistory.class));
     }
@@ -184,9 +185,10 @@ class ProjectHistoryCommandServiceTest {
         assertEquals("cloud/Dockerfile", dockerfile.getFileName());
         assertEquals("projects/100/histories/v2/cloud/Dockerfile", dockerfile.getFilePath());
 
-        verify(projectQueryService).getWriteableProject(projectId, memberId);
-        verify(projectRepository).findByIdForUpdate(projectId);
-        verify(projectHistoryRepository).countByProjectIdForUpdate(projectId);
+        InOrder lockOrder = inOrder(projectQueryService, projectRepository, projectHistoryRepository);
+        lockOrder.verify(projectQueryService).getWriteableProject(projectId, memberId);
+        lockOrder.verify(projectRepository).findByIdForUpdate(projectId);
+        lockOrder.verify(projectHistoryRepository).countByProjectIdForUpdate(projectId);
     }
 
     @Test
@@ -203,15 +205,13 @@ class ProjectHistoryCommandServiceTest {
 
         when(projectQueryService.getWriteableProject(projectId, memberId))
             .thenThrow(new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
-        Project project = Project.builder().build();
-        when(projectRepository.findByIdForUpdate(projectId)).thenReturn(Optional.of(project));
 
         ProjectException exception = assertThrows(ProjectException.class,
             () -> projectHistoryCommandService.saveGeneratedHistory(projectId, memberId, generatedFiles));
 
         assertEquals(ProjectErrorCode.PROJECT_NOT_FOUND, exception.getCode());
         verify(projectQueryService).getWriteableProject(projectId, memberId);
-        verify(projectRepository).findByIdForUpdate(projectId);
+        verify(projectRepository, never()).findByIdForUpdate(projectId);
         verify(projectHistoryRepository, never()).countByProjectIdForUpdate(projectId);
         verify(projectHistoryRepository, never()).save(any(ProjectHistory.class));
     }

@@ -3,6 +3,7 @@ package com.infragen.infragen.domain.project.service.command;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
@@ -31,7 +32,7 @@ public class ProjectHistoryCommandService {
     private final ProjectRepository projectRepository;
 
     // 프로젝트 히스토리 생성
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public ProjectHistoryResDTO.HistoryPreviewResDTO createHistory(
         Long projectId,
         ProjectHistoryReqDTO.CreateHistoryReqDTO request,
@@ -39,8 +40,8 @@ public class ProjectHistoryCommandService {
     ) {
         log.info("프로젝트 히스토리 생성 요청: projectId={}, memberId={}", projectId, memberId);
 
-        Project project = lockProjectForVersionAllocation(projectId);
         projectQueryService.getOwnedProject(projectId, memberId);
+        Project project = lockProjectForVersionAllocation(projectId);
         String versionName = nextVersionName(projectId);
 
         ProjectHistory history = ProjectHistory.builder()
@@ -56,7 +57,7 @@ public class ProjectHistoryCommandService {
     }
 
     // Generate API — IaC 파일 본문을 포함한 이력 저장 (B2-4에서 호출)
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public Long saveGeneratedHistory(
         Long projectId,
         Long memberId,
@@ -65,8 +66,8 @@ public class ProjectHistoryCommandService {
         log.info("생성 이력 저장 요청: projectId={}, memberId={}, fileCount={}",
             projectId, memberId, generatedFiles.size());
 
-        Project project = lockProjectForVersionAllocation(projectId);
         projectQueryService.getWriteableProject(projectId, memberId);
+        Project project = lockProjectForVersionAllocation(projectId);
         String versionName = nextVersionName(projectId);
 
         ProjectHistory history = ProjectHistory.builder()

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -11,14 +12,19 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 
 import com.infragen.infragen.domain.generation.dto.request.DeploymentTargetReqDTO;
 import com.infragen.infragen.domain.generation.dto.request.GenerateReqDTO;
@@ -38,12 +44,14 @@ import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
 import com.infragen.infragen.domain.parsing.service.ParsingService;
 import com.infragen.infragen.domain.project.service.command.ProjectHistoryCommandService;
+import com.infragen.infragen.domain.project.entity.Project;
 import com.infragen.infragen.domain.project.exception.ProjectException;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 import com.infragen.infragen.domain.project.entity.ProjectNode;
 import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
 import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
+import com.infragen.infragen.domain.project.repository.ProjectRepository;
 import com.infragen.infragen.global.enums.ComponentType;
 import java.util.Map;
 
@@ -59,6 +67,12 @@ class GenerationCommandServiceTest {
 
     @Mock
     private ProjectEdgeRepository projectEdgeRepository;
+
+    @Mock
+    private ProjectRepository projectRepository;
+
+    @Mock
+    private PlatformTransactionManager transactionManager;
 
     @Mock
     private ParsingService parsingService;
@@ -105,6 +119,8 @@ class GenerationCommandServiceTest {
             .files(files)
             .build();
 
+        givenRepeatableReadGraphSnapshot();
+        givenLockedProject(projectId);
         when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(null);
         when(projectNodeRepository.findAllByProjectId(projectId)).thenReturn(List.of(storedNode));
         when(projectEdgeRepository.findAllByProjectId(projectId)).thenReturn(List.of());
@@ -130,12 +146,25 @@ class GenerationCommandServiceTest {
             () -> assertEquals("local/.env", result.files().get(1).fileName()),
             () -> assertEquals(files.get(1).content(), result.files().get(1).content())
         );
-        verify(projectQueryService).getWriteableProject(projectId, memberId);
+        InOrder historyCreationOrder = inOrder(projectQueryService, projectRepository, projectHistoryCommandService);
+        historyCreationOrder.verify(projectQueryService).getWriteableProject(projectId, memberId);
+        historyCreationOrder.verify(projectRepository).findByIdForUpdate(projectId);
+        historyCreationOrder.verify(projectHistoryCommandService)
+            .saveGeneratedHistory(projectId, memberId, files);
+        ArgumentCaptor<TransactionDefinition> snapshotDefinition =
+            ArgumentCaptor.forClass(TransactionDefinition.class);
+        verify(transactionManager).getTransaction(snapshotDefinition.capture());
+        assertAll(
+            () -> assertEquals(TransactionDefinition.PROPAGATION_REQUIRES_NEW,
+                snapshotDefinition.getValue().getPropagationBehavior()),
+            () -> assertEquals(TransactionDefinition.ISOLATION_REPEATABLE_READ,
+                snapshotDefinition.getValue().getIsolationLevel()),
+            () -> assertEquals(true, snapshotDefinition.getValue().isReadOnly())
+        );
         ArgumentCaptor<ParsingReqDTO> parsingRequest = ArgumentCaptor.forClass(ParsingReqDTO.class);
         verify(parsingService).parsing(parsingRequest.capture(), eq(projectId));
         assertEquals("stored-node", parsingRequest.getValue().getNodes().get(0).getNodeId());
         verify(iaCGenerationService).generate(parsingResult, OutputFormat.DOCKER_COMPOSE);
-        verify(projectHistoryCommandService).saveGeneratedHistory(projectId, memberId, files);
     }
 
     @Test
@@ -163,6 +192,8 @@ class GenerationCommandServiceTest {
             .files(files)
             .build();
 
+        givenRepeatableReadGraphSnapshot();
+        givenLockedProject(projectId);
         when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(null);
         when(parsingService.parsing(any(ParsingReqDTO.class), eq(projectId))).thenReturn(parsingResult);
         when(iaCGenerationService.generate(parsingResult, OutputFormat.TERRAFORM, deploymentTarget))
@@ -183,10 +214,13 @@ class GenerationCommandServiceTest {
             () -> assertEquals("cloud/Dockerfile", result.files().get(0).fileName()),
             () -> assertEquals(files.get(0).content(), result.files().get(0).content())
         );
-        verify(projectQueryService).getWriteableProject(projectId, memberId);
+        InOrder historyCreationOrder = inOrder(projectQueryService, projectRepository, projectHistoryCommandService);
+        historyCreationOrder.verify(projectQueryService).getWriteableProject(projectId, memberId);
+        historyCreationOrder.verify(projectRepository).findByIdForUpdate(projectId);
+        historyCreationOrder.verify(projectHistoryCommandService)
+            .saveGeneratedHistory(projectId, memberId, files);
         verify(parsingService).parsing(any(ParsingReqDTO.class), eq(projectId));
         verify(iaCGenerationService).generate(parsingResult, OutputFormat.TERRAFORM, deploymentTarget);
-        verify(projectHistoryCommandService).saveGeneratedHistory(projectId, memberId, files);
     }
 
     @Test
@@ -398,6 +432,7 @@ class GenerationCommandServiceTest {
         verifyNoInteractions(
                 projectNodeRepository,
                 projectEdgeRepository,
+                projectRepository,
                 parsingService,
                 iaCGenerationService,
                 projectHistoryCommandService
@@ -413,6 +448,7 @@ class GenerationCommandServiceTest {
         GenerateReqDTO.Request request = localRequest();
         ParsingException parsingException = new ParsingException(ParsingErrorCode.EMPTY_NODES);
 
+        givenRepeatableReadGraphSnapshot();
         when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(null);
         when(parsingService.parsing(any(ParsingReqDTO.class), eq(projectId))).thenThrow(parsingException);
 
@@ -430,7 +466,7 @@ class GenerationCommandServiceTest {
         assertEquals(ParsingErrorCode.EMPTY_NODES, exception.getCode());
         verify(projectQueryService).getWriteableProject(projectId, memberId);
         verify(parsingService).parsing(any(ParsingReqDTO.class), eq(projectId));
-        verifyNoInteractions(iaCGenerationService, projectHistoryCommandService);
+        verifyNoInteractions(projectRepository, iaCGenerationService, projectHistoryCommandService);
     }
 
     @Test
@@ -445,6 +481,7 @@ class GenerationCommandServiceTest {
             IaCGenerationErrorCode.INVALID_COMPONENT_STATE
         );
 
+        givenRepeatableReadGraphSnapshot();
         when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(null);
         when(parsingService.parsing(any(ParsingReqDTO.class), eq(projectId))).thenReturn(parsingResult);
         when(iaCGenerationService.generate(parsingResult, OutputFormat.DOCKER_COMPOSE))
@@ -465,7 +502,17 @@ class GenerationCommandServiceTest {
         verify(projectQueryService).getWriteableProject(projectId, memberId);
         verify(parsingService).parsing(any(ParsingReqDTO.class), eq(projectId));
         verify(iaCGenerationService).generate(parsingResult, OutputFormat.DOCKER_COMPOSE);
-        verifyNoInteractions(projectHistoryCommandService);
+        verifyNoInteractions(projectRepository, projectHistoryCommandService);
+    }
+
+    private void givenLockedProject(Long projectId) {
+        when(projectRepository.findByIdForUpdate(projectId))
+            .thenReturn(Optional.of(Project.builder().build()));
+    }
+
+    private void givenRepeatableReadGraphSnapshot() {
+        when(transactionManager.getTransaction(any(TransactionDefinition.class)))
+            .thenReturn(new SimpleTransactionStatus());
     }
 
     private GenerateReqDTO.Request localRequest() {

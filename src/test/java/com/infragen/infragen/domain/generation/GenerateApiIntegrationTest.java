@@ -1,6 +1,7 @@
 package com.infragen.infragen.domain.generation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
@@ -119,38 +120,38 @@ class GenerateApiIntegrationTest {
           "deploymentTarget": null,
           "nodes": [
             {
-              "nodeId": "node-1",
+              "nodeId": "durable-mysql-node",
               "componentType": "MYSQL",
               "positionX": 100,
               "positionY": 200,
               "properties": {
                 "imageVersion": "mysql:8.0",
-                "containerName": "mysql",
-                "volumeName": "mysql_data",
+                "containerName": "durable-mysql",
+                "volumeName": "durable_mysql_data",
                 "port": 3306,
                 "env": {
-                  "databaseName": "appdb",
-                  "username": "user",
-                  "userPassword": "userpass12",
-                  "rootPassword": "rootpass12"
+                  "databaseName": "durable_db",
+                  "username": "durable_user",
+                  "userPassword": "durablepass12",
+                  "rootPassword": "durableroot12"
                 }
               }
             },
             {
-              "nodeId": "node-2",
+              "nodeId": "durable-app-node",
               "componentType": "SPRING_BOOT",
               "positionX": 400,
               "positionY": 200,
               "properties": {
-                "name": "app",
+                "name": "durable-app",
                 "port": 8080,
                 "javaVersion": "17",
-                "containerName": "spring-app"
+                "containerName": "durable-app"
               }
             }
           ],
           "edges": [
-            { "sourceNodeId": "node-1", "targetNodeId": "node-2" }
+            { "sourceNodeId": "durable-mysql-node", "targetNodeId": "durable-app-node" }
           ]
         }
         """;
@@ -161,52 +162,52 @@ class GenerateApiIntegrationTest {
           "deploymentTarget": null,
           "nodes": [
             {
-              "nodeId": "node-1",
+              "nodeId": "durable-mysql-node",
               "componentType": "MYSQL",
               "positionX": 100,
               "positionY": 200,
               "properties": {
                 "imageVersion": "mysql:8.0",
-                "containerName": "mysql",
-                "volumeName": "mysql_data",
+                "containerName": "durable-mysql",
+                "volumeName": "durable_mysql_data",
                 "port": 3306,
                 "env": {
-                  "databaseName": "appdb",
-                  "username": "user",
-                  "userPassword": "userpass12",
-                  "rootPassword": "rootpass12"
+                  "databaseName": "durable_db",
+                  "username": "durable_user",
+                  "userPassword": "durablepass12",
+                  "rootPassword": "durableroot12"
                 }
               }
             },
             {
-              "nodeId": "node-2",
+              "nodeId": "durable-redis-node",
               "componentType": "REDIS",
               "positionX": 250,
               "positionY": 200,
               "properties": {
                 "imageVersion": "redis:7.4",
-                "containerName": "redis",
-                "volumeName": "redis_data",
+                "containerName": "durable-redis",
+                "volumeName": "durable_redis_data",
                 "port": 6379,
-                "password": "test-redis-password"
+                "password": "durable-redis-password"
               }
             },
             {
-              "nodeId": "node-3",
+              "nodeId": "durable-app-node",
               "componentType": "SPRING_BOOT",
               "positionX": 400,
               "positionY": 200,
               "properties": {
-                "name": "app",
+                "name": "durable-app",
                 "port": 8080,
                 "javaVersion": "17",
-                "containerName": "spring-app"
+                "containerName": "durable-app"
               }
             }
           ],
           "edges": [
-            { "sourceNodeId": "node-1", "targetNodeId": "node-3" },
-            { "sourceNodeId": "node-2", "targetNodeId": "node-3" }
+            { "sourceNodeId": "durable-mysql-node", "targetNodeId": "durable-app-node" },
+            { "sourceNodeId": "durable-redis-node", "targetNodeId": "durable-app-node" }
           ]
         }
         """;
@@ -389,6 +390,58 @@ class GenerateApiIntegrationTest {
     }
 
     @Test
+    @DisplayName("대상 밖 필수 속성이 빠진 Redis — 요청 graph로 생성하고 저장 graph는 보존")
+    void generate_ExcludedInvalidNode_UsesRequestedGraphAndPreservesStoredGraph() throws Exception {
+        // given
+        Member owner = saveMember("excluded-node-owner@infragen.test");
+        Project project = saveProject(owner, "excluded-node-project");
+        saveDurableGraph(project, false);
+
+        List<ProjectNode> targetNodes = projectNodeRepository.findAllByProjectId(project.getId());
+        ProjectNode springBoot = targetNodes.stream()
+            .filter(node -> "durable-app-node".equals(node.getNodeId()))
+            .findFirst()
+            .orElseThrow();
+        ProjectNode excludedRedis = projectNodeRepository.saveAndFlush(ProjectNode.builder()
+            .project(project)
+            .componentType(ComponentType.REDIS)
+            .nodeId("excluded-redis-node")
+            .nodeName("excluded-redis")
+            .positionX(new java.math.BigDecimal("250"))
+            .positionY(new java.math.BigDecimal("200"))
+            .properties(Map.of(
+                "imageVersion", "redis:7.4",
+                "containerName", "excluded-redis",
+                "port", 6379
+            ))
+            .build());
+        projectEdgeRepository.saveAndFlush(ProjectEdge.builder()
+            .project(project)
+            .sourceNode(excludedRedis)
+            .targetNode(springBoot)
+            .build());
+
+        // when
+        ResultActions result = mockMvc.perform(post(GENERATE_URL, project.getId())
+            .with(authenticatedAs(owner))
+            .contentType(APPLICATION_JSON)
+            .content(REQUEST_JSON));
+
+        // then
+        result
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.isSuccess").value(true))
+            .andExpect(jsonPath("$.result.files.length()").value(2));
+
+        String response = result.andReturn().getResponse().getContentAsString();
+        assertFalse(objectMapper.readTree(response).path("result").path("files").toString()
+            .contains("excluded-redis"));
+        assertEquals(3, projectNodeRepository.findAllByProjectId(project.getId()).size());
+        assertEquals(2, projectEdgeRepository.findAllByProjectId(project.getId()).size());
+        assertEquals(1, projectHistoryRepository.countByProjectId(project.getId()));
+    }
+
+    @Test
     @DisplayName("타인 프로젝트 Generate — 쓰기 권한 오류로 거부")
     void generate_ProjectOwnedByAnotherMember_ReturnsForbidden() throws Exception {
         // given
@@ -536,30 +589,25 @@ class GenerateApiIntegrationTest {
     }
 
     @Test
-    @DisplayName("저장 graph 없음 — request body와 무관하게 400 반환")
-    void generate_WithoutStoredGraph_ReturnsBadRequestWithoutSavingHistory() throws Exception {
+    @DisplayName("저장 graph 없음 — 요청 graph로 생성하고 history 저장")
+    void generate_WithoutStoredGraph_UsesRequestGraphAndSavesHistory() throws Exception {
         // given
         Member owner = saveMember("owner@infragen.test");
-        Project project = saveProject(owner, "invalid-project");
-        String invalidRequest = REQUEST_JSON.replace(
-            "\"username\": \"user\"",
-            "\"username\": \" \""
-        );
+        Project project = saveProject(owner, "request-graph-project");
 
         // when
         ResultActions result = mockMvc.perform(post(GENERATE_URL, project.getId())
             .with(authenticatedAs(owner))
             .contentType(APPLICATION_JSON)
-            .content(invalidRequest));
+            .content(REQUEST_JSON));
 
         // then
         result
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.isSuccess").value(false))
-            .andExpect(jsonPath("$.code").value("PARSING400_1"));
-        assertEquals(0, projectHistoryRepository
-            .countByProjectId(project.getId()));
-        assertEquals(0, generatedFileRepository.count());
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.isSuccess").value(true))
+            .andExpect(jsonPath("$.result.files.length()").value(2));
+        assertEquals(1, projectHistoryRepository.countByProjectId(project.getId()));
+        assertEquals(2, generatedFileRepository.count());
     }
 
     private Member saveMember(String email) {

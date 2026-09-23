@@ -23,7 +23,11 @@ public interface GenerationControllerDocs {
     @Operation(
         summary = "인프라 코드 생성 API",
         description = """
-            프로젝트 캔버스(노드·엣지)를 검증·파싱한 뒤 IaC 파일을 생성합니다.
+            요청 body의 nodes·edges 그래프를 검증·파싱한 뒤 IaC 파일을 생성합니다.
+            이번 Generate의 입력 범위는 요청 그래프이며, 저장된 전체 프로젝트 그래프와 다를 수 있습니다.
+            요청에 포함되지 않은 노드·엣지는 파싱에 사용하지 않고 프로젝트 저장 데이터에도 변경을 가하지 않습니다.
+            nodes는 1개 이상이어야 합니다. edges가 비어 있으면 연결 부재만으로 거부하지 않습니다.
+            edge endpoint가 요청 nodes에 없거나 요청 node가 유효하지 않으면 기존 Parsing 오류로 거부합니다.
             LOCAL_DEV 기준 산출물은 의존 인프라용 docker-compose.yml과 호스트 실행용 .env입니다.
             생성 이력은 project_history·generated_file에 저장되며, 응답 historyId로 조회할 수 있습니다.
             엣지 방향: sourceNodeId(먼저 기동) → targetNodeId(나중 기동). 예) MySQL → Spring Boot.
@@ -41,7 +45,7 @@ public interface GenerationControllerDocs {
         @Parameter(description = "프로젝트 고유 식별자", required = true, example = "1")
         @PathVariable Long projectId,
         @RequestBody(
-            description = "캔버스 노드·엣지 그래프 (nested properties 형식)",
+            description = "이번 Generate 대상 nodes·edges 그래프와 배포 설정 (nested properties 형식)",
             required = true,
             content = @Content(
                 mediaType = "application/json",

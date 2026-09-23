@@ -41,10 +41,6 @@ import com.infragen.infragen.domain.project.service.command.ProjectHistoryComman
 import com.infragen.infragen.domain.project.exception.ProjectException;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
-import com.infragen.infragen.domain.project.entity.ProjectNode;
-import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
-import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
-import com.infragen.infragen.global.enums.ComponentType;
 import java.util.Map;
 
 @ExtendWith(MockitoExtension.class)
@@ -53,12 +49,6 @@ class GenerationCommandServiceTest {
 
     @Mock
     private ProjectQueryService projectQueryService;
-
-    @Mock
-    private ProjectNodeRepository projectNodeRepository;
-
-    @Mock
-    private ProjectEdgeRepository projectEdgeRepository;
 
     @Mock
     private ParsingService parsingService;
@@ -82,14 +72,6 @@ class GenerationCommandServiceTest {
         Long projectId = 1L;
         Long memberId = 2L;
         GenerateReqDTO.Request request = localRequest();
-        ProjectNode storedNode = ProjectNode.builder()
-                .componentType(ComponentType.MYSQL)
-                .nodeId("stored-node")
-                .nodeName("stored-mysql")
-                .positionX(java.math.BigDecimal.TEN)
-                .positionY(java.math.BigDecimal.ZERO)
-                .properties(java.util.Map.of("port", 3306))
-                .build();
         ParsingResultDTO parsingResult = new ParsingResultDTO();
         List<IaCFileDTO.FileContentResDTO> files = List.of(
             IaCFileDTO.FileContentResDTO.builder()
@@ -106,8 +88,6 @@ class GenerationCommandServiceTest {
             .build();
 
         when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(null);
-        when(projectNodeRepository.findAllByProjectId(projectId)).thenReturn(List.of(storedNode));
-        when(projectEdgeRepository.findAllByProjectId(projectId)).thenReturn(List.of());
         when(parsingService.parsing(any(ParsingReqDTO.class), eq(projectId))).thenReturn(parsingResult);
         when(iaCGenerationService.generate(parsingResult, OutputFormat.DOCKER_COMPOSE))
             .thenReturn(bundle);
@@ -133,7 +113,12 @@ class GenerationCommandServiceTest {
         verify(projectQueryService).getWriteableProject(projectId, memberId);
         ArgumentCaptor<ParsingReqDTO> parsingRequest = ArgumentCaptor.forClass(ParsingReqDTO.class);
         verify(parsingService).parsing(parsingRequest.capture(), eq(projectId));
-        assertEquals("stored-node", parsingRequest.getValue().getNodes().get(0).getNodeId());
+        assertEquals(
+            List.of("mysql-1", "app-1"),
+            parsingRequest.getValue().getNodes().stream().map(NodeDTO::getNodeId).toList()
+        );
+        assertEquals("mysql-1", parsingRequest.getValue().getEdges().get(0).getSourceNodeId());
+        assertEquals("app-1", parsingRequest.getValue().getEdges().get(0).getTargetNodeId());
         verify(iaCGenerationService).generate(parsingResult, OutputFormat.DOCKER_COMPOSE);
         verify(projectHistoryCommandService).saveGeneratedHistory(projectId, memberId, files);
     }
@@ -369,8 +354,6 @@ class GenerationCommandServiceTest {
         assertEquals(IaCGenerationErrorCode.MISSING_DEPLOYMENT_TARGET, exception.getCode());
         verifyNoInteractions(
             projectQueryService,
-            projectNodeRepository,
-            projectEdgeRepository,
             parsingService,
             iaCGenerationService,
             projectHistoryCommandService
@@ -396,8 +379,6 @@ class GenerationCommandServiceTest {
         assertEquals(ProjectErrorCode.PROJECT_ACCESS_DENIED, exception.getCode());
         verify(projectQueryService).getWriteableProject(projectId, viewerId);
         verifyNoInteractions(
-                projectNodeRepository,
-                projectEdgeRepository,
                 parsingService,
                 iaCGenerationService,
                 projectHistoryCommandService
@@ -473,7 +454,10 @@ class GenerationCommandServiceTest {
         edge.setSourceNodeId("mysql-1");
         edge.setTargetNodeId("app-1");
         return new GenerateReqDTO.Request(
-            List.of(new NodeDTO("mysql-1", "MYSQL", 0f, 0f, Map.of())),
+            List.of(
+                new NodeDTO("mysql-1", "MYSQL", 0f, 0f, Map.of("port", 3306)),
+                new NodeDTO("app-1", "SPRING_BOOT", 100f, 0f, Map.of("port", 8080))
+            ),
             List.of(edge),
             DeploymentOption.LOCAL,
             false,

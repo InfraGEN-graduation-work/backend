@@ -7,6 +7,7 @@ import java.util.function.Function;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.infragen.infragen.domain.generation.converter.GenerationRequestConverter;
 import com.infragen.infragen.domain.generation.dto.request.DeploymentTargetReqDTO;
 import com.infragen.infragen.domain.generation.dto.request.GenerateReqDTO;
 import com.infragen.infragen.domain.generation.dto.response.GenerateResDTO;
@@ -21,9 +22,6 @@ import com.infragen.infragen.domain.parsing.dto.request.ParsingReqDTO;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.service.ParsingService;
 import com.infragen.infragen.domain.project.service.command.ProjectHistoryCommandService;
-import com.infragen.infragen.domain.project.converter.ProjectGraphParsingConverter;
-import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
-import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 
 import lombok.RequiredArgsConstructor;
@@ -34,8 +32,6 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class GenerationCommandService {
     private final ProjectQueryService projectQueryService;
-    private final ProjectNodeRepository projectNodeRepository;
-    private final ProjectEdgeRepository projectEdgeRepository;
     private final ParsingService parsingService;
     private final IaCGenerationService iaCGenerationService;
     private final ProjectHistoryCommandService projectHistoryCommandService;
@@ -57,7 +53,10 @@ public class GenerationCommandService {
     ) {
         validateRequest(request);
         projectQueryService.getWriteableProject(projectId, memberId);
-        return generateAndSave(projectId, storedGraph(projectId), memberId,
+        return generateAndSave(
+            projectId,
+            GenerationRequestConverter.toParsingRequest(request),
+            memberId,
             parsingResult -> generateBundle(request, parsingResult));
     }
 
@@ -126,13 +125,6 @@ public class GenerationCommandService {
         IaCFileDTO.BundleResDTO bundle = bundleGenerator.apply(parsingResult);
 
         return saveGeneratedResult(projectId, memberId, bundle);
-    }
-
-    private ParsingReqDTO storedGraph(Long projectId) {
-        return ProjectGraphParsingConverter.toParsingReqDTO(
-                projectNodeRepository.findAllByProjectId(projectId),
-                projectEdgeRepository.findAllByProjectId(projectId)
-        );
     }
 
     private void validateCloudTarget(

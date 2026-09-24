@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -14,6 +15,7 @@ import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -221,8 +223,13 @@ class GenerationControllerWebTest {
                 .value("SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/appdb\n"));
 
         // then
-        verify(generationCommandService).generate(
-            eq(1L), any(GenerateReqDTO.Request.class), eq(1L));
+        ArgumentCaptor<GenerateReqDTO.Request> requestCaptor =
+            ArgumentCaptor.forClass(GenerateReqDTO.Request.class);
+        verify(generationCommandService).generate(eq(1L), requestCaptor.capture(), eq(1L));
+        assertEquals(2, requestCaptor.getValue().nodes().size());
+        assertEquals("node-1", requestCaptor.getValue().nodes().get(0).getNodeId());
+        assertEquals(1, requestCaptor.getValue().edges().size());
+        assertEquals("node-2", requestCaptor.getValue().edges().get(0).getTargetNodeId());
     }
 
     @Test

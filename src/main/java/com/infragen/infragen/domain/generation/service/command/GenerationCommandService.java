@@ -5,12 +5,10 @@ import java.util.List;
 import java.util.function.Function;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 
+import com.infragen.infragen.domain.generation.converter.GenerationRequestConverter;
 import com.infragen.infragen.domain.generation.dto.request.DeploymentTargetReqDTO;
 import com.infragen.infragen.domain.generation.dto.request.GenerateReqDTO;
 import com.infragen.infragen.domain.generation.dto.response.GenerateResDTO;
@@ -24,12 +22,6 @@ import com.infragen.infragen.domain.generation.validator.DeploymentTargetValidat
 import com.infragen.infragen.domain.parsing.dto.request.ParsingReqDTO;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.service.ParsingService;
-import com.infragen.infragen.domain.project.converter.ProjectGraphParsingConverter;
-import com.infragen.infragen.domain.project.exception.ProjectException;
-import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
-import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
-import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
-import com.infragen.infragen.domain.project.repository.ProjectRepository;
 import com.infragen.infragen.domain.project.service.command.ProjectHistoryCommandService;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 
@@ -41,10 +33,6 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class GenerationCommandService {
     private final ProjectQueryService projectQueryService;
-    private final ProjectNodeRepository projectNodeRepository;
-    private final ProjectEdgeRepository projectEdgeRepository;
-    private final ProjectRepository projectRepository;
-    private final PlatformTransactionManager transactionManager;
     private final ParsingService parsingService;
     private final IaCGenerationService iaCGenerationService;
     private final ProjectHistoryCommandService projectHistoryCommandService;
@@ -66,7 +54,10 @@ public class GenerationCommandService {
     ) {
         validateRequest(request);
         projectQueryService.getWriteableProject(projectId, memberId);
-        return generateAndSave(projectId, storedGraph(projectId), memberId,
+        return generateAndSave(
+            projectId,
+            GenerationRequestConverter.toParsingRequest(request),
+            memberId,
             parsingResult -> generateBundle(request, parsingResult));
     }
 
@@ -95,7 +86,7 @@ public class GenerationCommandService {
             parsingResult,
             OutputFormat.DOCKER_COMPOSE
         ).files());
-        
+
         return IaCFileDTO.BundleResDTO.builder()
             .files(List.copyOf(files))
             .build();
@@ -138,19 +129,6 @@ public class GenerationCommandService {
         return saveGeneratedResult(projectId, memberId, bundle);
     }
 
-    private ParsingReqDTO storedGraph(Long projectId) {
-        TransactionTemplate snapshotTransaction = new TransactionTemplate(transactionManager);
-        snapshotTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-        snapshotTransaction.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
-        snapshotTransaction.setReadOnly(true);
-
-        // node와 edge를 읽는 사이 graph 교체가 commit되어 서로 다른 상태가 섞이지 않게 한다.
-        return snapshotTransaction.execute(status -> ProjectGraphParsingConverter.toParsingReqDTO(
-            projectNodeRepository.findAllByProjectId(projectId),
-            projectEdgeRepository.findAllByProjectId(projectId)
-        ));
-    }
-
     private void validateCloudTarget(
         DeploymentOption deploymentOption,
         DeploymentTargetReqDTO.Target deploymentTarget
@@ -173,7 +151,6 @@ public class GenerationCommandService {
         Long memberId,
         IaCFileDTO.BundleResDTO bundle
     ) {
-        lockProjectBeforeHistoryCreation(projectId);
         Long historyId = projectHistoryCommandService.saveGeneratedHistory(
             projectId, memberId, bundle.files());
 
@@ -189,11 +166,6 @@ public class GenerationCommandService {
                 .toList())
             .historyId(historyId)
             .build();
-    }
-
-    private void lockProjectBeforeHistoryCreation(Long projectId) {
-        projectRepository.findByIdForUpdate(projectId)
-            .orElseThrow(() -> new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
     }
 
 }

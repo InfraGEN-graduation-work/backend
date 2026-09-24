@@ -2,7 +2,7 @@
 
 > 프론트엔드가 사용자 흐름에 따라 API를 연동할 때 사용하는 기준 문서다.
 >
-> 최종 갱신일: 2026-09-16 (#55 프로젝트 목록·metadata 계약 갱신)
+> 최종 갱신일: 2026-09-23 (#67 Generate 대상 graph 입력 계약 갱신)
 >
 > 상태: 현재는 현재 코드에 구현된 계약, 예정은 설계만 있고 아직 구현되지 않은 계약, 진행 중은 Issue #31 등에서 변경 중인 계약이다.
 
@@ -502,6 +502,10 @@ query parameter는 사용하지 않는다. 배포 범위와 target은 request bo
 
 규칙:
 
+- Generate는 요청 body의 `nodes`·`edges`만 파싱·생성 입력으로 사용한다. 프론트는 전체 캔버스를 저장한 뒤 현재 생성 대상 graph만 이 두 필드에 담는다.
+- `nodes`는 비어 있으면 안 된다. 저장 graph에만 존재하고 요청에 없는 노드는 이 Generate에서 검사하지 않으며, Generate 때문에 저장 데이터에서 삭제하지 않는다.
+- `edges`는 빈 배열을 허용한다. edge의 source·target은 모두 요청 `nodes`의 `nodeId`를 참조해야 한다. 누락되거나 잘못된 node·edge 참조는 기존 Parsing 오류로 거부한다.
+- 요청 graph는 생성 시점의 입력 snapshot으로 취급한다. 의도적으로 대상 범위가 저장 graph 전체보다 작을 수 있으므로 두 그래프 전체의 동등성은 검사하지 않는다.
 - `deploymentOption`은 `LOCAL`, `AWS`, `OCI` 중 하나이며 target 역직렬화의 단일 discriminator다.
 - `LOCAL`은 `includeLocalSpec=false`, `deploymentTarget=null`이어야 한다. JSON에는 `deploymentTarget: null`을 명시한다.
 - `AWS`·`OCI`는 선택 provider의 typed target을 `deploymentTarget` 바로 아래에 전달한다. `aws`·`oci` wrapper나 별도 `provider` 필드는 사용하지 않는다.

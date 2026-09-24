@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.function.Function;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.infragen.infragen.domain.generation.converter.GenerationRequestConverter;
@@ -45,7 +46,7 @@ public class GenerationCommandService {
      * @param memberId 요청 회원 식별자
      * @return 생성 파일과 history 식별자
      */
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public GenerateResDTO.GenerateResultResDTO generate(
         Long projectId,
         GenerateReqDTO.Request request,
@@ -85,6 +86,7 @@ public class GenerationCommandService {
             parsingResult,
             OutputFormat.DOCKER_COMPOSE
         ).files());
+
         return IaCFileDTO.BundleResDTO.builder()
             .files(List.copyOf(files))
             .build();

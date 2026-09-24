@@ -11,11 +11,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -37,11 +38,10 @@ import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
 import com.infragen.infragen.domain.parsing.service.ParsingService;
-import com.infragen.infragen.domain.project.service.command.ProjectHistoryCommandService;
 import com.infragen.infragen.domain.project.exception.ProjectException;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
+import com.infragen.infragen.domain.project.service.command.ProjectHistoryCommandService;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
-import java.util.Map;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("GenerationCommandService")
@@ -111,6 +111,7 @@ class GenerationCommandServiceTest {
             () -> assertEquals(files.get(1).content(), result.files().get(1).content())
         );
         verify(projectQueryService).getWriteableProject(projectId, memberId);
+        verify(projectHistoryCommandService).saveGeneratedHistory(projectId, memberId, files);
         ArgumentCaptor<ParsingReqDTO> parsingRequest = ArgumentCaptor.forClass(ParsingReqDTO.class);
         verify(parsingService).parsing(parsingRequest.capture(), eq(projectId));
         assertEquals(
@@ -120,7 +121,6 @@ class GenerationCommandServiceTest {
         assertEquals("mysql-1", parsingRequest.getValue().getEdges().get(0).getSourceNodeId());
         assertEquals("app-1", parsingRequest.getValue().getEdges().get(0).getTargetNodeId());
         verify(iaCGenerationService).generate(parsingResult, OutputFormat.DOCKER_COMPOSE);
-        verify(projectHistoryCommandService).saveGeneratedHistory(projectId, memberId, files);
     }
 
     @Test
@@ -169,9 +169,9 @@ class GenerationCommandServiceTest {
             () -> assertEquals(files.get(0).content(), result.files().get(0).content())
         );
         verify(projectQueryService).getWriteableProject(projectId, memberId);
+        verify(projectHistoryCommandService).saveGeneratedHistory(projectId, memberId, files);
         verify(parsingService).parsing(any(ParsingReqDTO.class), eq(projectId));
         verify(iaCGenerationService).generate(parsingResult, OutputFormat.TERRAFORM, deploymentTarget);
-        verify(projectHistoryCommandService).saveGeneratedHistory(projectId, memberId, files);
     }
 
     @Test

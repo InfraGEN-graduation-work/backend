@@ -6,6 +6,8 @@ import com.infragen.infragen.domain.project.entity.Project;
 import com.infragen.infragen.domain.project.entity.ProjectCollaborator;
 import com.infragen.infragen.domain.project.enums.ProjectCollaboratorRole;
 import com.infragen.infragen.domain.project.enums.ProjectStatus;
+import com.infragen.infragen.domain.project.exception.ProjectException;
+import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.repository.ProjectCollaboratorRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
@@ -18,12 +20,16 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectCollaboratorQueryServiceTest {
     @Mock
-    private ProjectQueryService projectQueryService;
+    private ProjectAccessService projectAccessService;
 
     @Mock
     private ProjectCollaboratorRepository collaboratorRepository;
@@ -45,7 +51,6 @@ class ProjectCollaboratorQueryServiceTest {
                 .member(Member.builder().nickname("editor").isActive(true).build())
                 .role(ProjectCollaboratorRole.EDITOR)
                 .build();
-        when(projectQueryService.getOwnedProject(1L, 10L)).thenReturn(project);
         when(collaboratorRepository.findAllByProjectId(1L)).thenReturn(List.of(collaborator));
 
         // when
@@ -54,6 +59,7 @@ class ProjectCollaboratorQueryServiceTest {
         // then
         assertEquals(1, result.collaborators().size());
         assertEquals(ProjectCollaboratorRole.EDITOR, result.collaborators().get(0).role());
+        verify(projectAccessService).requireReadAccess(1L, 10L);
     }
 
     @Test
@@ -77,7 +83,6 @@ class ProjectCollaboratorQueryServiceTest {
                 .member(invitedGuest)
                 .role(ProjectCollaboratorRole.EDITOR)
                 .build();
-        when(projectQueryService.getOwnedProject(1L, 99L)).thenReturn(guestProject);
         when(collaboratorRepository.findAllByProjectId(1L)).thenReturn(List.of(collaborator));
 
         // when
@@ -86,5 +91,24 @@ class ProjectCollaboratorQueryServiceTest {
         // then
         assertEquals(20L, result.collaborators().getFirst().memberId());
         assertEquals(ProjectCollaboratorRole.EDITOR, result.collaborators().getFirst().role());
+        verify(projectAccessService).requireReadAccess(1L, 99L);
+    }
+
+    @Test
+    @DisplayName("프로젝트 비참여자는 collaborator 목록을 조회할 수 없다")
+    void getAll_NonCollaborator_RejectsBeforeLoadingList() {
+        // given
+        doThrow(new ProjectException(ProjectErrorCode.PROJECT_ACCESS_DENIED))
+                .when(projectAccessService).requireReadAccess(1L, 30L);
+
+        // when
+        ProjectException exception = assertThrows(
+                ProjectException.class,
+                () -> service.getAll(1L, 30L)
+        );
+
+        // then
+        assertEquals(ProjectErrorCode.PROJECT_ACCESS_DENIED, exception.getCode());
+        verify(collaboratorRepository, never()).findAllByProjectId(1L);
     }
 }

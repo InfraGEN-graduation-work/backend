@@ -119,6 +119,24 @@ class ProjectCollaboratorControllerWebTest {
                 .andExpect(jsonPath("$.code").value("PROJECT200_5"))
                 .andExpect(jsonPath("$.result.collaborators[0].memberId").value(8))
                 .andExpect(jsonPath("$.result.collaborators[0].role").value("EDITOR"));
+        verify(collaboratorQueryService).getAll(1L, 7L);
+    }
+
+    @Test
+    @DisplayName("프로젝트 비참여자의 collaborator 목록 요청은 403으로 거부한다")
+    void getCollaborators_NonCollaborator_ReturnsForbidden() throws Exception {
+        // given
+        doThrow(new ProjectException(ProjectErrorCode.PROJECT_ACCESS_DENIED))
+                .when(collaboratorQueryService).getAll(1L, 9L);
+
+        // when
+        var response = mockMvc.perform(get(BASE_URL, 1L).with(authenticatedAs(9L)));
+
+        // then
+        response.andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.isSuccess").value(false))
+                .andExpect(jsonPath("$.code").value("PROJECT403_1"));
+        verify(collaboratorQueryService).getAll(1L, 9L);
     }
 
     @Test

@@ -10,15 +10,15 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ProjectCollaboratorQueryService {
-    private final ProjectQueryService projectQueryService;
+    private final ProjectAccessService projectAccessService;
     private final ProjectCollaboratorRepository collaboratorRepository;
 
     /**
-     * owner가 관리하는 project의 collaborator 목록을 조회한다.
+     * owner 또는 project 참여자가 collaborator 목록을 조회한다.
      */
     @Transactional(readOnly = true)
-    public ProjectCollaboratorResDTO.ListResult getAll(Long projectId, Long ownerId) {
-        projectQueryService.getOwnedProject(projectId, ownerId);
+    public ProjectCollaboratorResDTO.ListResult getAll(Long projectId, Long memberId) {
+        projectAccessService.requireReadAccess(projectId, memberId);
         return ProjectCollaboratorConverter.toListResult(
                 collaboratorRepository.findAllByProjectId(projectId)
         );

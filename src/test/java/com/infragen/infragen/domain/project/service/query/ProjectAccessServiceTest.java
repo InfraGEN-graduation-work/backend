@@ -74,7 +74,11 @@ class ProjectAccessServiceTest {
         Long memberId = 2L;
         when(projectRepository.findByIdAndMemberId(projectId, memberId))
                 .thenReturn(Optional.empty());
+        when(projectCollaboratorRepository.existsByProjectIdAndMemberId(projectId, memberId))
+                .thenReturn(true);
         // when
+        assertDoesNotThrow(() -> projectAccessService.requireReadAccess(projectId, memberId));
+
         ProjectException exception = assertThrows(
                 ProjectException.class,
                 () -> projectAccessService.requireWriteAccess(projectId, memberId)

@@ -61,4 +61,13 @@ public interface ProjectCollaboratorControllerDocs {
             @PathVariable Long projectId,
             @PathVariable Long memberId
     );
+
+    @Operation(
+            summary = "프로젝트에서 나가기",
+            description = "로그인한 EDITOR 또는 VIEWER가 자신의 collaborator membership만 삭제합니다. owner는 PROJECT403_2, 비참여자·이미 나간 회원은 PROJECT404_2를 받습니다. 프로젝트와 그래프·생성 파일·이력은 유지됩니다."
+    )
+    ApiResponse<Void> leaveProject(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long projectId
+    );
 }

@@ -14,6 +14,11 @@ import com.infragen.infragen.domain.collaboration.service.command.ProjectCollabo
 import com.infragen.infragen.domain.collaboration.service.command.ProjectCollaborationSnapshotWriter;
 import com.infragen.infragen.domain.collaboration.service.command.ProjectCollaborationVersionService;
 import com.infragen.infragen.domain.collaboration.service.query.CollaborationSnapshotQueryService;
+import com.infragen.infragen.domain.generation.dto.request.GenerateReqDTO;
+import com.infragen.infragen.domain.generation.enums.DeploymentOption;
+import com.infragen.infragen.domain.generation.service.IaCGenerationService;
+import com.infragen.infragen.domain.generation.service.command.GenerationCommandService;
+import com.infragen.infragen.domain.generation.validator.DeploymentTargetValidator;
 import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.service.query.MemberQueryService;
@@ -24,6 +29,8 @@ import com.infragen.infragen.domain.project.dto.response.ProjectResDTO;
 import com.infragen.infragen.domain.project.entity.Project;
 import com.infragen.infragen.domain.project.entity.ProjectCollaborator;
 import com.infragen.infragen.domain.project.entity.ProjectEdge;
+import com.infragen.infragen.domain.project.entity.GeneratedFile;
+import com.infragen.infragen.domain.project.entity.ProjectHistory;
 import com.infragen.infragen.domain.project.entity.ProjectNode;
 import com.infragen.infragen.domain.project.enums.ProjectCollaboratorRole;
 import com.infragen.infragen.domain.project.enums.ProjectStatus;
@@ -32,14 +39,18 @@ import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCod
 import com.infragen.infragen.domain.project.repository.ProjectCollaboratorRepository;
 import com.infragen.infragen.domain.project.repository.ProjectRepository;
 import com.infragen.infragen.domain.project.service.command.ProjectCommandService;
+import com.infragen.infragen.domain.project.service.command.ProjectCollaboratorCommandService;
+import com.infragen.infragen.domain.project.service.command.ProjectHistoryCommandService;
 import com.infragen.infragen.domain.project.service.query.ProjectAccessService;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
+import com.infragen.infragen.domain.parsing.service.ParsingService;
 import com.infragen.infragen.global.enums.ComponentType;
 import jakarta.persistence.EntityManager;
 import org.hibernate.SessionFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -116,6 +127,8 @@ class ProjectAccessMetadataIntegrationTest {
     @Autowired ProjectCollaborationStateRepository stateRepository;
     @Autowired ProjectQueryService queryService;
     @Autowired ProjectCommandService commandService;
+    @Autowired ProjectCollaboratorCommandService collaboratorCommandService;
+    @Autowired GenerationCommandService generationCommandService;
     @Autowired CollaborationSnapshotQueryService snapshotQueryService;
     @Autowired CollaborationOperationTransactionService operationService;
     @Autowired PlatformTransactionManager transactionManager;
@@ -124,6 +137,10 @@ class ProjectAccessMetadataIntegrationTest {
     @MockitoBean ProjectCollaborationSnapshotWriter snapshotWriter;
     @MockitoBean ProjectCollaborationCheckpointFailureService failureService;
     @MockitoBean SimpMessagingTemplate messagingTemplate;
+    @MockitoBean ParsingService parsingService;
+    @MockitoBean IaCGenerationService iaCGenerationService;
+    @MockitoBean ProjectHistoryCommandService historyCommandService;
+    @MockitoBean DeploymentTargetValidator deploymentTargetValidator;
 
     @Configuration
     @EnableJpaAuditing
@@ -133,7 +150,8 @@ class ProjectAccessMetadataIntegrationTest {
             "com.infragen.infragen.domain.member.repository",
             "com.infragen.infragen.domain.collaboration.repository"
     })
-    @Import({ProjectQueryService.class, ProjectCommandService.class, ProjectAccessService.class,
+    @Import({ProjectQueryService.class, ProjectCommandService.class, ProjectCollaboratorCommandService.class,
+            ProjectAccessService.class, GenerationCommandService.class,
             ProjectCollaborationVersionService.class, ProjectCollaborationSnapshotCommandService.class,
             CollaborationSnapshotQueryService.class, ProjectRoomResyncPublisher.class,
             CollaborationOperationTransactionService.class})
@@ -199,6 +217,64 @@ class ProjectAccessMetadataIntegrationTest {
 
         // then
         assertEquals(List.of(owned.getId()), result.stream().map(row -> row.projectId()).toList());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ProjectCollaboratorRole.class, names = {"EDITOR", "VIEWER"})
+    @DisplayName("EDITOR와 VIEWER가 나가면 본인 접근만 끊기고 프로젝트 데이터는 유지된다")
+    void leaveProject_Collaborator_PreservesProjectDataAndRevokesAccess(ProjectCollaboratorRole role) {
+        // given
+        Fixture fixture = fixture();
+        Long memberId = role == ProjectCollaboratorRole.EDITOR ? fixture.editorId() : fixture.viewerId();
+        Long remainingMemberId = role == ProjectCollaboratorRole.EDITOR ? fixture.viewerId() : fixture.editorId();
+        Long historyId = new TransactionTemplate(transactionManager).execute(status -> {
+            Project project = entityManager.find(Project.class, fixture.projectId());
+            ProjectHistory history = ProjectHistory.builder().project(project).versionName("v1").build();
+            history.addGeneratedFile(GeneratedFile.builder().fileName("compose.yaml")
+                    .filePath("local/compose.yaml").content("services: {}").fileSize(12).build());
+            entityManager.persist(history);
+            entityManager.flush();
+            return history.getId();
+        });
+        var before = queryService.getProjectDetail(fixture.projectId(), fixture.ownerId());
+
+        // when
+        collaboratorCommandService.leave(fixture.projectId(), memberId);
+
+        // then
+        assertAll(
+                () -> assertFalse(collaboratorRepository.existsByProjectIdAndMemberId(fixture.projectId(), memberId)),
+                () -> assertTrue(collaboratorRepository.existsByProjectIdAndMemberId(fixture.projectId(), remainingMemberId)),
+                () -> assertEquals(before, queryService.getProjectDetail(fixture.projectId(), fixture.ownerId())),
+                () -> assertEquals(1, jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM project_history WHERE id = ?", Integer.class, historyId)),
+                () -> assertEquals(1, jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM generated_file WHERE history_id = ?", Integer.class, historyId)),
+                () -> assertEquals(ProjectErrorCode.PROJECT_ACCESS_DENIED,
+                        assertThrows(ProjectException.class, () -> queryService.getProjectDetail(
+                                fixture.projectId(), memberId)).getCode()),
+                () -> assertEquals(ProjectErrorCode.PROJECT_ACCESS_DENIED,
+                        assertThrows(ProjectException.class, () -> queryService.getWriteableProject(
+                                fixture.projectId(), memberId)).getCode())
+        );
+    }
+
+    @Test
+    @DisplayName("탈퇴한 EDITOR의 Generate 요청은 파싱과 이력 저장 전에 거부한다")
+    void generate_FormerEditor_RejectsBeforeGeneratingFiles() {
+        // given
+        Fixture fixture = fixture();
+        collaboratorCommandService.leave(fixture.projectId(), fixture.editorId());
+        GenerateReqDTO.Request request = new GenerateReqDTO.Request(
+                List.of(), List.of(), DeploymentOption.LOCAL, false, null);
+
+        // when
+        ProjectException exception = assertThrows(ProjectException.class,
+                () -> generationCommandService.generate(fixture.projectId(), request, fixture.editorId()));
+
+        // then
+        assertEquals(ProjectErrorCode.PROJECT_ACCESS_DENIED, exception.getCode());
+        verifyNoInteractions(parsingService, iaCGenerationService, historyCommandService);
     }
 
     @Test

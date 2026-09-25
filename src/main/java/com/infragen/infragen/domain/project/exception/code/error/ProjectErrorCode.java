@@ -22,6 +22,11 @@ public enum ProjectErrorCode implements BaseErrorCode {
             "해당 프로젝트에 대한 접근 권한이 없습니다.",
             "PROJECT403_1"
     ),
+    OWNER_CANNOT_LEAVE_PROJECT(
+            HttpStatus.FORBIDDEN,
+            "프로젝트 소유자는 협업자 나가기 기능을 사용할 수 없습니다.",
+            "PROJECT403_2"
+    ),
     PROJECT_CONCURRENCY_ERROR(
             HttpStatus.CONFLICT,
             "다른 사용자가 동시에 캔버스를 수정하여 저장할 수 없습니다.",

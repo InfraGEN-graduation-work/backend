@@ -11,6 +11,7 @@ import com.infragen.infragen.domain.project.entity.ProjectCollaborator;
 import com.infragen.infragen.domain.project.exception.ProjectException;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.repository.ProjectCollaboratorRepository;
+import com.infragen.infragen.domain.project.repository.ProjectRepository;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 public class ProjectCollaboratorCommandService {
     private final ProjectQueryService projectQueryService;
     private final ProjectCollaboratorRepository collaboratorRepository;
+    private final ProjectRepository projectRepository;
 
     /** 기존 숫자 memberId 직접 등록 요청을 거부하고 초대코드 경로만 사용하게 한다. */
     public void rejectMemberIdAddition(Long projectId, Long ownerId) {
@@ -52,6 +54,17 @@ public class ProjectCollaboratorCommandService {
         if (project.getMember().getRole() == Role.ROLE_GUEST) {
             ProjectCollaborator collaborator = findCollaborator(projectId, memberId);
             ensureGuestOwnerOnlyManagesGuests(project, collaborator.getMember());
+        }
+        if (collaboratorRepository.deleteByProjectIdAndMemberId(projectId, memberId) == 0) {
+            throw new ProjectException(ProjectErrorCode.COLLABORATOR_NOT_FOUND);
+        }
+    }
+
+    /** owner는 나갈 수 없으며, 인증된 회원의 collaborator membership만 삭제한다. */
+    @Transactional
+    public void leave(Long projectId, Long memberId) {
+        if (projectRepository.existsByIdAndMemberId(projectId, memberId)) {
+            throw new ProjectException(ProjectErrorCode.OWNER_CANNOT_LEAVE_PROJECT);
         }
         if (collaboratorRepository.deleteByProjectIdAndMemberId(projectId, memberId) == 0) {
             throw new ProjectException(ProjectErrorCode.COLLABORATOR_NOT_FOUND);

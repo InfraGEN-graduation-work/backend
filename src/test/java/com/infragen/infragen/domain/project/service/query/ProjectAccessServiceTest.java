@@ -8,6 +8,7 @@ import com.infragen.infragen.domain.project.exception.ProjectException;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.repository.ProjectCollaboratorRepository;
 import com.infragen.infragen.domain.project.repository.ProjectRepository;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -102,6 +103,28 @@ class ProjectAccessServiceTest {
         ProjectException exception = assertThrows(
                 ProjectException.class,
                 () -> projectAccessService.requireReadAccess(projectId, memberId)
+        );
+
+        // then
+        assertEquals(ProjectErrorCode.PROJECT_ACCESS_DENIED, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("membership이 없는 이전 참여자는 프로젝트를 수정할 수 없다")
+    void formerCollaborator_cannotWriteProject() {
+        // given
+        Long projectId = 1L;
+        Long memberId = 2L;
+        when(projectRepository.findByIdAndMemberId(projectId, memberId))
+                .thenReturn(Optional.empty());
+        when(projectCollaboratorRepository.existsByProjectIdAndMemberIdAndRole(
+                projectId, memberId, ProjectCollaboratorRole.EDITOR))
+                .thenReturn(false);
+
+        // when
+        ProjectException exception = assertThrows(
+                ProjectException.class,
+                () -> projectAccessService.requireWriteAccess(projectId, memberId)
         );
 
         // then

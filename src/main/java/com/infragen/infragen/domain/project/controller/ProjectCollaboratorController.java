@@ -116,4 +116,15 @@ public class ProjectCollaboratorController implements ProjectCollaboratorControl
         collaboratorCommandService.delete(projectId, userDetails.getMemberId(), memberId);
         return ApiResponse.onSuccess(ProjectSuccessCode.PROJECT_COLLABORATOR_DELETE_SUCCESS, null);
     }
+
+    /** 인증된 collaborator가 자신의 membership만 삭제하고 프로젝트에서 나간다. */
+    @Override
+    @DeleteMapping("/me")
+    public ApiResponse<Void> leaveProject(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long projectId
+    ) {
+        collaboratorCommandService.leave(projectId, userDetails.getMemberId());
+        return ApiResponse.onSuccess(ProjectSuccessCode.PROJECT_COLLABORATOR_DELETE_SUCCESS, null);
+    }
 }

@@ -42,6 +42,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -271,6 +272,56 @@ class ProjectCollaboratorControllerWebTest {
                 any(ProjectCollaboratorReqDTO.ChangeRole.class)
         );
         verify(collaboratorCommandService).delete(1L, 7L, 8L);
+    }
+
+    @Test
+    @DisplayName("본인 탈퇴 요청은 인증된 회원의 ID만 사용하고 성공 응답을 반환한다")
+    void leaveProject_AuthenticatedCollaborator_ReturnsSuccess() throws Exception {
+        // when
+        var response = mockMvc.perform(delete(BASE_URL + "/me", 1L)
+                .with(authenticatedAs(7L)));
+
+        // then
+        response.andExpect(status().isOk())
+                .andExpect(jsonPath("$.isSuccess").value(true))
+                .andExpect(jsonPath("$.code").value("PROJECT200_7"));
+        verify(collaboratorCommandService).leave(1L, 7L);
+        verify(collaboratorCommandService, never()).delete(1L, 7L, 7L);
+    }
+
+    @Test
+    @DisplayName("owner의 본인 탈퇴는 접근 거부 응답을 반환한다")
+    void leaveProject_Owner_ReturnsForbidden() throws Exception {
+        // given
+        doThrow(new ProjectException(ProjectErrorCode.OWNER_CANNOT_LEAVE_PROJECT))
+                .when(collaboratorCommandService).leave(1L, 7L);
+
+        // when
+        var response = mockMvc.perform(delete(BASE_URL + "/me", 1L)
+                .with(authenticatedAs(7L)));
+
+        // then
+        response.andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.isSuccess").value(false))
+                .andExpect(jsonPath("$.code").value("PROJECT403_2"))
+                .andExpect(jsonPath("$.message").value("프로젝트 소유자는 협업자 나가기 기능을 사용할 수 없습니다."));
+    }
+
+    @Test
+    @DisplayName("참여하지 않거나 이미 나간 회원은 collaborator 조회 오류를 받는다")
+    void leaveProject_NonCollaborator_ReturnsNotFound() throws Exception {
+        // given
+        doThrow(new ProjectException(ProjectErrorCode.COLLABORATOR_NOT_FOUND))
+                .when(collaboratorCommandService).leave(1L, 7L);
+
+        // when
+        var response = mockMvc.perform(delete(BASE_URL + "/me", 1L)
+                .with(authenticatedAs(7L)));
+
+        // then
+        response.andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.isSuccess").value(false))
+                .andExpect(jsonPath("$.code").value("PROJECT404_2"));
     }
 
     @Test

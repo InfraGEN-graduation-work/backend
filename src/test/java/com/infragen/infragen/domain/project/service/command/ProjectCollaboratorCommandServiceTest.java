@@ -10,10 +10,13 @@ import com.infragen.infragen.domain.project.enums.ProjectStatus;
 import com.infragen.infragen.domain.project.exception.ProjectException;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.repository.ProjectCollaboratorRepository;
+import com.infragen.infragen.domain.project.repository.ProjectRepository;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -25,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -36,6 +40,9 @@ class ProjectCollaboratorCommandServiceTest {
 
     @Mock
     private ProjectCollaboratorRepository collaboratorRepository;
+
+    @Mock
+    private ProjectRepository projectRepository;
 
     @InjectMocks
     private ProjectCollaboratorCommandService service;
@@ -98,6 +105,72 @@ class ProjectCollaboratorCommandServiceTest {
 
         // then
         assertEquals(ProjectErrorCode.COLLABORATOR_NOT_FOUND, exception.getCode());
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {20L, 30L})
+    @DisplayName("서로 다른 collaborator가 자신의 membership만 삭제할 수 있다")
+    void leave_Collaborator_DeletesOwnMembership(long memberId) {
+        // given
+        when(collaboratorRepository.deleteByProjectIdAndMemberId(1L, memberId)).thenReturn(1L);
+
+        // when
+        service.leave(1L, memberId);
+
+        // then
+        verify(projectRepository).existsByIdAndMemberId(1L, memberId);
+        verify(collaboratorRepository).deleteByProjectIdAndMemberId(1L, memberId);
+    }
+
+    @Test
+    @DisplayName("owner는 본인 탈퇴 API로 프로젝트에서 나갈 수 없다")
+    void leave_Owner_ThrowsOwnerCannotLeave() {
+        // given
+        when(projectRepository.existsByIdAndMemberId(1L, 10L)).thenReturn(true);
+
+        // when
+        ProjectException exception = assertThrows(
+                ProjectException.class,
+                () -> service.leave(1L, 10L)
+        );
+
+        // then
+        assertEquals(ProjectErrorCode.OWNER_CANNOT_LEAVE_PROJECT, exception.getCode());
+        verifyNoInteractions(collaboratorRepository);
+    }
+
+    @Test
+    @DisplayName("프로젝트에 참여하지 않은 회원은 탈퇴할 수 없다")
+    void leave_NonCollaborator_ThrowsNotFound() {
+        // when
+        ProjectException exception = assertThrows(
+                ProjectException.class,
+                () -> service.leave(1L, 20L)
+        );
+
+        // then
+        assertEquals(ProjectErrorCode.COLLABORATOR_NOT_FOUND, exception.getCode());
+        verify(collaboratorRepository).deleteByProjectIdAndMemberId(1L, 20L);
+    }
+
+    @Test
+    @DisplayName("프로젝트에서 두 번 나가면 두 번째 요청은 거부한다")
+    void leave_Twice_SecondRequestThrowsNotFound() {
+        // given
+        when(collaboratorRepository.deleteByProjectIdAndMemberId(1L, 20L))
+                .thenReturn(1L, 0L);
+
+        // when
+        service.leave(1L, 20L);
+        ProjectException exception = assertThrows(
+                ProjectException.class,
+                () -> service.leave(1L, 20L)
+        );
+
+        // then
+        assertEquals(ProjectErrorCode.COLLABORATOR_NOT_FOUND, exception.getCode());
+        verify(collaboratorRepository, times(2))
+                .deleteByProjectIdAndMemberId(1L, 20L);
     }
 
     @Test

@@ -54,6 +54,7 @@ class ProjectHistoryCommandServiceTest {
     @Test
     @DisplayName("히스토리 생성 - 성공 시 요약 정보 반환 및 순차 버전 생성")
     void createHistory_Success() {
+        // given
         Long memberId = 1L;
         Long projectId = 100L;
         ProjectHistoryReqDTO.CreateHistoryReqDTO request = new ProjectHistoryReqDTO.CreateHistoryReqDTO("Initial commit");
@@ -67,46 +68,55 @@ class ProjectHistoryCommandServiceTest {
         ProjectHistory savedHistory = ProjectHistory.builder()
                 .versionName("v1")
                 .description("Initial commit")
+                .actorMemberId(memberId)
                 .project(project)
                 .build();
         ReflectionTestUtils.setField(savedHistory, "id", 200L);
         ReflectionTestUtils.setField(savedHistory, "createdAt", LocalDateTime.now());
 
-        when(projectQueryService.getOwnedProject(projectId, memberId)).thenReturn(project);
+        when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(project);
         when(projectRepository.findByIdForUpdate(projectId)).thenReturn(Optional.of(project));
         when(projectHistoryRepository.countByProjectIdForUpdate(projectId)).thenReturn(0L);
         when(projectHistoryRepository.save(any(ProjectHistory.class))).thenReturn(savedHistory);
 
+        // when
         ProjectHistoryResDTO.HistoryPreviewResDTO result = projectHistoryCommandService.createHistory(projectId, request, memberId);
 
+        // then
         assertNotNull(result);
         assertEquals(200L, result.historyId());
         assertEquals("v1", result.versionName());
         assertEquals("Initial commit", result.description());
+        assertEquals(memberId, result.actorMemberId());
         assertNotNull(result.createdAt());
 
         InOrder lockOrder = inOrder(projectQueryService, projectRepository, projectHistoryRepository);
-        lockOrder.verify(projectQueryService).getOwnedProject(projectId, memberId);
+        lockOrder.verify(projectQueryService).getWriteableProject(projectId, memberId);
         lockOrder.verify(projectRepository).findByIdForUpdate(projectId);
         lockOrder.verify(projectHistoryRepository).countByProjectIdForUpdate(projectId);
-        verify(projectHistoryRepository).save(any(ProjectHistory.class));
+        ArgumentCaptor<ProjectHistory> historyCaptor = ArgumentCaptor.forClass(ProjectHistory.class);
+        verify(projectHistoryRepository).save(historyCaptor.capture());
+        assertEquals(memberId, historyCaptor.getValue().getActorMemberId());
     }
 
     @Test
-    @DisplayName("히스토리 생성 - 프로젝트가 없거나 권한 불일치 시 예외 발생")
-    void createHistory_ProjectNotFound_ThrowsException() {
+    @DisplayName("히스토리 생성 - 쓰기 권한이 없으면 저장 전에 거부")
+    void createHistory_AccessDenied_DoesNotSaveHistory() {
+        // given
         Long memberId = 1L;
         Long projectId = 100L;
         ProjectHistoryReqDTO.CreateHistoryReqDTO request = new ProjectHistoryReqDTO.CreateHistoryReqDTO("Initial commit");
 
-        when(projectQueryService.getOwnedProject(projectId, memberId))
-            .thenThrow(new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
+        when(projectQueryService.getWriteableProject(projectId, memberId))
+            .thenThrow(new ProjectException(ProjectErrorCode.PROJECT_ACCESS_DENIED));
 
+        // when
         ProjectException exception = assertThrows(ProjectException.class,
                 () -> projectHistoryCommandService.createHistory(projectId, request, memberId));
 
-        assertEquals(ProjectErrorCode.PROJECT_NOT_FOUND, exception.getCode());
-        verify(projectQueryService).getOwnedProject(projectId, memberId);
+        // then
+        assertEquals(ProjectErrorCode.PROJECT_ACCESS_DENIED, exception.getCode());
+        verify(projectQueryService).getWriteableProject(projectId, memberId);
         verify(projectRepository, never()).findByIdForUpdate(projectId);
         verify(projectHistoryRepository, never()).countByProjectIdForUpdate(projectId);
         verify(projectHistoryRepository, never()).save(any(ProjectHistory.class));
@@ -115,6 +125,7 @@ class ProjectHistoryCommandServiceTest {
     @Test
     @DisplayName("생성 이력 저장 - 성공 시 historyId 반환 및 파일 본문·경로 저장")
     void saveGeneratedHistory_Success() {
+        // given
         Long memberId = 1L;
         Long projectId = 100L;
         List<IaCFileDTO.FileContentResDTO> generatedFiles = List.of(
@@ -151,11 +162,13 @@ class ProjectHistoryCommandServiceTest {
             return history;
         });
 
+        // when
         Long historyId = projectHistoryCommandService.saveGeneratedHistory(
             projectId, memberId, generatedFiles);
 
+        // then
         assertEquals(300L, historyId);
-        
+
         // 저장된 ProjectHistory 객체를 확인
         ArgumentCaptor<ProjectHistory> historyCaptor = ArgumentCaptor.forClass(ProjectHistory.class);
         verify(projectHistoryRepository).save(historyCaptor.capture());
@@ -163,6 +176,7 @@ class ProjectHistoryCommandServiceTest {
         ProjectHistory savedHistory = historyCaptor.getValue();
         assertEquals("v2", savedHistory.getVersionName());
         assertNull(savedHistory.getDescription());
+        assertEquals(memberId, savedHistory.getActorMemberId());
         assertEquals(project, savedHistory.getProject());
         assertEquals(4, savedHistory.getGeneratedFileList().size());
 

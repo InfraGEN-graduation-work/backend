@@ -5,14 +5,17 @@ import java.util.List;
 
 import lombok.Builder;
 
-public class ProjectHistoryResDTO {
+public final class ProjectHistoryResDTO {
+    private ProjectHistoryResDTO() {
+    }
 
     @Builder
     public record HistoryPreviewResDTO(
         Long historyId,
         String versionName,
         String description,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        Long actorMemberId
     ) {
     }
 
@@ -28,7 +31,8 @@ public class ProjectHistoryResDTO {
         String versionName,
         String description,
         LocalDateTime createdAt,
-        List<GeneratedFileResDTO.FileInfoResDTO> generatedFileList
+        List<GeneratedFileResDTO.FileInfoResDTO> generatedFileList,
+        Long actorMemberId
     ) {
     }
 }

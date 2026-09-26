@@ -7,7 +7,9 @@ import com.infragen.infragen.domain.project.dto.response.GeneratedFileResDTO;
 import com.infragen.infragen.domain.project.entity.GeneratedFile;
 import com.infragen.infragen.domain.project.entity.ProjectHistory;
 
-public class ProjectHistoryConverter {
+public final class ProjectHistoryConverter {
+    private ProjectHistoryConverter() {
+    }
 
     public static ProjectHistoryResDTO.HistoryPreviewResDTO toHistoryPreviewResDTO(ProjectHistory history) {
         return ProjectHistoryResDTO.HistoryPreviewResDTO.builder()
@@ -15,6 +17,7 @@ public class ProjectHistoryConverter {
             .versionName(history.getVersionName())
             .description(history.getDescription())
             .createdAt(history.getCreatedAt())
+            .actorMemberId(history.getActorMemberId())
             .build();
     }
 
@@ -48,6 +51,7 @@ public class ProjectHistoryConverter {
             .description(history.getDescription())
             .createdAt(history.getCreatedAt())
             .generatedFileList(fileInfoList)
+            .actorMemberId(history.getActorMemberId())
             .build();
     }
 }

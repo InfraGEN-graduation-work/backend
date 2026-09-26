@@ -36,6 +36,9 @@ public class ProjectHistory extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Column(name = "actor_member_id", nullable = true)
+    private Long actorMemberId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false)
     private Project project;
@@ -47,10 +50,12 @@ public class ProjectHistory extends BaseEntity {
     public ProjectHistory(
             String versionName,
             String description,
+            Long actorMemberId,
             Project project
     ) {
         this.versionName = versionName;
         this.description = description;
+        this.actorMemberId = actorMemberId;
         this.project = project;
     }
 

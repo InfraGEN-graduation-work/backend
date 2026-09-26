@@ -31,7 +31,7 @@ public class ProjectHistoryCommandService {
     private final ProjectHistoryRepository projectHistoryRepository;
     private final ProjectRepository projectRepository;
 
-    // 프로젝트 히스토리 생성
+    /** owner 또는 EDITOR가 수동 이력을 생성하며 project별 버전 발급 잠금을 유지한다. */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ProjectHistoryResDTO.HistoryPreviewResDTO createHistory(
         Long projectId,
@@ -40,13 +40,14 @@ public class ProjectHistoryCommandService {
     ) {
         log.info("프로젝트 히스토리 생성 요청: projectId={}, memberId={}", projectId, memberId);
 
-        projectQueryService.getOwnedProject(projectId, memberId);
+        projectQueryService.getWriteableProject(projectId, memberId);
         Project project = lockProjectForVersionAllocation(projectId);
         String versionName = nextVersionName(projectId);
 
         ProjectHistory history = ProjectHistory.builder()
             .versionName(versionName)
             .description(request.description())
+            .actorMemberId(memberId)
             .project(project)
             .build();
 
@@ -72,6 +73,7 @@ public class ProjectHistoryCommandService {
 
         ProjectHistory history = ProjectHistory.builder()
             .versionName(versionName)
+            .actorMemberId(memberId)
             .project(project)
             .build();
 

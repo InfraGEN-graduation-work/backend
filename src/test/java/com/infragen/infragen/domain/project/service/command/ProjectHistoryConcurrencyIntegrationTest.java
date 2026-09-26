@@ -1,6 +1,7 @@
 package com.infragen.infragen.domain.project.service.command;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -19,6 +20,7 @@ import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabas
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.test.context.ContextConfiguration;
@@ -89,6 +91,9 @@ class ProjectHistoryConcurrencyIntegrationTest {
     private ProjectHistoryRepository projectHistoryRepository;
 
     @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
     private GeneratedFileRepository generatedFileRepository;
 
     @Autowired
@@ -148,6 +153,8 @@ class ProjectHistoryConcurrencyIntegrationTest {
             .map(ProjectHistoryResDTO.HistoryPreviewResDTO::versionName)
             .sorted()
             .toList());
+        assertTrue(results.stream().allMatch(result ->
+            fixture.memberId().equals(result.actorMemberId())));
         assertEquals(2, projectHistoryRepository.countByProjectId(fixture.projectId()));
     }
 
@@ -179,7 +186,39 @@ class ProjectHistoryConcurrencyIntegrationTest {
             .map(ProjectHistory::getVersionName)
             .sorted()
             .toList());
+        assertTrue(histories.stream().allMatch(history ->
+            fixture.memberId().equals(history.getActorMemberId())));
         assertEquals(2, generatedFileRepository.count());
+    }
+
+    @Test
+    @DisplayName("이전 history의 생성자 컬럼은 nullable이고 DB에 null로 남는다")
+    void legacyHistory_WithoutActor_PersistsNullActorColumn() {
+        // given
+        Fixture fixture = fixture("legacy-history");
+        Project project = projectRepository.findById(fixture.projectId()).orElseThrow();
+        ProjectHistory legacy = projectHistoryRepository.saveAndFlush(ProjectHistory.builder()
+            .project(project)
+            .versionName("v1")
+            .description("legacy")
+            .build());
+
+        // when
+        String nullable = jdbcTemplate.queryForObject("""
+            SELECT IS_NULLABLE FROM information_schema.columns
+            WHERE table_schema = DATABASE()
+              AND table_name = 'project_history'
+              AND column_name = 'actor_member_id'
+            """, String.class);
+        Long storedActor = jdbcTemplate.queryForObject(
+            "SELECT actor_member_id FROM project_history WHERE id = ?",
+            Long.class,
+            legacy.getId()
+        );
+
+        // then
+        assertEquals("YES", nullable);
+        assertNull(storedActor);
     }
 
     @Test

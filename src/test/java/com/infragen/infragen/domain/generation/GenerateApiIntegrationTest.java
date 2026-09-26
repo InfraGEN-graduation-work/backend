@@ -1,5 +1,6 @@
 package com.infragen.infragen.domain.generation;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -49,9 +50,11 @@ import com.infragen.infragen.domain.collaboration.repository.ProjectCollaboratio
 import com.infragen.infragen.domain.collaboration.repository.ProjectCollaborationStateRepository;
 import com.infragen.infragen.domain.project.entity.GeneratedFile;
 import com.infragen.infragen.domain.project.entity.Project;
+import com.infragen.infragen.domain.project.entity.ProjectCollaborator;
 import com.infragen.infragen.domain.project.entity.ProjectEdge;
 import com.infragen.infragen.domain.project.entity.ProjectNode;
 import com.infragen.infragen.domain.project.entity.ProjectHistory;
+import com.infragen.infragen.domain.project.enums.ProjectCollaboratorRole;
 import com.infragen.infragen.domain.project.enums.ProjectStatus;
 import com.infragen.infragen.domain.project.repository.GeneratedFileRepository;
 import com.infragen.infragen.domain.project.repository.ProjectHistoryRepository;
@@ -62,6 +65,7 @@ import com.infragen.infragen.domain.project.repository.ProjectCollaboratorReposi
 import com.infragen.infragen.domain.project.repository.ProjectCollaboratorInvitationRepository;
 import com.infragen.infragen.global.enums.ComponentType;
 import com.infragen.infragen.global.auth.CustomUserDetails;
+import com.infragen.infragen.global.util.JwtUtil;
 
 @Testcontainers
 @SpringBootTest
@@ -254,6 +258,9 @@ class GenerateApiIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Autowired
+    private JwtUtil jwtUtil;
+
+    @Autowired
     private MemberRepository memberRepository;
 
     @Autowired
@@ -335,6 +342,7 @@ class GenerateApiIntegrationTest {
 
         ProjectHistory history = histories.get(0);
         assertEquals("v1", history.getVersionName());
+        assertEquals(owner.getId(), history.getActorMemberId());
 
         List<GeneratedFile> generatedFiles = generatedFileRepository
             .findAllByProjectHistoryId(history.getId());
@@ -348,6 +356,118 @@ class GenerateApiIntegrationTest {
         assertTrue(generatedFiles.stream().anyMatch(file ->
             "local/docker-compose.yml".equals(file.getFileName())
                 && file.getContent().contains("durable-mysql")));
+    }
+
+    @Test
+    @DisplayName("실제 JWT와 MySQL에서 이력 역할 경계와 생성자·과거 null을 반환한다")
+    void projectHistory_CollaboratorRolesAndLegacyActor_EnforcesApiContract() throws Exception {
+        // given
+        Member owner = saveMember("history-owner@infragen.test");
+        Member editor = saveMember("history-editor@infragen.test");
+        Member viewer = saveMember("history-viewer@infragen.test");
+        Member outsider = saveMember("history-outsider@infragen.test");
+        Project project = saveProject(owner, "history-access-project");
+        projectCollaboratorRepository.saveAllAndFlush(List.of(
+            ProjectCollaborator.builder().project(project).member(editor)
+                .role(ProjectCollaboratorRole.EDITOR).build(),
+            ProjectCollaborator.builder().project(project).member(viewer)
+                .role(ProjectCollaboratorRole.VIEWER).build()
+        ));
+        ProjectHistory legacy = projectHistoryRepository.saveAndFlush(ProjectHistory.builder()
+            .project(project).versionName("v1").description("old record").build());
+        String ownerToken = jwtUtil.createAccessToken(owner.getId(), owner.getRole());
+        String editorToken = jwtUtil.createAccessToken(editor.getId(), editor.getRole());
+        String viewerToken = jwtUtil.createAccessToken(viewer.getId(), viewer.getRole());
+        String outsiderToken = jwtUtil.createAccessToken(outsider.getId(), outsider.getRole());
+        String historiesUrl = "/api/v1/projects/{projectId}/histories";
+
+        // when
+        var created = mockMvc.perform(post(historiesUrl, project.getId())
+            .header("Authorization", "Bearer " + editorToken)
+            .contentType(APPLICATION_JSON)
+            .content("{\"description\":\"editor work\"}"));
+        Long editorHistoryId = objectMapper.readTree(created.andReturn().getResponse()
+            .getContentAsString()).path("result").path("historyId").asLong();
+        var ownerList = mockMvc.perform(get(historiesUrl, project.getId())
+            .header("Authorization", "Bearer " + ownerToken));
+        var viewerList = mockMvc.perform(get(historiesUrl, project.getId())
+            .header("Authorization", "Bearer " + viewerToken));
+        var viewerEditorDetail = mockMvc.perform(get(historiesUrl + "/{historyId}",
+            project.getId(), editorHistoryId)
+            .header("Authorization", "Bearer " + viewerToken));
+        var viewerLegacyDetail = mockMvc.perform(get(historiesUrl + "/{historyId}",
+            project.getId(), legacy.getId())
+            .header("Authorization", "Bearer " + viewerToken));
+        var viewerCreate = mockMvc.perform(post(historiesUrl, project.getId())
+            .header("Authorization", "Bearer " + viewerToken)
+            .contentType(APPLICATION_JSON)
+            .content("{\"description\":\"denied\"}"));
+        var outsiderList = mockMvc.perform(get(historiesUrl, project.getId())
+            .header("Authorization", "Bearer " + outsiderToken));
+
+        // then
+        created.andExpect(status().isCreated())
+            .andExpect(jsonPath("$.result.versionName").value("v2"))
+            .andExpect(jsonPath("$.result.actorMemberId").value(editor.getId()));
+        ownerList.andExpect(status().isOk())
+            .andExpect(jsonPath("$.result.historyList.length()").value(2));
+        viewerList.andExpect(status().isOk())
+            .andExpect(jsonPath("$.result.historyList.length()").value(2));
+        var historyRows = objectMapper.readTree(viewerList.andReturn().getResponse()
+            .getContentAsString()).path("result").path("historyList");
+        boolean foundLegacy = false;
+        boolean foundEditor = false;
+        for (int index = 0; index < historyRows.size(); index++) {
+            var row = historyRows.get(index);
+            if (row.path("historyId").asLong() == legacy.getId()) {
+                foundLegacy = true;
+                assertTrue(row.path("actorMemberId").isNull());
+            } else {
+                foundEditor = true;
+                assertEquals(editorHistoryId, row.path("historyId").asLong());
+                assertEquals(editor.getId(), row.path("actorMemberId").asLong());
+            }
+        }
+        assertTrue(foundLegacy);
+        assertTrue(foundEditor);
+        viewerEditorDetail.andExpect(status().isOk())
+            .andExpect(jsonPath("$.result.actorMemberId").value(editor.getId()));
+        viewerLegacyDetail.andExpect(status().isOk())
+            .andExpect(jsonPath("$.result.actorMemberId").value(nullValue()));
+        viewerCreate.andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("PROJECT403_1"));
+        outsiderList.andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("PROJECT403_1"));
+        assertEquals(editor.getId(), projectHistoryRepository.findById(editorHistoryId)
+            .orElseThrow().getActorMemberId());
+        assertEquals(2, projectHistoryRepository.countByProjectId(project.getId()));
+    }
+
+    @Test
+    @DisplayName("EDITOR의 Generate 이력에는 프로젝트 owner가 아닌 EDITOR의 ID가 저장된다")
+    void generate_Editor_SavesEditorAsHistoryActor() throws Exception {
+        // given
+        Member owner = saveMember("generate-owner@infragen.test");
+        Member editor = saveMember("generate-editor@infragen.test");
+        Project project = saveProject(owner, "editor-generate-project");
+        projectCollaboratorRepository.saveAndFlush(ProjectCollaborator.builder()
+            .project(project).member(editor).role(ProjectCollaboratorRole.EDITOR).build());
+        saveDurableGraph(project, false);
+        String editorToken = jwtUtil.createAccessToken(editor.getId(), editor.getRole());
+
+        // when
+        var response = mockMvc.perform(post(GENERATE_URL, project.getId())
+            .header("Authorization", "Bearer " + editorToken)
+            .contentType(APPLICATION_JSON)
+            .content(REQUEST_JSON));
+
+        // then
+        response.andExpect(status().isOk())
+            .andExpect(jsonPath("$.result.historyId").isNumber());
+        Long historyId = objectMapper.readTree(response.andReturn().getResponse()
+            .getContentAsString()).path("result").path("historyId").asLong();
+        assertEquals(editor.getId(), projectHistoryRepository.findById(historyId)
+            .orElseThrow().getActorMemberId());
     }
 
     @Test
@@ -578,7 +698,7 @@ class GenerateApiIntegrationTest {
                 .header("Authorization", "Bearer " + reissuedGuestAToken));
         var foreignDetail = mockMvc.perform(get("/api/v1/projects/{projectId}", guestAProjectId)
                 .header("Authorization", "Bearer " + guestB.accessToken()));
-        var foreignHistory = mockMvc.perform(get("/api/v1/projects/{projectId}/histories", guestAProjectId)
+        var collaboratorHistory = mockMvc.perform(get("/api/v1/projects/{projectId}/histories", guestAProjectId)
                 .header("Authorization", "Bearer " + guestB.accessToken()));
 
         // then
@@ -627,9 +747,10 @@ class GenerateApiIntegrationTest {
         foreignDetail
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("PROJECT200_2"));
-        foreignHistory
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("PROJECT404_1"));
+        collaboratorHistory
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("PROJECT_HISTORY200_1"))
+                .andExpect(jsonPath("$.result.historyList.length()").value(1));
         assertEquals(1, projectHistoryRepository.countByProjectId(guestAProjectId));
         assertEquals(0, projectHistoryRepository.countByProjectId(guestBProjectId));
     }

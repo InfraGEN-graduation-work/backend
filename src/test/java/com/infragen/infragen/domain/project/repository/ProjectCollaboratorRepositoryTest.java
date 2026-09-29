@@ -10,6 +10,7 @@ import com.infragen.infragen.domain.project.entity.ProjectHistory;
 import com.infragen.infragen.domain.project.entity.ProjectNode;
 import com.infragen.infragen.domain.project.enums.ProjectCollaboratorRole;
 import com.infragen.infragen.domain.project.enums.ProjectStatus;
+import com.infragen.infragen.domain.project.repository.projection.ProjectSuccessionCandidatePreview;
 import com.infragen.infragen.global.enums.ComponentType;
 import jakarta.persistence.EntityManager;
 import java.time.LocalDateTime;
@@ -107,7 +108,7 @@ class ProjectCollaboratorRepositoryTest {
         Member departingMember = member("departing");
         Project project = project(owner);
         membership(project, departingMember);
-        entityManager.remove(departingMember);
+        departingMember.withdraw();
         flushAndClear();
 
         // when
@@ -199,7 +200,7 @@ class ProjectCollaboratorRepositoryTest {
         Member departingMember = member("departing");
         Project project = project(owner);
         ProjectCollaborator membership = membership(project, departingMember);
-        entityManager.remove(departingMember);
+        departingMember.withdraw();
         flushAndClear();
 
         // when
@@ -242,9 +243,93 @@ class ProjectCollaboratorRepositoryTest {
         );
     }
 
+    @Test
+    @DisplayName("승계 후보 preview는 활성 membership의 scalar 값만 반환하고 Member Entity를 적재하지 않는다")
+    void findActiveSuccessionCandidatePreviews_ActiveCandidates_ReturnsScalarValuesWithoutMemberEntity() {
+        // given
+        Member owner = member("owner");
+        Member regularCandidate = member("regular", Role.ROLE_USER);
+        Member guestCandidate = member("guest", Role.ROLE_GUEST);
+        Project project = project(owner);
+        ProjectCollaborator regularMembership = membership(project, regularCandidate, ProjectCollaboratorRole.EDITOR);
+        ProjectCollaborator guestMembership = membership(project, guestCandidate, ProjectCollaboratorRole.VIEWER);
+        flushAndClear();
+
+        // when
+        List<ProjectSuccessionCandidatePreview> previews
+                = repository.findActiveSuccessionCandidatePreviewsByProjectId(project.getId());
+
+        // then
+        assertEquals(2, previews.size());
+        assertEquals(0, entityManager.unwrap(Session.class).getStatistics().getEntityCount());
+        ProjectSuccessionCandidatePreview regularPreview = previews.stream()
+                .filter(preview -> preview.getMemberId().equals(regularCandidate.getId())).findFirst().orElseThrow();
+        assertAll(
+                () -> assertEquals(regularMembership.getId(), regularPreview.getMembershipId()),
+                () -> assertEquals(Role.ROLE_USER, regularPreview.getMemberRole()),
+                () -> assertEquals(ProjectCollaboratorRole.EDITOR, regularPreview.getCollaboratorRole()),
+                () -> assertNotNull(regularPreview.getJoinedAt())
+        );
+        ProjectSuccessionCandidatePreview guestPreview = previews.stream()
+                .filter(preview -> preview.getMemberId().equals(guestCandidate.getId())).findFirst().orElseThrow();
+        assertAll(
+                () -> assertEquals(guestMembership.getId(), guestPreview.getMembershipId()),
+                () -> assertEquals(Role.ROLE_GUEST, guestPreview.getMemberRole()),
+                () -> assertEquals(ProjectCollaboratorRole.VIEWER, guestPreview.getCollaboratorRole())
+        );
+    }
+
+    @Test
+    @DisplayName("승계 후보 preview는 비활성 회원의 membership을 제외한다")
+    void findActiveSuccessionCandidatePreviews_InactiveMember_ExcludesCandidate() {
+        // given
+        Member owner = member("owner");
+        Member activeCandidate = member("active");
+        Member inactiveCandidate = member("inactive");
+        Project project = project(owner);
+        membership(project, activeCandidate);
+        membership(project, inactiveCandidate);
+        inactiveCandidate.withdraw();
+        flushAndClear();
+
+        // when
+        List<ProjectSuccessionCandidatePreview> previews
+                = repository.findActiveSuccessionCandidatePreviewsByProjectId(project.getId());
+
+        // then
+        assertEquals(1, previews.size());
+        assertEquals(activeCandidate.getId(), previews.get(0).getMemberId());
+    }
+
+    @Test
+    @DisplayName("승계 후보 preview는 지정한 project의 membership만 반환한다")
+    void findActiveSuccessionCandidatePreviews_OtherProject_ExcludesUnrelatedCandidate() {
+        // given
+        Member owner = member("owner");
+        Member candidate = member("candidate");
+        Member unrelatedCandidate = member("unrelated");
+        Project project = project(owner);
+        Project otherProject = project(owner);
+        membership(project, candidate);
+        membership(otherProject, unrelatedCandidate);
+        flushAndClear();
+
+        // when
+        List<ProjectSuccessionCandidatePreview> previews
+                = repository.findActiveSuccessionCandidatePreviewsByProjectId(project.getId());
+
+        // then
+        assertEquals(1, previews.size());
+        assertEquals(candidate.getId(), previews.get(0).getMemberId());
+    }
+
     private Member member(String nickname) {
+        return member(nickname, Role.ROLE_USER);
+    }
+
+    private Member member(String nickname, Role role) {
         Member member = Member.builder().email(UUID.randomUUID() + "@test.com").nickname(nickname)
-                .password("encodedPassword").role(Role.ROLE_USER).isActive(true).build();
+                .password("encodedPassword").role(role).isActive(true).build();
         entityManager.persist(member);
         return member;
     }
@@ -256,8 +341,12 @@ class ProjectCollaboratorRepositoryTest {
     }
 
     private ProjectCollaborator membership(Project project, Member member) {
+        return membership(project, member, ProjectCollaboratorRole.EDITOR);
+    }
+
+    private ProjectCollaborator membership(Project project, Member member, ProjectCollaboratorRole role) {
         ProjectCollaborator membership = ProjectCollaborator.builder().project(project).member(member)
-                .role(ProjectCollaboratorRole.EDITOR).build();
+                .role(role).build();
         entityManager.persist(membership);
         return membership;
     }

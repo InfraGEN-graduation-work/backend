@@ -759,8 +759,8 @@ class ProjectCollaboratorInvitationCommandServiceTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    @DisplayName("탈퇴 회원이 발신자 또는 대상인 대기 초대만 취소한다")
-    void cancelRelatedPendingInvitationsOnWithdrawal_RelatedPending_RecordsCancellation(boolean sender) {
+    @DisplayName("떠나는 회원이 발신자 또는 대상인 대기 초대만 취소한다")
+    void cancelRelatedPendingInvitations_RelatedPending_RecordsCancellation(boolean sender) {
         // given
         Member owner = member(OWNER_ID, Role.ROLE_USER, "owner@test.com");
         Member invitee = member(INVITEE_ID, Role.ROLE_USER, "invitee@test.com");
@@ -770,26 +770,26 @@ class ProjectCollaboratorInvitationCommandServiceTest {
         stubCancellation(departingMember, project, List.of(invitation));
 
         // when
-        service.cancelRelatedPendingInvitationsOnWithdrawal(departingMember.getId());
+        service.cancelRelatedPendingInvitations(departingMember.getId(), List.of(PROJECT_ID));
 
         // then
         assertEquals(ProjectCollaboratorInvitationStatus.CANCELLED, invitation.getStatus());
         assertSame(departingMember, invitation.getRespondedBy());
         assertNotNull(invitation.getRespondedAt());
-        InOrder order = inOrder(invitationRepository, projectRepository);
+        InOrder order = inOrder(memberRepository, invitationRepository);
+        order.verify(memberRepository).findByIdForUpdate(departingMember.getId());
         order.verify(invitationRepository)
                 .findPendingRelatedProjectIdsOrderByProjectIdAsc(departingMember.getId());
-        order.verify(projectRepository).findByIdForUpdate(PROJECT_ID);
         order.verify(invitationRepository)
                 .findPendingRelatedByProjectIdAndMemberIdForUpdate(PROJECT_ID, departingMember.getId());
         verify(invitationRepository, never()).deleteAllByMemberId(departingMember.getId());
         verify(invitationRepository, never()).deleteByProjectId(PROJECT_ID);
-        verifyNoInteractions(collaboratorRepository);
+        verifyNoInteractions(projectRepository, collaboratorRepository);
     }
 
     @Test
-    @DisplayName("만료 시각이 지난 대기 초대도 탈퇴 시 취소 기록을 남긴다")
-    void cancelRelatedPendingInvitationsOnWithdrawal_ExpiredPending_CancelsWithoutChangingExpiry() {
+    @DisplayName("만료 시각이 지난 대기 초대도 취소 기록을 남긴다")
+    void cancelRelatedPendingInvitations_ExpiredPending_CancelsWithoutChangingExpiry() {
         // given
         Member owner = member(OWNER_ID, Role.ROLE_USER, "owner@test.com");
         Project project = project(PROJECT_ID, owner);
@@ -801,7 +801,7 @@ class ProjectCollaboratorInvitationCommandServiceTest {
         stubCancellation(owner, project, List.of(invitation));
 
         // when
-        service.cancelRelatedPendingInvitationsOnWithdrawal(OWNER_ID);
+        service.cancelRelatedPendingInvitations(OWNER_ID, List.of(PROJECT_ID));
 
         // then
         assertEquals(ProjectCollaboratorInvitationStatus.CANCELLED, invitation.getStatus());
@@ -812,7 +812,7 @@ class ProjectCollaboratorInvitationCommandServiceTest {
     @ParameterizedTest
     @EnumSource(value = ProjectCollaboratorInvitationStatus.class, names = {"ACCEPTED", "DECLINED", "CANCELLED"})
     @DisplayName("잠금 조회에서 이미 처리된 초대는 취소가 기존 상태와 처리 기록을 변경하지 않는다")
-    void cancelRelatedPendingInvitationsOnWithdrawal_ProcessedAtLock_PreservesHistory(
+    void cancelRelatedPendingInvitations_ProcessedAtLock_PreservesHistory(
             ProjectCollaboratorInvitationStatus status
     ) {
         // given
@@ -831,7 +831,7 @@ class ProjectCollaboratorInvitationCommandServiceTest {
         stubCancellation(owner, project, List.of(invitation));
 
         // when
-        service.cancelRelatedPendingInvitationsOnWithdrawal(OWNER_ID);
+        service.cancelRelatedPendingInvitations(OWNER_ID, List.of(PROJECT_ID));
 
         // then
         assertEquals(status, invitation.getStatus());
@@ -841,33 +841,56 @@ class ProjectCollaboratorInvitationCommandServiceTest {
     }
 
     @Test
-    @DisplayName("최초 ID 조회 뒤 삭제된 프로젝트는 초대를 조회하지 않고 건너뛴다")
-    void cancelRelatedPendingInvitationsOnWithdrawal_ProjectDeleted_SkipsProject() {
+    @DisplayName("잠긴 project라도 관련 대기 초대가 없으면 초대 잠금 조회를 하지 않는다")
+    void cancelRelatedPendingInvitations_LockedProjectWithoutPending_SkipsInvitationLock() {
         // given
         Member owner = member(OWNER_ID, Role.ROLE_USER, "owner@test.com");
-        when(memberRepository.findById(OWNER_ID)).thenReturn(Optional.of(owner));
+        when(memberRepository.findByIdForUpdate(OWNER_ID)).thenReturn(Optional.of(owner));
         when(invitationRepository.findPendingRelatedProjectIdsOrderByProjectIdAsc(OWNER_ID))
-                .thenReturn(List.of(PROJECT_ID));
-        when(projectRepository.findByIdForUpdate(PROJECT_ID)).thenReturn(Optional.empty());
+                .thenReturn(List.of());
 
         // when
-        service.cancelRelatedPendingInvitationsOnWithdrawal(OWNER_ID);
+        service.cancelRelatedPendingInvitations(OWNER_ID, List.of(1L, 2L));
 
         // then
-        verify(invitationRepository, never()).findPendingRelatedByProjectIdAndMemberIdForUpdate(PROJECT_ID, OWNER_ID);
-        verifyNoInteractions(collaboratorRepository);
+        verify(invitationRepository, never())
+                .findPendingRelatedByProjectIdAndMemberIdForUpdate(any(Long.class), any(Long.class));
+        verifyNoInteractions(projectRepository, collaboratorRepository);
+    }
+
+    @Test
+    @DisplayName("잠긴 범위 밖 project의 관련 대기 초대는 잠그거나 취소하지 않는다")
+    void cancelRelatedPendingInvitations_PendingOutsideLockedRange_DoesNotLockOrCancel() {
+        // given
+        Member owner = member(OWNER_ID, Role.ROLE_USER, "owner@test.com");
+        Project lockedProject = project(1L, owner);
+        ProjectCollaboratorInvitation invitation = invitation(lockedProject, owner,
+                member(INVITEE_ID, Role.ROLE_USER, "invitee@test.com"));
+        when(memberRepository.findByIdForUpdate(OWNER_ID)).thenReturn(Optional.of(owner));
+        when(invitationRepository.findPendingRelatedProjectIdsOrderByProjectIdAsc(OWNER_ID))
+                .thenReturn(List.of(1L, 5L));
+        when(invitationRepository.findPendingRelatedByProjectIdAndMemberIdForUpdate(1L, OWNER_ID))
+                .thenReturn(List.of(invitation));
+
+        // when
+        service.cancelRelatedPendingInvitations(OWNER_ID, List.of(1L));
+
+        // then
+        assertEquals(ProjectCollaboratorInvitationStatus.CANCELLED, invitation.getStatus());
+        verify(invitationRepository, never()).findPendingRelatedByProjectIdAndMemberIdForUpdate(5L, OWNER_ID);
+        verifyNoInteractions(projectRepository);
     }
 
     @Test
     @DisplayName("잠금 대기 중 초대가 삭제되거나 수락되어 대기가 없으면 취소하지 않는다")
-    void cancelRelatedPendingInvitationsOnWithdrawal_NoPendingAfterLock_DoesNothing() {
+    void cancelRelatedPendingInvitations_NoPendingAfterLock_DoesNothing() {
         // given
         Member owner = member(OWNER_ID, Role.ROLE_USER, "owner@test.com");
         Project project = project(PROJECT_ID, owner);
         stubCancellation(owner, project, List.of());
 
         // when
-        service.cancelRelatedPendingInvitationsOnWithdrawal(OWNER_ID);
+        service.cancelRelatedPendingInvitations(OWNER_ID, List.of(PROJECT_ID));
 
         // then
         verify(invitationRepository).findPendingRelatedByProjectIdAndMemberIdForUpdate(PROJECT_ID, OWNER_ID);
@@ -879,7 +902,7 @@ class ProjectCollaboratorInvitationCommandServiceTest {
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     @DisplayName("잠금 이후 프로젝트나 회원 관련성이 다르면 대기 초대를 취소하지 않는다")
-    void cancelRelatedPendingInvitationsOnWithdrawal_ScopeMismatch_SkipsInvitation(boolean differentProject) {
+    void cancelRelatedPendingInvitations_ScopeMismatch_SkipsInvitation(boolean differentProject) {
         // given
         Member owner = member(OWNER_ID, Role.ROLE_USER, "owner@test.com");
         Member anotherMember = member(30L, Role.ROLE_USER, "another@test.com");
@@ -891,7 +914,7 @@ class ProjectCollaboratorInvitationCommandServiceTest {
         stubCancellation(owner, lockedProject, List.of(invitation));
 
         // when
-        service.cancelRelatedPendingInvitationsOnWithdrawal(OWNER_ID);
+        service.cancelRelatedPendingInvitations(OWNER_ID, List.of(PROJECT_ID));
 
         // then
         assertEquals(ProjectCollaboratorInvitationStatus.PENDING, invitation.getStatus());
@@ -900,8 +923,8 @@ class ProjectCollaboratorInvitationCommandServiceTest {
     }
 
     @Test
-    @DisplayName("같은 프로젝트의 여러 대기 초대는 한 번의 잠금 조회로 취소한다")
-    void cancelRelatedPendingInvitationsOnWithdrawal_MultipleInvitations_CancelsTogether() {
+    @DisplayName("같은 프로젝트의 여러 대기 초대는 한 번의 잠금 조회로 같은 시각에 취소한다")
+    void cancelRelatedPendingInvitations_MultipleInvitations_CancelsTogether() {
         // given
         Member owner = member(OWNER_ID, Role.ROLE_USER, "owner@test.com");
         Project project = project(PROJECT_ID, owner);
@@ -912,7 +935,7 @@ class ProjectCollaboratorInvitationCommandServiceTest {
         stubCancellation(owner, project, List.of(sent, received));
 
         // when
-        service.cancelRelatedPendingInvitationsOnWithdrawal(OWNER_ID);
+        service.cancelRelatedPendingInvitations(OWNER_ID, List.of(PROJECT_ID));
 
         // then
         assertEquals(ProjectCollaboratorInvitationStatus.CANCELLED, sent.getStatus());
@@ -920,59 +943,48 @@ class ProjectCollaboratorInvitationCommandServiceTest {
         assertEquals(sent.getRespondedAt(), received.getRespondedAt());
         assertSame(owner, sent.getRespondedBy());
         assertSame(owner, received.getRespondedBy());
-        verify(projectRepository).findByIdForUpdate(PROJECT_ID);
         verify(invitationRepository).findPendingRelatedByProjectIdAndMemberIdForUpdate(PROJECT_ID, OWNER_ID);
         verify(invitationRepository, never()).save(any(ProjectCollaboratorInvitation.class));
     }
 
     @Test
-    @DisplayName("관련 프로젝트는 작은 ID부터 project와 초대 잠금을 순서대로 얻는다")
-    void cancelRelatedPendingInvitationsOnWithdrawal_MultipleProjects_LocksInProjectIdOrder() {
+    @DisplayName("여러 project의 초대는 호출자가 준 잠금 순서대로 잠근다")
+    void cancelRelatedPendingInvitations_MultipleProjects_LocksInGivenOrder() {
         // given
         Member owner = member(OWNER_ID, Role.ROLE_USER, "owner@test.com");
         Member invitee = member(INVITEE_ID, Role.ROLE_USER, "invitee@test.com");
-        Project first = project(1L, owner);
-        Project second = project(2L, invitee);
-        ProjectCollaboratorInvitation sent = invitation(first, owner, invitee);
-        ProjectCollaboratorInvitation received = invitation(second, invitee, owner);
-        when(memberRepository.findById(OWNER_ID)).thenReturn(Optional.of(owner));
+        ProjectCollaboratorInvitation sent = invitation(project(1L, owner), owner, invitee);
+        ProjectCollaboratorInvitation received = invitation(project(2L, invitee), invitee, owner);
+        when(memberRepository.findByIdForUpdate(OWNER_ID)).thenReturn(Optional.of(owner));
         when(invitationRepository.findPendingRelatedProjectIdsOrderByProjectIdAsc(OWNER_ID))
                 .thenReturn(List.of(1L, 2L));
-        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(first));
-        when(projectRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(second));
         when(invitationRepository.findPendingRelatedByProjectIdAndMemberIdForUpdate(1L, OWNER_ID))
                 .thenReturn(List.of(sent));
         when(invitationRepository.findPendingRelatedByProjectIdAndMemberIdForUpdate(2L, OWNER_ID))
                 .thenReturn(List.of(received));
 
         // when
-        service.cancelRelatedPendingInvitationsOnWithdrawal(OWNER_ID);
+        service.cancelRelatedPendingInvitations(OWNER_ID, List.of(1L, 2L));
 
         // then
-        InOrder order = inOrder(projectRepository, invitationRepository);
-        order.verify(projectRepository).findByIdForUpdate(1L);
+        InOrder order = inOrder(invitationRepository);
         order.verify(invitationRepository).findPendingRelatedByProjectIdAndMemberIdForUpdate(1L, OWNER_ID);
-        order.verify(projectRepository).findByIdForUpdate(2L);
         order.verify(invitationRepository).findPendingRelatedByProjectIdAndMemberIdForUpdate(2L, OWNER_ID);
         assertEquals(ProjectCollaboratorInvitationStatus.CANCELLED, sent.getStatus());
         assertEquals(ProjectCollaboratorInvitationStatus.CANCELLED, received.getStatus());
-        verifyNoInteractions(collaboratorRepository);
+        verifyNoInteractions(projectRepository, collaboratorRepository);
     }
 
     @Test
-    @DisplayName("두 번째 프로젝트의 잠금 실패를 전파하고 나머지 취소를 중단한다")
-    void cancelRelatedPendingInvitationsOnWithdrawal_LockFails_PropagatesAndStopsProcessing() {
+    @DisplayName("두 번째 project의 초대 잠금 실패를 전파하고 나머지 취소를 중단한다")
+    void cancelRelatedPendingInvitations_LockFails_PropagatesAndStopsProcessing() {
         // given
         Member owner = member(OWNER_ID, Role.ROLE_USER, "owner@test.com");
-        Project first = project(1L, owner);
-        Project second = project(2L, owner);
-        ProjectCollaboratorInvitation invitation = invitation(first, owner,
+        ProjectCollaboratorInvitation invitation = invitation(project(1L, owner), owner,
                 member(INVITEE_ID, Role.ROLE_USER, "invitee@test.com"));
-        when(memberRepository.findById(OWNER_ID)).thenReturn(Optional.of(owner));
+        when(memberRepository.findByIdForUpdate(OWNER_ID)).thenReturn(Optional.of(owner));
         when(invitationRepository.findPendingRelatedProjectIdsOrderByProjectIdAsc(OWNER_ID))
                 .thenReturn(List.of(1L, 2L, 3L));
-        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(first));
-        when(projectRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(second));
         when(invitationRepository.findPendingRelatedByProjectIdAndMemberIdForUpdate(1L, OWNER_ID))
                 .thenReturn(List.of(invitation));
         PessimisticLockingFailureException failure = new PessimisticLockingFailureException("lock failed");
@@ -981,40 +993,27 @@ class ProjectCollaboratorInvitationCommandServiceTest {
 
         // when
         PessimisticLockingFailureException exception = assertThrows(PessimisticLockingFailureException.class,
-                () -> service.cancelRelatedPendingInvitationsOnWithdrawal(OWNER_ID));
+                () -> service.cancelRelatedPendingInvitations(OWNER_ID, List.of(1L, 2L, 3L)));
 
         // then
         assertSame(failure, exception);
         verify(invitationRepository).findPendingRelatedByProjectIdAndMemberIdForUpdate(1L, OWNER_ID);
-        verify(projectRepository, never()).findByIdForUpdate(3L);
+        verify(invitationRepository, never()).findPendingRelatedByProjectIdAndMemberIdForUpdate(3L, OWNER_ID);
     }
 
-    @Test
-    @DisplayName("탈퇴 회원이 없으면 관련 초대를 조회하지 않는다")
-    void cancelRelatedPendingInvitationsOnWithdrawal_MemberNotFound_ThrowsMemberNotFound() {
-        // given
-        when(memberRepository.findById(OWNER_ID)).thenReturn(Optional.empty());
-
-        // when
-        MemberException exception = assertThrows(MemberException.class,
-                () -> service.cancelRelatedPendingInvitationsOnWithdrawal(OWNER_ID));
-
-        // then
-        assertEquals(MemberErrorCode.MEMBER_NOT_FOUND, exception.getCode());
-        verifyNoInteractions(invitationRepository, projectRepository, collaboratorRepository);
-    }
-
-    @Test
-    @DisplayName("비활성 회원은 대기 초대 취소를 시작하지 않는다")
-    void cancelRelatedPendingInvitationsOnWithdrawal_InactiveMember_ThrowsMemberNotFound() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @DisplayName("떠나는 회원이 없거나 비활성이면 관련 초대를 조회하지 않는다")
+    void cancelRelatedPendingInvitations_MemberUnavailable_ThrowsMemberNotFound(boolean missing) {
         // given
         Member owner = member(OWNER_ID, Role.ROLE_USER, "owner@test.com");
         owner.withdraw();
-        when(memberRepository.findById(OWNER_ID)).thenReturn(Optional.of(owner));
+        when(memberRepository.findByIdForUpdate(OWNER_ID))
+                .thenReturn(missing ? Optional.empty() : Optional.of(owner));
 
         // when
         MemberException exception = assertThrows(MemberException.class,
-                () -> service.cancelRelatedPendingInvitationsOnWithdrawal(OWNER_ID));
+                () -> service.cancelRelatedPendingInvitations(OWNER_ID, List.of(PROJECT_ID)));
 
         // then
         assertEquals(MemberErrorCode.MEMBER_NOT_FOUND, exception.getCode());
@@ -1022,25 +1021,24 @@ class ProjectCollaboratorInvitationCommandServiceTest {
     }
 
     @Test
-    @DisplayName("관련 대기 초대가 없으면 프로젝트 잠금 없이 끝난다")
-    void cancelRelatedPendingInvitationsOnWithdrawal_NoPendingProjects_DoesNothing() {
+    @DisplayName("회원 잠금 조회 실패를 전파하고 초대를 조회하지 않는다")
+    void cancelRelatedPendingInvitations_MemberLockFails_Propagates() {
         // given
-        Member owner = member(OWNER_ID, Role.ROLE_USER, "owner@test.com");
-        when(memberRepository.findById(OWNER_ID)).thenReturn(Optional.of(owner));
-        when(invitationRepository.findPendingRelatedProjectIdsOrderByProjectIdAsc(OWNER_ID))
-                .thenReturn(List.of());
+        PessimisticLockingFailureException failure = new PessimisticLockingFailureException("lock failed");
+        when(memberRepository.findByIdForUpdate(OWNER_ID)).thenThrow(failure);
 
         // when
-        service.cancelRelatedPendingInvitationsOnWithdrawal(OWNER_ID);
+        PessimisticLockingFailureException exception = assertThrows(PessimisticLockingFailureException.class,
+                () -> service.cancelRelatedPendingInvitations(OWNER_ID, List.of(PROJECT_ID)));
 
         // then
-        verifyNoInteractions(projectRepository, collaboratorRepository);
-        verify(invitationRepository, never()).findPendingRelatedByProjectIdAndMemberIdForUpdate(any(Long.class), any(Long.class));
+        assertSame(failure, exception);
+        verifyNoInteractions(invitationRepository);
     }
 
     @Test
     @DisplayName("취소 시각은 초대 잠금을 얻은 이후의 시각으로 기록한다")
-    void cancelRelatedPendingInvitationsOnWithdrawal_ClockAdvancesAtLock_RecordsPostLockTime() {
+    void cancelRelatedPendingInvitations_ClockAdvancesAtLock_RecordsPostLockTime() {
         // given
         Member owner = member(OWNER_ID, Role.ROLE_USER, "owner@test.com");
         Project project = project(PROJECT_ID, owner);
@@ -1058,7 +1056,7 @@ class ProjectCollaboratorInvitationCommandServiceTest {
                     });
 
             // when
-            service.cancelRelatedPendingInvitationsOnWithdrawal(OWNER_ID);
+            service.cancelRelatedPendingInvitations(OWNER_ID, List.of(PROJECT_ID));
 
             // then
             assertEquals(afterLock, invitation.getRespondedAt());
@@ -1069,10 +1067,9 @@ class ProjectCollaboratorInvitationCommandServiceTest {
     private void stubCancellation(
             Member departingMember, Project project, List<ProjectCollaboratorInvitation> invitations
     ) {
-        when(memberRepository.findById(departingMember.getId())).thenReturn(Optional.of(departingMember));
+        when(memberRepository.findByIdForUpdate(departingMember.getId())).thenReturn(Optional.of(departingMember));
         when(invitationRepository.findPendingRelatedProjectIdsOrderByProjectIdAsc(departingMember.getId()))
                 .thenReturn(List.of(project.getId()));
-        when(projectRepository.findByIdForUpdate(project.getId())).thenReturn(Optional.of(project));
         when(invitationRepository.findPendingRelatedByProjectIdAndMemberIdForUpdate(project.getId(), departingMember.getId()))
                 .thenReturn(invitations);
     }

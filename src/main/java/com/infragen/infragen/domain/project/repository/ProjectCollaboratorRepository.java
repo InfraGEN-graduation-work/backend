@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 import com.infragen.infragen.domain.project.entity.ProjectCollaborator;
 import com.infragen.infragen.domain.project.enums.ProjectCollaboratorRole;
+import com.infragen.infragen.domain.project.repository.projection.ProjectSuccessionCandidatePreview;
 
 public interface ProjectCollaboratorRepository
         extends JpaRepository<@NonNull ProjectCollaborator, @NonNull Long> {
@@ -60,15 +61,23 @@ public interface ProjectCollaboratorRepository
      */
     List<ProjectCollaborator> findAllByProjectId(Long projectId);
 
-    /** project 잠금 이후 활성 승계 후보를 조회하며, 후보별 회원 조회가 반복되지 않게 함께 가져온다. */
+    /**
+     * 소유권 자동 승계의 후보 선정 단계에서 project의 활성 참여자를 scalar 값만으로 조회한다.
+     * 선정과 실행 사이에 회원을 잠그므로, 선정 단계에서 Member Entity를 미리 캐시에 올리지 않으려고
+     * member는 조건에만 join한다. 정렬하지 않으며 후보 우선순위 판단은 호출자가 수행한다.
+     */
     @Query("""
-            SELECT collaborator
+            SELECT collaborator.id AS membershipId,
+                   member.id AS memberId,
+                   member.role AS memberRole,
+                   collaborator.role AS collaboratorRole,
+                   collaborator.createdAt AS joinedAt
             FROM ProjectCollaborator collaborator
-            JOIN FETCH collaborator.member member
+            JOIN collaborator.member member
             WHERE collaborator.project.id = :projectId
               AND member.isActive = true
             """)
-    List<ProjectCollaborator> findActiveSuccessionCandidatesByProjectId(
+    List<ProjectSuccessionCandidatePreview> findActiveSuccessionCandidatePreviewsByProjectId(
             @Param("projectId") Long projectId
     );
 

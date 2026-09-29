@@ -71,7 +71,7 @@ class ProjectCollaboratorInvitationRepositoryTest {
         Project project = project(owner);
         ProjectCollaboratorInvitation invitation = invitation(project, owner, invitee, status, CREATED_AT);
         Long inviteeId = invitee.getId();
-        entityManager.remove(invitee);
+        invitee.withdraw();
         flushAndClear();
 
         // when
@@ -101,7 +101,7 @@ class ProjectCollaboratorInvitationRepositoryTest {
         Project project = project(inviter);
         ProjectCollaboratorInvitation invitation = invitation(project, inviter, invitee, status, CREATED_AT);
         Long inviterId = inviter.getId();
-        entityManager.remove(inviter);
+        inviter.withdraw();
         flushAndClear();
 
         // when
@@ -132,7 +132,7 @@ class ProjectCollaboratorInvitationRepositoryTest {
         ProjectCollaboratorInvitation invitation = invitation(project, owner, invitee,
                 ProjectCollaboratorInvitationStatus.PENDING, CREATED_AT);
         invitation.cancel(responder, RESPONDED_AT);
-        entityManager.remove(responder);
+        responder.withdraw();
         flushAndClear();
 
         // when

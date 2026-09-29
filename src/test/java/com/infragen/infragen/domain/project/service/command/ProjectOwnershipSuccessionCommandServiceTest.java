@@ -2,8 +2,6 @@ package com.infragen.infragen.domain.project.service.command;
 
 import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.member.enums.Role;
-import com.infragen.infragen.domain.member.exception.MemberException;
-import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
 import com.infragen.infragen.domain.project.entity.Project;
 import com.infragen.infragen.domain.project.entity.ProjectCollaborator;
@@ -12,8 +10,10 @@ import com.infragen.infragen.domain.project.exception.ProjectException;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.repository.ProjectCollaboratorRepository;
 import com.infragen.infragen.domain.project.repository.ProjectRepository;
+import com.infragen.infragen.domain.project.repository.projection.ProjectSuccessionCandidatePreview;
+import com.infragen.infragen.domain.project.service.command.ProjectOwnershipSuccessionPlan.Deletion;
+import com.infragen.infragen.domain.project.service.command.ProjectOwnershipSuccessionPlan.Transfer;
 import java.time.LocalDateTime;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
@@ -33,7 +33,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -61,118 +63,80 @@ class ProjectOwnershipSuccessionCommandServiceTest {
     private ProjectOwnershipSuccessionCommandService service;
 
     @Test
-    @DisplayName("일반 회원 EDITOR가 오래된 일반 회원 VIEWER보다 우선 승계한다")
-    void succeedOwnedProjectsOnWithdrawal_EditorBeforeOlderViewer_TransfersOwnership() {
+    @DisplayName("일반 회원 EDITOR가 오래된 일반 회원 VIEWER보다 우선 승계 계획에 선정된다")
+    void prepareSuccessionPlans_EditorBeforeOlderViewer_PlansTransferToEditor() {
         // given
-        Member owner = member(OWNER_ID, Role.ROLE_USER, true);
-        Project project = project(PROJECT_ID, owner);
-        ProjectCollaborator editor = candidate(project, 20L, Role.ROLE_USER,
-                ProjectCollaboratorRole.EDITOR, 200L, JOINED_AT.plusDays(1), true);
-        ProjectCollaborator viewer = candidate(project, 30L, Role.ROLE_USER,
-                ProjectCollaboratorRole.VIEWER, 100L, JOINED_AT, true);
-        stubOwnedProjects(owner, project);
-        when(collaboratorRepository.findActiveSuccessionCandidatesByProjectId(PROJECT_ID))
-                .thenReturn(List.of(viewer, editor));
-        stubSelectedCandidate(editor);
+        stubLockedProject(PROJECT_ID, OWNER_ID);
+        stubCandidates(PROJECT_ID,
+                candidate(30L, Role.ROLE_USER, ProjectCollaboratorRole.VIEWER, 100L, JOINED_AT),
+                candidate(20L, Role.ROLE_USER, ProjectCollaboratorRole.EDITOR, 200L, JOINED_AT.plusDays(1)));
 
         // when
-        service.succeedOwnedProjectsOnWithdrawal(OWNER_ID);
+        List<ProjectOwnershipSuccessionPlan> plans = service.prepareSuccessionPlans(OWNER_ID, List.of(PROJECT_ID));
 
         // then
-        assertSame(editor.getMember(), project.getMember());
-        verifyTransferOrder(editor);
-        verify(collaboratorRepository, never()).save(any(ProjectCollaborator.class));
-        verifyNoInteractions(projectCommandService);
+        assertEquals(List.of(new Transfer(PROJECT_ID, OWNER_ID, 20L, Role.ROLE_USER)), plans);
     }
 
     @ParameterizedTest
     @EnumSource(ProjectCollaboratorRole.class)
-    @DisplayName("같은 일반 회원 역할에서는 먼저 참여한 회원에게 승계한다")
-    void succeedOwnedProjectsOnWithdrawal_SameRole_SelectsEarliestParticipant(ProjectCollaboratorRole role) {
+    @DisplayName("같은 일반 회원 역할에서는 먼저 참여한 회원을 선정한다")
+    void prepareSuccessionPlans_SameRole_PlansEarliestParticipant(ProjectCollaboratorRole role) {
         // given
-        Member owner = member(OWNER_ID, Role.ROLE_USER, true);
-        Project project = project(PROJECT_ID, owner);
-        ProjectCollaborator earlier = candidate(project, 20L, Role.ROLE_USER, role,
-                200L, JOINED_AT, true);
-        ProjectCollaborator later = candidate(project, 30L, Role.ROLE_USER, role,
-                100L, JOINED_AT.plusMinutes(1), true);
-        stubOwnedProjects(owner, project);
-        when(collaboratorRepository.findActiveSuccessionCandidatesByProjectId(PROJECT_ID))
-                .thenReturn(List.of(later, earlier));
-        stubSelectedCandidate(earlier);
+        stubLockedProject(PROJECT_ID, OWNER_ID);
+        stubCandidates(PROJECT_ID,
+                candidate(30L, Role.ROLE_USER, role, 100L, JOINED_AT.plusMinutes(1)),
+                candidate(20L, Role.ROLE_USER, role, 200L, JOINED_AT));
 
         // when
-        service.succeedOwnedProjectsOnWithdrawal(OWNER_ID);
+        List<ProjectOwnershipSuccessionPlan> plans = service.prepareSuccessionPlans(OWNER_ID, List.of(PROJECT_ID));
 
         // then
-        assertSame(earlier.getMember(), project.getMember());
-        verify(collaboratorRepository).deleteByProjectIdAndMemberId(PROJECT_ID, 20L);
-        verifyNoInteractions(projectCommandService);
+        assertEquals(List.of(new Transfer(PROJECT_ID, OWNER_ID, 20L, Role.ROLE_USER)), plans);
     }
 
     @Test
-    @DisplayName("역할과 참여 시각이 같으면 작은 membership ID로 승계 대상을 고정한다")
-    void succeedOwnedProjectsOnWithdrawal_SameRoleAndTime_SelectsSmallestMembershipId() {
+    @DisplayName("역할과 참여 시각이 같으면 작은 membership ID의 회원을 선정한다")
+    void prepareSuccessionPlans_SameRoleAndTime_PlansSmallestMembershipId() {
         // given
-        Member owner = member(OWNER_ID, Role.ROLE_USER, true);
-        Project project = project(PROJECT_ID, owner);
-        ProjectCollaborator first = candidate(project, 30L, Role.ROLE_USER,
-                ProjectCollaboratorRole.EDITOR, 100L, JOINED_AT, true);
-        ProjectCollaborator second = candidate(project, 20L, Role.ROLE_USER,
-                ProjectCollaboratorRole.EDITOR, 200L, JOINED_AT, true);
-        stubOwnedProjects(owner, project);
-        when(collaboratorRepository.findActiveSuccessionCandidatesByProjectId(PROJECT_ID))
-                .thenReturn(List.of(second, first));
-        stubSelectedCandidate(first);
+        stubLockedProject(PROJECT_ID, OWNER_ID);
+        stubCandidates(PROJECT_ID,
+                candidate(20L, Role.ROLE_USER, ProjectCollaboratorRole.EDITOR, 200L, JOINED_AT),
+                candidate(30L, Role.ROLE_USER, ProjectCollaboratorRole.EDITOR, 100L, JOINED_AT));
 
         // when
-        service.succeedOwnedProjectsOnWithdrawal(OWNER_ID);
+        List<ProjectOwnershipSuccessionPlan> plans = service.prepareSuccessionPlans(OWNER_ID, List.of(PROJECT_ID));
 
         // then
-        assertSame(first.getMember(), project.getMember());
-        verify(collaboratorRepository).deleteByProjectIdAndMemberId(PROJECT_ID, 30L);
+        assertEquals(List.of(new Transfer(PROJECT_ID, OWNER_ID, 30L, Role.ROLE_USER)), plans);
     }
 
     @Test
-    @DisplayName("일반 회원 VIEWER가 guest EDITOR보다 우선 승계한다")
-    void succeedOwnedProjectsOnWithdrawal_MixedTypes_SelectsRegularViewerBeforeGuestEditor() {
+    @DisplayName("일반 회원 VIEWER가 guest EDITOR보다 우선 선정된다")
+    void prepareSuccessionPlans_MixedTypes_PlansRegularViewerBeforeGuestEditor() {
         // given
-        Member owner = member(OWNER_ID, Role.ROLE_USER, true);
-        Project project = project(PROJECT_ID, owner);
-        ProjectCollaborator guest = candidate(project, 20L, Role.ROLE_GUEST,
-                ProjectCollaboratorRole.EDITOR, 100L, JOINED_AT, true);
-        ProjectCollaborator regular = candidate(project, 30L, Role.ROLE_USER,
-                ProjectCollaboratorRole.VIEWER, 200L, JOINED_AT.plusDays(1), true);
-        stubOwnedProjects(owner, project);
-        when(collaboratorRepository.findActiveSuccessionCandidatesByProjectId(PROJECT_ID))
-                .thenReturn(List.of(guest, regular));
-        stubSelectedCandidate(regular);
+        stubLockedProject(PROJECT_ID, OWNER_ID);
+        stubCandidates(PROJECT_ID,
+                candidate(20L, Role.ROLE_GUEST, ProjectCollaboratorRole.EDITOR, 100L, JOINED_AT),
+                candidate(30L, Role.ROLE_USER, ProjectCollaboratorRole.VIEWER, 200L, JOINED_AT.plusDays(1)));
 
         // when
-        service.succeedOwnedProjectsOnWithdrawal(OWNER_ID);
+        List<ProjectOwnershipSuccessionPlan> plans = service.prepareSuccessionPlans(OWNER_ID, List.of(PROJECT_ID));
 
         // then
-        assertSame(regular.getMember(), project.getMember());
-        verify(memberRepository, never()).findByIdForUpdate(20L);
-        verifyNoInteractions(projectCommandService);
+        assertEquals(List.of(new Transfer(PROJECT_ID, OWNER_ID, 30L, Role.ROLE_USER)), plans);
     }
 
     @ParameterizedTest
     @ValueSource(ints = {0, 1})
-    @DisplayName("일반 회원이 없으면 guest의 역할과 참여 시각 대신 무작위로 승계한다")
-    void succeedOwnedProjectsOnWithdrawal_OnlyGuests_SelectsRandomGuest(int index) {
+    @DisplayName("일반 회원이 없으면 guest를 무작위로 한 번만 선정해 계획에 고정한다")
+    void prepareSuccessionPlans_OnlyGuests_PlansRandomGuestOnce(int index) {
         // given
-        Member owner = member(OWNER_ID, Role.ROLE_USER, true);
-        Project project = project(PROJECT_ID, owner);
-        ProjectCollaborator editor = candidate(project, 20L, Role.ROLE_GUEST,
-                ProjectCollaboratorRole.EDITOR, 100L, JOINED_AT, true);
-        ProjectCollaborator viewer = candidate(project, 30L, Role.ROLE_GUEST,
-                ProjectCollaboratorRole.VIEWER, 200L, JOINED_AT.plusDays(1), true);
-        List<ProjectCollaborator> guests = List.of(editor, viewer);
-        stubOwnedProjects(owner, project);
-        when(collaboratorRepository.findActiveSuccessionCandidatesByProjectId(PROJECT_ID))
-                .thenReturn(guests);
-        stubSelectedCandidate(guests.get(index));
+        stubLockedProject(PROJECT_ID, OWNER_ID);
+        List<ProjectSuccessionCandidatePreview> guests = List.of(
+                candidate(20L, Role.ROLE_GUEST, ProjectCollaboratorRole.EDITOR, 100L, JOINED_AT),
+                candidate(30L, Role.ROLE_GUEST, ProjectCollaboratorRole.VIEWER, 200L, JOINED_AT.plusDays(1)));
+        when(collaboratorRepository.findActiveSuccessionCandidatePreviewsByProjectId(PROJECT_ID)).thenReturn(guests);
         ThreadLocalRandom random = mock(ThreadLocalRandom.class);
         when(random.nextInt(2)).thenReturn(index);
 
@@ -180,336 +144,232 @@ class ProjectOwnershipSuccessionCommandServiceTest {
             randomSource.when(ThreadLocalRandom::current).thenReturn(random);
 
             // when
-            service.succeedOwnedProjectsOnWithdrawal(OWNER_ID);
+            List<ProjectOwnershipSuccessionPlan> plans =
+                    service.prepareSuccessionPlans(OWNER_ID, List.of(PROJECT_ID));
 
             // then
-            assertSame(guests.get(index).getMember(), project.getMember());
+            assertEquals(List.of(new Transfer(PROJECT_ID, OWNER_ID,
+                    guests.get(index).getMemberId(), Role.ROLE_GUEST)), plans);
             verify(random).nextInt(2);
-            verifyNoInteractions(projectCommandService);
         }
     }
 
     @Test
-    @DisplayName("비활성 일반 회원은 제외하고 활성 guest에게 승계한다")
-    void succeedOwnedProjectsOnWithdrawal_InactiveRegularCandidate_SelectsActiveGuest() {
+    @DisplayName("승계 후보가 없으면 삭제 계획을 만든다")
+    void prepareSuccessionPlans_NoCandidates_PlansDeletion() {
         // given
-        Member owner = member(OWNER_ID, Role.ROLE_USER, true);
-        Project project = project(PROJECT_ID, owner);
-        ProjectCollaborator inactive = candidate(project, 20L, Role.ROLE_USER,
-                ProjectCollaboratorRole.EDITOR, 100L, JOINED_AT, false);
-        ProjectCollaborator active = candidate(project, 30L, Role.ROLE_GUEST,
-                ProjectCollaboratorRole.VIEWER, 200L, JOINED_AT, true);
-        stubOwnedProjects(owner, project);
-        when(collaboratorRepository.findActiveSuccessionCandidatesByProjectId(PROJECT_ID))
-                .thenReturn(List.of(inactive, active));
-        stubSelectedCandidate(active);
+        stubLockedProject(PROJECT_ID, OWNER_ID);
+        stubCandidates(PROJECT_ID);
 
         // when
-        service.succeedOwnedProjectsOnWithdrawal(OWNER_ID);
+        List<ProjectOwnershipSuccessionPlan> plans = service.prepareSuccessionPlans(OWNER_ID, List.of(PROJECT_ID));
 
         // then
-        assertSame(active.getMember(), project.getMember());
-        verify(memberRepository, never()).findByIdForUpdate(20L);
+        assertEquals(List.of(new Deletion(PROJECT_ID, OWNER_ID)), plans);
     }
 
     @Test
-    @DisplayName("승계 후보가 없으면 기존 프로젝트 삭제 경로에 위임한다")
-    void succeedOwnedProjectsOnWithdrawal_NoCandidates_DeletesProject() {
+    @DisplayName("후보 목록에 떠나는 회원만 있으면 삭제 계획을 만든다")
+    void prepareSuccessionPlans_OnlyDepartingMember_PlansDeletion() {
         // given
-        Member owner = member(OWNER_ID, Role.ROLE_USER, true);
-        Project project = project(PROJECT_ID, owner);
-        stubOwnedProjects(owner, project);
-        when(collaboratorRepository.findActiveSuccessionCandidatesByProjectId(PROJECT_ID))
-                .thenReturn(List.of());
+        stubLockedProject(PROJECT_ID, OWNER_ID);
+        stubCandidates(PROJECT_ID,
+                candidate(OWNER_ID, Role.ROLE_USER, ProjectCollaboratorRole.EDITOR, 100L, JOINED_AT));
 
         // when
-        service.succeedOwnedProjectsOnWithdrawal(OWNER_ID);
+        List<ProjectOwnershipSuccessionPlan> plans = service.prepareSuccessionPlans(OWNER_ID, List.of(PROJECT_ID));
 
         // then
-        verify(projectCommandService).deleteProject(PROJECT_ID, OWNER_ID);
-        verify(memberRepository, never()).findByIdForUpdate(any(Long.class));
+        assertEquals(List.of(new Deletion(PROJECT_ID, OWNER_ID)), plans);
+    }
+
+    @Test
+    @DisplayName("잠금 전에 삭제됐거나 owner가 바뀐 프로젝트는 계획에서 제외한다")
+    void prepareSuccessionPlans_ProjectMissingOrOwnerChanged_SkipsProject() {
+        // given
+        when(projectRepository.findByIdForUpdate(10L)).thenReturn(Optional.empty());
+        stubLockedProject(20L, 99L);
+
+        // when
+        List<ProjectOwnershipSuccessionPlan> plans = service.prepareSuccessionPlans(OWNER_ID, List.of(10L, 20L));
+
+        // then
+        assertTrue(plans.isEmpty());
+        verifyNoInteractions(collaboratorRepository);
+    }
+
+    @Test
+    @DisplayName("여러 프로젝트의 계획은 입력 순서를 따르며 준비 단계에서는 회원 잠금이나 변경을 하지 않는다")
+    void prepareSuccessionPlans_MixedProjects_KeepsOrderWithoutSideEffects() {
+        // given
+        Project first = stubLockedProject(10L, OWNER_ID);
+        stubLockedProject(20L, OWNER_ID);
+        stubCandidates(10L, candidate(40L, Role.ROLE_USER, ProjectCollaboratorRole.EDITOR, 100L, JOINED_AT));
+        stubCandidates(20L);
+
+        // when
+        List<ProjectOwnershipSuccessionPlan> plans = service.prepareSuccessionPlans(OWNER_ID, List.of(10L, 20L));
+
+        // then
+        assertEquals(List.of(
+                new Transfer(10L, OWNER_ID, 40L, Role.ROLE_USER),
+                new Deletion(20L, OWNER_ID)), plans);
+        assertEquals(OWNER_ID, first.getMember().getId());
+        assertThrows(UnsupportedOperationException.class, () -> plans.add(new Deletion(30L, OWNER_ID)));
+        verifyNoInteractions(memberRepository, projectCommandService);
+        verify(collaboratorRepository, never()).deleteByProjectIdAndMemberId(anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("승계 계획은 project와 선정 회원을 다시 확인한 뒤 참여 기록을 지우고 owner를 바꾼다")
+    void executeSuccessionPlans_Transfer_ChangesOwnerWithoutKeepingDepartingMember() {
+        // given
+        Project project = stubLockedProject(PROJECT_ID, OWNER_ID);
+        Member successor = member(20L, Role.ROLE_USER, true);
+        when(memberRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(successor));
+        when(collaboratorRepository.deleteByProjectIdAndMemberId(PROJECT_ID, 20L)).thenReturn(1L);
+
+        // when
+        service.executeSuccessionPlans(List.of(new Transfer(PROJECT_ID, OWNER_ID, 20L, Role.ROLE_USER)));
+
+        // then
+        assertSame(successor, project.getMember());
+        InOrder order = inOrder(projectRepository, memberRepository, collaboratorRepository);
+        order.verify(projectRepository).findByIdForUpdate(PROJECT_ID);
+        order.verify(memberRepository).findByIdForUpdate(20L);
+        order.verify(collaboratorRepository).deleteByProjectIdAndMemberId(PROJECT_ID, 20L);
         verify(collaboratorRepository, never()).save(any(ProjectCollaborator.class));
+        verify(collaboratorRepository, never()).findActiveSuccessionCandidatePreviewsByProjectId(anyLong());
+        verifyNoInteractions(projectCommandService);
     }
 
     @Test
-    @DisplayName("비활성 후보나 떠나는 회원만 남으면 프로젝트를 삭제한다")
-    void succeedOwnedProjectsOnWithdrawal_NoEligibleCandidates_DeletesProject() {
-        // given
-        Member owner = member(OWNER_ID, Role.ROLE_USER, true);
-        Project project = project(PROJECT_ID, owner);
-        stubOwnedProjects(owner, project);
-        when(collaboratorRepository.findActiveSuccessionCandidatesByProjectId(PROJECT_ID))
-                .thenReturn(List.of(
-                        candidate(project, 20L, Role.ROLE_USER, ProjectCollaboratorRole.EDITOR,
-                                100L, JOINED_AT, false),
-                        candidate(project, OWNER_ID, Role.ROLE_USER, ProjectCollaboratorRole.EDITOR,
-                                200L, JOINED_AT, true)));
-
+    @DisplayName("삭제 계획은 기존 프로젝트 삭제 경로에 위임한다")
+    void executeSuccessionPlans_Deletion_DelegatesToDeleteProject() {
         // when
-        service.succeedOwnedProjectsOnWithdrawal(OWNER_ID);
+        service.executeSuccessionPlans(List.of(new Deletion(PROJECT_ID, OWNER_ID)));
 
         // then
         verify(projectCommandService).deleteProject(PROJECT_ID, OWNER_ID);
-        verify(memberRepository, never()).findByIdForUpdate(any(Long.class));
-    }
-
-    @Test
-    @DisplayName("소유 프로젝트가 없으면 승계나 삭제를 실행하지 않는다")
-    void succeedOwnedProjectsOnWithdrawal_NoOwnedProjects_DoesNothing() {
-        // given
-        when(memberRepository.findById(OWNER_ID))
-                .thenReturn(Optional.of(member(OWNER_ID, Role.ROLE_USER, true)));
-        when(projectRepository.findOwnedProjectIdsOrderByIdAsc(OWNER_ID)).thenReturn(List.of());
-
-        // when
-        service.succeedOwnedProjectsOnWithdrawal(OWNER_ID);
-
-        // then
-        verify(projectRepository, never()).findByIdForUpdate(any(Long.class));
-        verifyNoInteractions(collaboratorRepository, projectCommandService);
-    }
-
-    @Test
-    @DisplayName("존재하지 않는 회원의 프로젝트 처리를 시작하지 않는다")
-    void succeedOwnedProjectsOnWithdrawal_MemberNotFound_ThrowsMemberNotFound() {
-        // given
-        when(memberRepository.findById(OWNER_ID)).thenReturn(Optional.empty());
-
-        // when
-        MemberException exception = assertThrows(MemberException.class,
-                () -> service.succeedOwnedProjectsOnWithdrawal(OWNER_ID));
-
-        // then
-        assertEquals(MemberErrorCode.MEMBER_NOT_FOUND, exception.getCode());
-        verifyNoInteractions(projectRepository, collaboratorRepository, projectCommandService);
-    }
-
-    @Test
-    @DisplayName("캐시에 비활성 회원이 있어도 프로젝트 처리를 시작하지 않는다")
-    void succeedOwnedProjectsOnWithdrawal_InactiveMember_ThrowsMemberNotFound() {
-        // given
-        when(memberRepository.findById(OWNER_ID))
-                .thenReturn(Optional.of(member(OWNER_ID, Role.ROLE_USER, false)));
-
-        // when
-        MemberException exception = assertThrows(MemberException.class,
-                () -> service.succeedOwnedProjectsOnWithdrawal(OWNER_ID));
-
-        // then
-        assertEquals(MemberErrorCode.MEMBER_NOT_FOUND, exception.getCode());
-        verifyNoInteractions(projectRepository, collaboratorRepository, projectCommandService);
-    }
-
-    @Test
-    @DisplayName("guest는 일반 회원 탈퇴의 승계 정책을 사용할 수 없다")
-    void succeedOwnedProjectsOnWithdrawal_GuestMember_ThrowsGuestActionNotAllowed() {
-        // given
-        when(memberRepository.findById(OWNER_ID))
-                .thenReturn(Optional.of(member(OWNER_ID, Role.ROLE_GUEST, true)));
-
-        // when
-        MemberException exception = assertThrows(MemberException.class,
-                () -> service.succeedOwnedProjectsOnWithdrawal(OWNER_ID));
-
-        // then
-        assertEquals(MemberErrorCode.GUEST_ACTION_NOT_ALLOWED, exception.getCode());
-        verifyNoInteractions(projectRepository, collaboratorRepository, projectCommandService);
-    }
-
-    @Test
-    @DisplayName("ID 조회 이후 삭제된 프로젝트는 건너뛴다")
-    void succeedOwnedProjectsOnWithdrawal_ProjectDeletedBeforeLock_SkipsProject() {
-        // given
-        when(memberRepository.findById(OWNER_ID))
-                .thenReturn(Optional.of(member(OWNER_ID, Role.ROLE_USER, true)));
-        when(projectRepository.findOwnedProjectIdsOrderByIdAsc(OWNER_ID)).thenReturn(List.of(PROJECT_ID));
-        when(projectRepository.findByIdForUpdate(PROJECT_ID)).thenReturn(Optional.empty());
-
-        // when
-        service.succeedOwnedProjectsOnWithdrawal(OWNER_ID);
-
-        // then
-        verifyNoInteractions(collaboratorRepository, projectCommandService);
-    }
-
-    @Test
-    @DisplayName("잠금 이후 소유자가 바뀐 프로젝트는 승계하거나 삭제하지 않는다")
-    void succeedOwnedProjectsOnWithdrawal_OwnerChangedBeforeLock_SkipsProject() {
-        // given
-        Member owner = member(OWNER_ID, Role.ROLE_USER, true);
-        Project project = project(PROJECT_ID, member(99L, Role.ROLE_USER, true));
-        stubOwnedProjects(owner, project);
-
-        // when
-        service.succeedOwnedProjectsOnWithdrawal(OWNER_ID);
-
-        // then
-        assertEquals(99L, project.getMember().getId());
-        verifyNoInteractions(collaboratorRepository, projectCommandService);
+        verifyNoInteractions(projectRepository, memberRepository, collaboratorRepository);
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    @DisplayName("선정한 회원이 잠금 시점에 비활성이면 이전이나 삭제 대신 처리를 중단한다")
-    void succeedOwnedProjectsOnWithdrawal_SuccessorUnavailableAtLock_ThrowsTargetUnavailable(boolean filtered) {
+    @DisplayName("선정 회원이 실행 시점에 없거나 비활성이면 재선정 없이 중단한다")
+    void executeSuccessionPlans_SuccessorUnavailable_ThrowsTargetUnavailable(boolean missing) {
         // given
         Member owner = member(OWNER_ID, Role.ROLE_USER, true);
         Project project = project(PROJECT_ID, owner);
-        ProjectCollaborator candidate = candidate(project, 20L, Role.ROLE_USER,
-                ProjectCollaboratorRole.EDITOR, 100L, JOINED_AT, true);
-        stubOwnedProjects(owner, project);
-        when(collaboratorRepository.findActiveSuccessionCandidatesByProjectId(PROJECT_ID))
-                .thenReturn(List.of(candidate));
+        when(projectRepository.findByIdForUpdate(PROJECT_ID)).thenReturn(Optional.of(project));
         when(memberRepository.findByIdForUpdate(20L))
-                .thenReturn(filtered ? Optional.empty() : Optional.of(member(20L, Role.ROLE_USER, false)));
+                .thenReturn(missing ? Optional.empty() : Optional.of(member(20L, Role.ROLE_USER, false)));
 
         // when
-        ProjectException exception = assertThrows(ProjectException.class,
-                () -> service.succeedOwnedProjectsOnWithdrawal(OWNER_ID));
+        ProjectException exception = assertThrows(ProjectException.class, () -> service.executeSuccessionPlans(
+                List.of(new Transfer(PROJECT_ID, OWNER_ID, 20L, Role.ROLE_USER))));
 
         // then
         assertEquals(ProjectErrorCode.OWNERSHIP_TRANSFER_TARGET_UNAVAILABLE, exception.getCode());
         assertSame(owner, project.getMember());
-        verify(collaboratorRepository, never()).deleteByProjectIdAndMemberId(PROJECT_ID, 20L);
+        verify(collaboratorRepository, never()).deleteByProjectIdAndMemberId(anyLong(), anyLong());
+        verify(collaboratorRepository, never()).findActiveSuccessionCandidatePreviewsByProjectId(anyLong());
         verifyNoInteractions(projectCommandService);
     }
 
     @Test
-    @DisplayName("선정한 회원의 계정 유형이 잠금 조회에서 달라지면 처리를 중단한다")
-    void succeedOwnedProjectsOnWithdrawal_SuccessorTypeChanged_ThrowsTargetUnavailable() {
+    @DisplayName("선정 회원의 계정 유형이 계획과 다르면 중단한다")
+    void executeSuccessionPlans_SuccessorTypeChanged_ThrowsTargetUnavailable() {
         // given
         Member owner = member(OWNER_ID, Role.ROLE_USER, true);
         Project project = project(PROJECT_ID, owner);
-        ProjectCollaborator candidate = candidate(project, 20L, Role.ROLE_USER,
-                ProjectCollaboratorRole.EDITOR, 100L, JOINED_AT, true);
-        stubOwnedProjects(owner, project);
-        when(collaboratorRepository.findActiveSuccessionCandidatesByProjectId(PROJECT_ID))
-                .thenReturn(List.of(candidate));
-        when(memberRepository.findByIdForUpdate(20L))
-                .thenReturn(Optional.of(member(20L, Role.ROLE_GUEST, true)));
+        when(projectRepository.findByIdForUpdate(PROJECT_ID)).thenReturn(Optional.of(project));
+        when(memberRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(member(20L, Role.ROLE_GUEST, true)));
 
         // when
-        ProjectException exception = assertThrows(ProjectException.class,
-                () -> service.succeedOwnedProjectsOnWithdrawal(OWNER_ID));
+        ProjectException exception = assertThrows(ProjectException.class, () -> service.executeSuccessionPlans(
+                List.of(new Transfer(PROJECT_ID, OWNER_ID, 20L, Role.ROLE_USER))));
 
         // then
         assertEquals(ProjectErrorCode.OWNERSHIP_TRANSFER_TARGET_UNAVAILABLE, exception.getCode());
         assertSame(owner, project.getMember());
-        verify(collaboratorRepository, never()).deleteByProjectIdAndMemberId(PROJECT_ID, 20L);
+        verify(collaboratorRepository, never()).deleteByProjectIdAndMemberId(anyLong(), anyLong());
     }
 
     @Test
-    @DisplayName("선정한 참여 기록 삭제가 실패하면 소유자를 바꾸지 않는다")
-    void succeedOwnedProjectsOnWithdrawal_MembershipDisappeared_ThrowsTargetUnavailable() {
+    @DisplayName("선정 회원의 참여 기록이 사라졌으면 owner를 바꾸지 않고 중단한다")
+    void executeSuccessionPlans_MembershipDisappeared_ThrowsTargetUnavailable() {
         // given
         Member owner = member(OWNER_ID, Role.ROLE_USER, true);
         Project project = project(PROJECT_ID, owner);
-        ProjectCollaborator candidate = candidate(project, 20L, Role.ROLE_USER,
-                ProjectCollaboratorRole.EDITOR, 100L, JOINED_AT, true);
-        stubOwnedProjects(owner, project);
-        when(collaboratorRepository.findActiveSuccessionCandidatesByProjectId(PROJECT_ID))
-                .thenReturn(List.of(candidate));
-        when(memberRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(candidate.getMember()));
+        when(projectRepository.findByIdForUpdate(PROJECT_ID)).thenReturn(Optional.of(project));
+        when(memberRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(member(20L, Role.ROLE_USER, true)));
         when(collaboratorRepository.deleteByProjectIdAndMemberId(PROJECT_ID, 20L)).thenReturn(0L);
 
         // when
-        ProjectException exception = assertThrows(ProjectException.class,
-                () -> service.succeedOwnedProjectsOnWithdrawal(OWNER_ID));
+        ProjectException exception = assertThrows(ProjectException.class, () -> service.executeSuccessionPlans(
+                List.of(new Transfer(PROJECT_ID, OWNER_ID, 20L, Role.ROLE_USER))));
 
         // then
         assertEquals(ProjectErrorCode.OWNERSHIP_TRANSFER_TARGET_UNAVAILABLE, exception.getCode());
         assertSame(owner, project.getMember());
-        verifyNoInteractions(projectCommandService);
     }
 
-    @Test
-    @DisplayName("여러 프로젝트는 ID 순서대로 다시 조회하며 승계와 삭제를 함께 처리한다")
-    void succeedOwnedProjectsOnWithdrawal_MixedProjects_ProcessesInProjectIdOrder() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @DisplayName("승계할 프로젝트가 없거나 owner가 계획과 다르면 중단한다")
+    void executeSuccessionPlans_ProjectMissingOrOwnerChanged_ThrowsProjectNotFound(boolean missing) {
         // given
-        Member owner = member(OWNER_ID, Role.ROLE_USER, true);
-        Project first = project(10L, owner);
-        Project second = project(20L, owner);
-        Project third = project(30L, owner);
-        stubOwnedProjects(owner, first, second, third);
-        ProjectCollaborator firstCandidate = candidate(first, 40L, Role.ROLE_USER,
-                ProjectCollaboratorRole.EDITOR, 100L, JOINED_AT, true);
-        ProjectCollaborator thirdCandidate = candidate(third, 50L, Role.ROLE_USER,
-                ProjectCollaboratorRole.VIEWER, 200L, JOINED_AT, true);
-        when(collaboratorRepository.findActiveSuccessionCandidatesByProjectId(10L))
-                .thenReturn(List.of(firstCandidate));
-        when(collaboratorRepository.findActiveSuccessionCandidatesByProjectId(20L)).thenReturn(List.of());
-        when(collaboratorRepository.findActiveSuccessionCandidatesByProjectId(30L))
-                .thenReturn(List.of(thirdCandidate));
-        stubSelectedCandidate(firstCandidate);
-        stubSelectedCandidate(thirdCandidate);
+        when(projectRepository.findByIdForUpdate(PROJECT_ID)).thenReturn(missing
+                ? Optional.empty()
+                : Optional.of(project(PROJECT_ID, member(99L, Role.ROLE_USER, true))));
 
         // when
-        service.succeedOwnedProjectsOnWithdrawal(OWNER_ID);
+        ProjectException exception = assertThrows(ProjectException.class, () -> service.executeSuccessionPlans(
+                List.of(new Transfer(PROJECT_ID, OWNER_ID, 20L, Role.ROLE_USER))));
 
         // then
-        assertSame(firstCandidate.getMember(), first.getMember());
-        assertSame(thirdCandidate.getMember(), third.getMember());
-        InOrder order = inOrder(projectRepository, collaboratorRepository, memberRepository, projectCommandService);
-        order.verify(projectRepository).findByIdForUpdate(10L);
-        order.verify(collaboratorRepository).deleteByProjectIdAndMemberId(10L, 40L);
-        order.verify(projectRepository).findByIdForUpdate(20L);
-        order.verify(projectCommandService).deleteProject(20L, OWNER_ID);
-        order.verify(projectRepository).findByIdForUpdate(30L);
-        order.verify(collaboratorRepository).deleteByProjectIdAndMemberId(30L, 50L);
-        verify(collaboratorRepository, never()).save(any(ProjectCollaborator.class));
+        assertEquals(ProjectErrorCode.PROJECT_NOT_FOUND, exception.getCode());
+        verifyNoInteractions(memberRepository);
+        verify(collaboratorRepository, never()).deleteByProjectIdAndMemberId(anyLong(), anyLong());
     }
 
     @Test
-    @DisplayName("앞선 승계 이후 삭제가 실패해도 예외를 전파하고 후속 처리를 중단한다")
-    void succeedOwnedProjectsOnWithdrawal_DeleteFails_PropagatesAndStopsProcessing() {
+    @DisplayName("여러 계획은 순서대로 실행하고 중간 실패 시 예외를 전파해 이후 계획을 실행하지 않는다")
+    void executeSuccessionPlans_DeleteFails_PropagatesAndStopsProcessing() {
         // given
-        Member owner = member(OWNER_ID, Role.ROLE_USER, true);
-        when(memberRepository.findById(OWNER_ID)).thenReturn(Optional.of(owner));
-        when(projectRepository.findOwnedProjectIdsOrderByIdAsc(OWNER_ID)).thenReturn(List.of(10L, 20L, 30L));
-        Project first = project(10L, owner);
-        when(projectRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(first));
-        ProjectCollaborator candidate = candidate(first, 40L, Role.ROLE_USER,
-                ProjectCollaboratorRole.EDITOR, 100L, JOINED_AT, true);
-        when(collaboratorRepository.findActiveSuccessionCandidatesByProjectId(10L))
-                .thenReturn(List.of(candidate));
-        stubSelectedCandidate(candidate);
-        when(projectRepository.findByIdForUpdate(20L)).thenReturn(Optional.of(project(20L, owner)));
-        when(collaboratorRepository.findActiveSuccessionCandidatesByProjectId(20L)).thenReturn(List.of());
+        Project first = stubLockedProject(10L, OWNER_ID);
+        Member successor = member(40L, Role.ROLE_USER, true);
+        when(memberRepository.findByIdForUpdate(40L)).thenReturn(Optional.of(successor));
+        when(collaboratorRepository.deleteByProjectIdAndMemberId(10L, 40L)).thenReturn(1L);
         ProjectException failure = new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND);
         doThrow(failure).when(projectCommandService).deleteProject(20L, OWNER_ID);
 
         // when
-        ProjectException exception = assertThrows(ProjectException.class,
-                () -> service.succeedOwnedProjectsOnWithdrawal(OWNER_ID));
+        ProjectException exception = assertThrows(ProjectException.class, () -> service.executeSuccessionPlans(
+                List.of(new Transfer(10L, OWNER_ID, 40L, Role.ROLE_USER),
+                        new Deletion(20L, OWNER_ID),
+                        new Transfer(30L, OWNER_ID, 50L, Role.ROLE_USER))));
 
         // then
         assertSame(failure, exception);
-        verify(collaboratorRepository).deleteByProjectIdAndMemberId(10L, 40L);
+        assertSame(successor, first.getMember());
+        InOrder order = inOrder(collaboratorRepository, projectCommandService);
+        order.verify(collaboratorRepository).deleteByProjectIdAndMemberId(10L, 40L);
+        order.verify(projectCommandService).deleteProject(20L, OWNER_ID);
         verify(projectRepository, never()).findByIdForUpdate(30L);
+        verify(memberRepository, never()).findByIdForUpdate(50L);
     }
 
-    private void stubOwnedProjects(Member owner, Project... projects) {
-        when(memberRepository.findById(OWNER_ID)).thenReturn(Optional.of(owner));
-        when(projectRepository.findOwnedProjectIdsOrderByIdAsc(OWNER_ID))
-                .thenReturn(Arrays.stream(projects).map(Project::getId).toList());
-        for (Project project : projects) {
-            when(projectRepository.findByIdForUpdate(project.getId())).thenReturn(Optional.of(project));
-        }
+    private Project stubLockedProject(Long projectId, Long ownerId) {
+        Project project = project(projectId, member(ownerId, Role.ROLE_USER, true));
+        when(projectRepository.findByIdForUpdate(projectId)).thenReturn(Optional.of(project));
+        return project;
     }
 
-    private void stubSelectedCandidate(ProjectCollaborator candidate) {
-        Long projectId = candidate.getProject().getId();
-        Long memberId = candidate.getMember().getId();
-        when(memberRepository.findByIdForUpdate(memberId)).thenReturn(Optional.of(candidate.getMember()));
-        when(collaboratorRepository.deleteByProjectIdAndMemberId(projectId, memberId)).thenReturn(1L);
-    }
-
-    private void verifyTransferOrder(ProjectCollaborator candidate) {
-        InOrder order = inOrder(projectRepository, collaboratorRepository, memberRepository);
-        order.verify(projectRepository).findByIdForUpdate(PROJECT_ID);
-        order.verify(collaboratorRepository).findActiveSuccessionCandidatesByProjectId(PROJECT_ID);
-        order.verify(memberRepository).findByIdForUpdate(candidate.getMember().getId());
-        order.verify(collaboratorRepository).deleteByProjectIdAndMemberId(PROJECT_ID, candidate.getMember().getId());
+    private void stubCandidates(Long projectId, ProjectSuccessionCandidatePreview... candidates) {
+        when(collaboratorRepository.findActiveSuccessionCandidatePreviewsByProjectId(projectId))
+                .thenReturn(List.of(candidates));
     }
 
     private Member member(Long id, Role role, boolean active) {
@@ -530,17 +390,40 @@ class ProjectOwnershipSuccessionCommandServiceTest {
         return project;
     }
 
-    private ProjectCollaborator candidate(
-            Project project, Long memberId, Role type, ProjectCollaboratorRole role,
-            Long membershipId, LocalDateTime joinedAt, boolean active
+    private ProjectSuccessionCandidatePreview candidate(
+            Long memberId, Role memberRole, ProjectCollaboratorRole collaboratorRole,
+            Long membershipId, LocalDateTime joinedAt
     ) {
-        ProjectCollaborator candidate = ProjectCollaborator.builder()
-                .project(project)
-                .member(member(memberId, type, active))
-                .role(role)
-                .build();
-        ReflectionTestUtils.setField(candidate, "id", membershipId);
-        ReflectionTestUtils.setField(candidate, "createdAt", joinedAt);
-        return candidate;
+        return new CandidatePreview(membershipId, memberId, memberRole, collaboratorRole, joinedAt);
+    }
+
+    private record CandidatePreview(
+            Long membershipId, Long memberId, Role memberRole,
+            ProjectCollaboratorRole collaboratorRole, LocalDateTime joinedAt
+    ) implements ProjectSuccessionCandidatePreview {
+        @Override
+        public Long getMembershipId() {
+            return membershipId;
+        }
+
+        @Override
+        public Long getMemberId() {
+            return memberId;
+        }
+
+        @Override
+        public Role getMemberRole() {
+            return memberRole;
+        }
+
+        @Override
+        public ProjectCollaboratorRole getCollaboratorRole() {
+            return collaboratorRole;
+        }
+
+        @Override
+        public LocalDateTime getJoinedAt() {
+            return joinedAt;
+        }
     }
 }

@@ -1,10 +1,12 @@
 package com.infragen.infragen.domain.project.service.command;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.infragen.infragen.domain.member.entity.Member;
@@ -127,29 +129,41 @@ public class ProjectCollaboratorInvitationCommandService {
     }
 
     /**
-     * 회원 비활성화 전에 관련 PENDING 초대만 취소하고 완료 이력은 보존한다.
-     * project ID 순으로 project→invitation을 잠그며 기존 transaction에서도 READ_COMMITTED를 사용한다.
+     * 회원이 떠날 때 그 회원이 보냈거나 받은 대기(PENDING) 초대를 CANCELLED로 바꿔,
+     * 떠난 회원이 관련된 초대가 나중에 수락되지 않게 한다. 만료 시각이 지난 PENDING도 취소하고,
+     * 이미 수락·거절·취소된 초대는 이력으로 그대로 둔다.
+     * 호출자가 같은 transaction에서 잠근 project 범위 안에서만 처리하며 범위 밖 project를 새로 잠그지 않는다.
+     * 호출자는 떠나는 회원을 잠그고 소유 프로젝트 승계·삭제를 실행한 뒤, 회원 비활성화 전에 호출해야 한다.
+     *
+     * @param departingMemberId 떠나는 회원 ID이며 취소 처리자로 기록된다
+     * @param lockedProjectIds 호출자가 이미 쓰기 잠금한 project ID 목록. 이 순서대로 초대를 잠근다
+     * @throws MemberException 떠나는 회원이 없거나 이미 비활성인 경우 MEMBER_NOT_FOUND
      */
-    @Transactional(isolation = Isolation.READ_COMMITTED)
-    public void cancelRelatedPendingInvitationsOnWithdrawal(Long memberId) {
-        Member departingMember = memberRepository.findById(memberId)
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void cancelRelatedPendingInvitations(Long departingMemberId, List<Long> lockedProjectIds) {
+        // 앞선 bulk 삭제가 캐시를 비웠을 수 있으므로 호출자가 잠근 회원 행을 다시 읽어 활성 상태를 확인한다.
+        Member departingMember = memberRepository.findByIdForUpdate(departingMemberId)
+                .filter(member -> Boolean.TRUE.equals(member.getIsActive()))
                 .orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
-        if (!Boolean.TRUE.equals(departingMember.getIsActive())) {
-            throw new MemberException(MemberErrorCode.MEMBER_NOT_FOUND);
-        }
 
-        for (Long projectId : invitationRepository.findPendingRelatedProjectIdsOrderByProjectIdAsc(memberId)) {
-            if (projectRepository.findByIdForUpdate(projectId).isEmpty()) {
+        // 관련 PENDING이 없는 project의 초대 잠금 조회를 건너뛴다. 삭제된 project는 초대도 지워져 여기서 빠진다.
+        Set<Long> pendingRelatedProjectIds = new HashSet<>(
+                invitationRepository.findPendingRelatedProjectIdsOrderByProjectIdAsc(departingMemberId));
+
+        for (Long projectId : lockedProjectIds) {
+            if (!pendingRelatedProjectIds.contains(projectId)) {
                 continue;
             }
             List<ProjectCollaboratorInvitation> invitations = invitationRepository
-                    .findPendingRelatedByProjectIdAndMemberIdForUpdate(projectId, memberId);
+                    .findPendingRelatedByProjectIdAndMemberIdForUpdate(projectId, departingMemberId);
+
             LocalDateTime cancelledAt = LocalDateTime.now();
+
             for (ProjectCollaboratorInvitation invitation : invitations) {
                 if (invitation.getStatus() != ProjectCollaboratorInvitationStatus.PENDING
                         || !invitation.getProject().getId().equals(projectId)
-                        || (!invitation.getInvitedBy().getId().equals(memberId)
-                                && !invitation.getInvitee().getId().equals(memberId))) {
+                        || (!invitation.getInvitedBy().getId().equals(departingMemberId)
+                                && !invitation.getInvitee().getId().equals(departingMemberId))) {
                     continue;
                 }
                 invitation.cancel(departingMember, cancelledAt);

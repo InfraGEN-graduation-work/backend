@@ -6,6 +6,7 @@ import com.infragen.infragen.domain.member.repository.MemberRepository;
 import com.infragen.infragen.domain.project.dto.request.ProjectReqDTO;
 import com.infragen.infragen.domain.project.dto.response.ProjectResDTO;
 import com.infragen.infragen.domain.project.service.command.ProjectCommandService;
+import com.infragen.infragen.domain.project.service.command.ProjectOwnershipTransferCommandService;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 import com.infragen.infragen.global.apiPayload.handler.GeneralExceptionAdvice;
 import com.infragen.infragen.global.auth.AuthenticationEntryPointImpl;
@@ -40,6 +41,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 
@@ -68,11 +70,12 @@ class ProjectControllerSecurityWebTest {
     @MockitoBean RedisUtil redisUtil;
     @MockitoBean MemberRepository memberRepository;
     @MockitoBean ProjectCommandService commandService;
+    @MockitoBean ProjectOwnershipTransferCommandService transferService;
     @MockitoBean ProjectQueryService queryService;
 
     @ParameterizedTest
-    @ValueSource(strings = {"GET", "PATCH"})
-    @DisplayName("목록과 metadata PATCH는 인증이 없으면 401로 거부한다")
+    @ValueSource(strings = {"GET", "PATCH", "POST"})
+    @DisplayName("프로젝트 목록·metadata 수정·소유권 이전은 인증이 없으면 401로 거부한다")
     void projectEndpoints_Anonymous_Unauthorized(String method) throws Exception {
         // given
         var request = request(method);
@@ -82,12 +85,12 @@ class ProjectControllerSecurityWebTest {
 
         // then
         response.andExpect(status().isUnauthorized());
-        verifyNoInteractions(commandService, queryService);
+        verifyNoInteractions(commandService, transferService, queryService);
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"GET", "PATCH"})
-    @DisplayName("목록과 metadata PATCH는 잘못된 JWT를 거부한다")
+    @ValueSource(strings = {"GET", "PATCH", "POST"})
+    @DisplayName("프로젝트 목록·metadata 수정·소유권 이전은 잘못된 JWT를 거부한다")
     void projectEndpoints_InvalidJwt_Unauthorized(String method) throws Exception {
         // given
         var request = request(method).header("Authorization", "Bearer invalid");
@@ -97,11 +100,11 @@ class ProjectControllerSecurityWebTest {
 
         // then
         response.andExpect(status().isUnauthorized());
-        verifyNoInteractions(commandService, queryService);
+        verifyNoInteractions(commandService, transferService, queryService);
     }
 
     @Test
-    @DisplayName("목록과 PATCH는 요청 memberId 대신 검증된 JWT subject를 사용한다")
+    @DisplayName("프로젝트 API는 요청 memberId 대신 검증된 JWT subject를 사용한다")
     void projectEndpoints_ValidJwt_UseAuthenticatedMember() throws Exception {
         // given
         Member member = Member.builder().email("test@example.com").nickname("tester")
@@ -120,17 +123,25 @@ class ProjectControllerSecurityWebTest {
                 .header("Authorization", "Bearer " + token));
         var patchResponse = mockMvc.perform(request("PATCH").param("memberId", "999")
                 .header("Authorization", "Bearer " + token));
+        var transferResponse = mockMvc.perform(request("POST").param("memberId", "999")
+                .header("Authorization", "Bearer " + token));
 
         // then
         listResponse.andExpect(status().isOk());
         patchResponse.andExpect(status().isOk());
+        transferResponse.andExpect(status().isOk());
         verify(queryService).getProjects(7L);
         verify(commandService).updateMetadata(1L, metadata, 7L);
+        verify(transferService).transfer(1L, 7L, 9L);
     }
 
     private MockHttpServletRequestBuilder request(String method) {
-        return method.equals("GET") ? get("/api/v1/projects")
-                : patch("/api/v1/projects/1/metadata").contentType(APPLICATION_JSON)
-                        .content("{\"title\":\"New\",\"baseVersion\":0}");
+        return switch (method) {
+            case "GET" -> get("/api/v1/projects");
+            case "PATCH" -> patch("/api/v1/projects/1/metadata").contentType(APPLICATION_JSON)
+                    .content("{\"title\":\"New\",\"baseVersion\":0}");
+            case "POST" -> post("/api/v1/projects/1/ownership-transfer/9");
+            default -> throw new IllegalArgumentException("Unsupported method: " + method);
+        };
     }
 }

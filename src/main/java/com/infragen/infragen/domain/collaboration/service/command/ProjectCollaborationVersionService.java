@@ -14,8 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Optional;
-
+/** project → state 잠금 순서를 유지해 graph 변경과 프로젝트 관리 요청을 조정한다. */
 @Service
 @RequiredArgsConstructor
 public class ProjectCollaborationVersionService {
@@ -75,20 +74,11 @@ public class ProjectCollaborationVersionService {
             String operationId,
             boolean requireExactBaseVersion
     ) {
-        Optional<ProjectCollaborationState> state;
-
-        // 잠금 전 version을 미리 적재하면 잠금 대기 후에도 1차 캐시의 오래된 값을 사용할 수 있다.
-        if (stateRepository.existsByProjectId(projectId)) {
-            state = stateRepository.findByProjectIdForUpdate(projectId);
-        } else {
-            Project project = projectRepository.findByIdForUpdate(projectId)
-                    .orElseThrow(() -> new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
-            state = stateRepository.findByProjectIdForUpdate(projectId)
-                    .or(() -> Optional.of(createInitialState(project)));
-        }
-
-        ProjectCollaborationState lockedState = state
+        // 전체 교체·metadata·삭제가 project를 갱신하므로 모든 발급도 project → state 순서로 잠근다.
+        Project project = projectRepository.findByIdForUpdate(projectId)
                 .orElseThrow(() -> new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
+        ProjectCollaborationState lockedState = stateRepository.findByProjectIdForUpdate(projectId)
+                .orElseGet(() -> createInitialState(project));
 
         if (operationId != null) {
             ProjectCollaborationOperation existing = operationRepository

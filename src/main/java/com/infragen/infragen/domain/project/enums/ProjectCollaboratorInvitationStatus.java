@@ -6,5 +6,6 @@ package com.infragen.infragen.domain.project.enums;
 public enum ProjectCollaboratorInvitationStatus {
     PENDING,
     ACCEPTED,
-    DECLINED
+    DECLINED,
+    CANCELLED
 }

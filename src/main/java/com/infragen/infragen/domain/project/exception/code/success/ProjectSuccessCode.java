@@ -77,6 +77,11 @@ public enum ProjectSuccessCode implements BaseSuccessCode {
         "프로젝트 초대 거절에 성공했습니다.",
         "PROJECT200_12"
     ),
+    PROJECT_OWNERSHIP_TRANSFER_SUCCESS(
+        HttpStatus.OK,
+        "프로젝트 소유권 이전에 성공했습니다.",
+        "PROJECT200_13"
+    ),
     ;
     private final HttpStatus httpStatus;
     private final String message;

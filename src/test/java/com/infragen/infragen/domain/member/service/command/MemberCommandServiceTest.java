@@ -15,12 +15,17 @@ import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
 import com.infragen.infragen.domain.project.repository.ProjectCollaboratorInvitationRepository;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
@@ -29,6 +34,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
@@ -92,20 +98,32 @@ class MemberCommandServiceTest {
     private MemberCommandService memberCommandService;
 
     @Test
+    @DisplayName("활성 회원을 잠근 뒤 닉네임과 암호화한 비밀번호를 수정한다")
     void updateMember_Success() {
+        // given
         MemberReqDTO.UpdateMember request = new MemberReqDTO.UpdateMember("newNickname", "newPassword123");
-        when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
+        Member lockedMember = Member.builder().email("member@test.com").nickname("oldNickname")
+                .password("oldEncodedPassword").role(Role.ROLE_USER).isActive(true).build();
+        ReflectionTestUtils.setField(lockedMember, "id", 1L);
+        when(memberRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lockedMember));
         when(passwordEncoder.encode(request.password())).thenReturn("encodedPassword");
-        when(member.getId()).thenReturn(1L);
-        when(member.getEmail()).thenReturn("member@test.com");
-        when(member.getNickname()).thenReturn("newNickname");
 
+        // when
         var result = memberCommandService.updateMember(1L, request);
 
-        verify(passwordEncoder).encode("newPassword123");
-        verify(member).updateProfile("newNickname", "encodedPassword");
-        assertEquals(1L, result.id());
-        assertEquals("newNickname", result.nickname());
+        // then
+        var order = inOrder(memberRepository, passwordEncoder);
+        order.verify(memberRepository).findByIdForUpdate(1L);
+        order.verify(passwordEncoder).encode("newPassword123");
+        assertAll(
+                () -> assertEquals("newNickname", lockedMember.getNickname()),
+                () -> assertEquals("encodedPassword", lockedMember.getPassword()),
+                () -> assertEquals(1L, result.id()),
+                () -> assertEquals("newNickname", result.nickname()),
+                () -> assertTrue(result.isActive())
+        );
+        verify(memberRepository, never()).findById(anyLong());
+        verifyNoInteractions(invitationRepository, tokenService);
     }
 
     @Test
@@ -252,25 +270,33 @@ class MemberCommandServiceTest {
 
     @Test
     void updateMember_NicknameOnly() {
+        // given
         MemberReqDTO.UpdateMember request = new MemberReqDTO.UpdateMember("newNickname", null);
-        when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
+        when(memberRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(member));
+        when(member.getIsActive()).thenReturn(true);
         when(member.getPassword()).thenReturn("oldEncodedPassword");
 
+        // when
         memberCommandService.updateMember(1L, request);
 
+        // then
         verify(member).updateProfile("newNickname", "oldEncodedPassword");
         verifyNoInteractions(passwordEncoder);
     }
 
     @Test
     void updateMember_PasswordOnly() {
+        // given
         MemberReqDTO.UpdateMember request = new MemberReqDTO.UpdateMember(null, "newPassword123");
-        when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
+        when(memberRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(member));
+        when(member.getIsActive()).thenReturn(true);
         when(member.getNickname()).thenReturn("oldNickname");
         when(passwordEncoder.encode(request.password())).thenReturn("encodedPassword");
 
+        // when
         memberCommandService.updateMember(1L, request);
 
+        // then
         verify(member).updateProfile("oldNickname", "encodedPassword");
     }
 
@@ -278,7 +304,8 @@ class MemberCommandServiceTest {
     void updateMember_SocialMemberNicknameOnly_Success() {
         // given
         MemberReqDTO.UpdateMember request = new MemberReqDTO.UpdateMember("newNickname", null);
-        when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
+        when(memberRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(member));
+        when(member.getIsActive()).thenReturn(true);
         when(member.getSocialProvider()).thenReturn(SocialProvider.KAKAO);
         when(member.getPassword()).thenReturn("randomEncodedPassword");
 
@@ -294,7 +321,8 @@ class MemberCommandServiceTest {
     void updateMember_SocialMemberPasswordIncluded_ThrowsException() {
         // given
         MemberReqDTO.UpdateMember request = new MemberReqDTO.UpdateMember("newNickname", "newPassword123");
-        when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
+        when(memberRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(member));
+        when(member.getIsActive()).thenReturn(true);
         when(member.getSocialProvider()).thenReturn(SocialProvider.KAKAO);
 
         // when
@@ -309,17 +337,24 @@ class MemberCommandServiceTest {
 
     @Test
     void updateMember_MemberNotFound() {
+        // given
         MemberReqDTO.UpdateMember request = new MemberReqDTO.UpdateMember("newNickname", "newPassword123");
-        when(memberRepository.findById(1L)).thenReturn(Optional.empty());
+        when(memberRepository.findByIdForUpdate(1L)).thenReturn(Optional.empty());
 
-        assertThrows(MemberException.class, () -> memberCommandService.updateMember(1L, request));
+        // when
+        MemberException exception = assertThrows(MemberException.class,
+                () -> memberCommandService.updateMember(1L, request));
+
+        // then
+        assertEquals(MemberErrorCode.MEMBER_NOT_FOUND, exception.getCode());
+        verify(member, never()).updateProfile(any(), any());
         verifyNoInteractions(passwordEncoder);
     }
 
     @Test
     void updateMember_GuestMember_ThrowsForbidden() {
         // given
-        when(memberRepository.findById(99L)).thenReturn(Optional.of(guestMember()));
+        when(memberRepository.findByIdForUpdate(99L)).thenReturn(Optional.of(guestMember()));
 
         // when
         MemberException exception = assertThrows(
@@ -334,6 +369,94 @@ class MemberCommandServiceTest {
         assertEquals(MemberErrorCode.GUEST_ACTION_NOT_ALLOWED, exception.getCode());
         verifyNoInteractions(passwordEncoder);
         verify(tokenService, never()).deleteRefreshToken(99L);
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(booleans = {false})
+    @DisplayName("잠금 조회한 회원이 활성이 아니면 프로필을 수정하지 않는다")
+    void updateMember_InactiveLockedMember_ThrowsMemberNotFound(Boolean active) {
+        // given
+        Member lockedMember = Member.builder().email("member@test.com").nickname("oldNickname")
+                .password("oldEncodedPassword").role(Role.ROLE_USER).isActive(active).build();
+        when(memberRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lockedMember));
+        var request = new MemberReqDTO.UpdateMember("newNickname", "newPassword123");
+
+        // when
+        MemberException exception = assertThrows(MemberException.class,
+                () -> memberCommandService.updateMember(1L, request));
+
+        // then
+        assertAll(
+                () -> assertEquals(MemberErrorCode.MEMBER_NOT_FOUND, exception.getCode()),
+                () -> assertEquals("oldNickname", lockedMember.getNickname()),
+                () -> assertEquals("oldEncodedPassword", lockedMember.getPassword()),
+                () -> assertEquals(active, lockedMember.getIsActive())
+        );
+        verifyNoInteractions(passwordEncoder, invitationRepository, tokenService);
+    }
+
+    @Test
+    @DisplayName("회원 잠금 실패를 전파하며 비밀번호 암호화나 프로필 수정을 하지 않는다")
+    void updateMember_MemberLockFailure_PropagatesWithoutMutation() {
+        // given
+        var failure = new PessimisticLockingFailureException("member lock failed");
+        when(memberRepository.findByIdForUpdate(1L)).thenThrow(failure);
+        var request = new MemberReqDTO.UpdateMember("newNickname", "newPassword123");
+
+        // when
+        var exception = assertThrows(PessimisticLockingFailureException.class,
+                () -> memberCommandService.updateMember(1L, request));
+
+        // then
+        assertSame(failure, exception);
+        verifyNoInteractions(member, passwordEncoder, invitationRepository, tokenService);
+    }
+
+    @Test
+    @DisplayName("수정 필드가 없으면 잠금 조회한 현재 프로필을 유지한다")
+    void updateMember_NoFields_PreservesLockedProfile() {
+        // given
+        Member lockedMember = Member.builder().email("member@test.com").nickname("currentNickname")
+                .password("currentEncodedPassword").role(Role.ROLE_USER).isActive(true).build();
+        when(memberRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lockedMember));
+        var request = new MemberReqDTO.UpdateMember(null, null);
+
+        // when
+        var result = memberCommandService.updateMember(1L, request);
+
+        // then
+        assertAll(
+                () -> assertEquals("currentNickname", result.nickname()),
+                () -> assertEquals("currentEncodedPassword", lockedMember.getPassword()),
+                () -> assertTrue(lockedMember.getIsActive())
+        );
+        verify(memberRepository).findByIdForUpdate(1L);
+        verifyNoInteractions(passwordEncoder, invitationRepository, tokenService);
+    }
+
+    @Test
+    @DisplayName("비밀번호 암호화 실패 때 닉네임과 비밀번호를 변경하지 않는다")
+    void updateMember_PasswordEncodingFailure_PropagatesWithoutMutation() {
+        // given
+        Member lockedMember = Member.builder().email("member@test.com").nickname("oldNickname")
+                .password("oldEncodedPassword").role(Role.ROLE_USER).isActive(true).build();
+        when(memberRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(lockedMember));
+        var failure = new IllegalStateException("password encoding failed");
+        when(passwordEncoder.encode("newPassword123")).thenThrow(failure);
+        var request = new MemberReqDTO.UpdateMember("newNickname", "newPassword123");
+
+        // when
+        var exception = assertThrows(IllegalStateException.class,
+                () -> memberCommandService.updateMember(1L, request));
+
+        // then
+        assertAll(
+                () -> assertSame(failure, exception),
+                () -> assertEquals("oldNickname", lockedMember.getNickname()),
+                () -> assertEquals("oldEncodedPassword", lockedMember.getPassword())
+        );
+        verifyNoInteractions(invitationRepository, tokenService);
     }
 
     @Test

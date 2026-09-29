@@ -5,6 +5,8 @@ import com.infragen.infragen.domain.project.entity.Project;
 import com.infragen.infragen.domain.project.entity.ProjectCollaboratorInvitation;
 import com.infragen.infragen.domain.project.dto.response.ProjectCollaboratorInvitationResDTO;
 import com.infragen.infragen.domain.project.enums.ProjectCollaboratorRole;
+import jakarta.persistence.Tuple;
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -29,36 +31,45 @@ public final class ProjectCollaboratorInvitationConverter {
                 .build();
     }
 
-    /** 초대 발신자가 보는 정보로 변환한다. 대상 회원의 내부 ID와 초대코드는 응답하지 않는다. */
+    /** 발신 이력의 scalar 조회 값을 응답으로 변환한다. 회원 ID·초대코드를 노출하거나 Entity를 조회하지 않는다. */
     public static ProjectCollaboratorInvitationResDTO.SentItem toSentItem(
-            ProjectCollaboratorInvitation invitation,
+            Tuple invitation,
             ProjectCollaboratorInvitationResDTO.InvitationStatus status
     ) {
         return ProjectCollaboratorInvitationResDTO.SentItem.builder()
-                .invitationId(invitation.getId())
-                .inviteeNickname(invitation.getInvitee().getNickname())
-                .role(invitation.getRole())
+                .invitationId(invitation.get("invitationId", Number.class).longValue())
+                .inviteeNickname(invitation.get("memberNickname", String.class))
+                .role(ProjectCollaboratorRole.valueOf(invitation.get("role", String.class)))
                 .status(status)
-                .createdAt(invitation.getCreatedAt())
-                .expiresAt(invitation.getExpiresAt())
-                .respondedAt(invitation.getRespondedAt())
+                .createdAt(readDateTime(invitation, "createdAt"))
+                .expiresAt(readDateTime(invitation, "expiresAt"))
+                .respondedAt(readDateTime(invitation, "respondedAt"))
                 .build();
     }
 
-    /** 초대 대상자가 확인할 프로젝트와 초대자 정보로 변환한다. */
+    /** 수신 이력의 프로젝트·초대자 표시 값을 응답으로 변환한다. 표시 상태는 호출자가 판단한다. */
     public static ProjectCollaboratorInvitationResDTO.ReceivedItem toReceivedItem(
-            ProjectCollaboratorInvitation invitation,
+            Tuple invitation,
             ProjectCollaboratorInvitationResDTO.InvitationStatus status
     ) {
         return ProjectCollaboratorInvitationResDTO.ReceivedItem.builder()
-                .invitationId(invitation.getId())
-                .projectTitle(invitation.getProject().getTitle())
-                .inviterNickname(invitation.getInvitedBy().getNickname())
-                .role(invitation.getRole())
+                .invitationId(invitation.get("invitationId", Number.class).longValue())
+                .projectTitle(invitation.get("projectTitle", String.class))
+                .inviterNickname(invitation.get("memberNickname", String.class))
+                .role(ProjectCollaboratorRole.valueOf(invitation.get("role", String.class)))
                 .status(status)
-                .createdAt(invitation.getCreatedAt())
-                .expiresAt(invitation.getExpiresAt())
+                .createdAt(readDateTime(invitation, "createdAt"))
+                .expiresAt(readDateTime(invitation, "expiresAt"))
                 .build();
+    }
+
+    /** native 조회의 Timestamp·LocalDateTime을 기존 응답 시각으로 변환하며 선택 필드의 null은 유지한다. */
+    public static LocalDateTime readDateTime(Tuple row, String alias) {
+        Object value = row.get(alias);
+        if (value instanceof Timestamp timestamp) {
+            return timestamp.toLocalDateTime();
+        }
+        return (LocalDateTime) value;
     }
 
     public static ProjectCollaboratorInvitationResDTO.SentList toSentList(

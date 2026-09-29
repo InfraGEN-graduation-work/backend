@@ -82,6 +82,11 @@ public enum ProjectErrorCode implements BaseErrorCode {
             "응답할 수 없는 프로젝트 초대입니다.",
             "PROJECT404_3"
     ),
+    OWNERSHIP_TRANSFER_TARGET_UNAVAILABLE(
+            HttpStatus.NOT_FOUND,
+            "소유권을 이전할 수 없는 프로젝트 참여자입니다.",
+            "PROJECT404_4"
+    ),
     ;
     private final HttpStatus httpStatus;
     private final String message;

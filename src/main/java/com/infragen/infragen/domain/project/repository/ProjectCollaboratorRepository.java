@@ -1,15 +1,16 @@
 package com.infragen.infragen.domain.project.repository;
 
-import com.infragen.infragen.domain.project.entity.ProjectCollaborator;
-import com.infragen.infragen.domain.project.enums.ProjectCollaboratorRole;
+import java.util.List;
+import java.util.Optional;
+
 import org.jspecify.annotations.NonNull;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.util.List;
-import java.util.Optional;
+import com.infragen.infragen.domain.project.entity.ProjectCollaborator;
+import com.infragen.infragen.domain.project.enums.ProjectCollaboratorRole;
 
 public interface ProjectCollaboratorRepository
         extends JpaRepository<@NonNull ProjectCollaborator, @NonNull Long> {
@@ -19,6 +20,28 @@ public interface ProjectCollaboratorRepository
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("DELETE FROM ProjectCollaborator collaborator WHERE collaborator.project.id = :projectId")
     void deleteByProjectId(@Param("projectId") Long projectId);
+
+    /**
+     * 탈퇴 처리의 잠금 대상·잔여 관계 확인에 사용할 참여 project ID를 오름차순으로 반환한다.
+     * 회원 Entity를 적재하거나 활성 상태로 범위를 줄이지 않는다.
+     */
+    @Query("""
+            SELECT collaborator.project.id
+            FROM ProjectCollaborator collaborator
+            WHERE collaborator.member.id = :memberId
+            ORDER BY collaborator.project.id ASC
+            """)
+    List<Long> findParticipatingProjectIdsOrderByProjectIdAsc(@Param("memberId") Long memberId);
+
+    /**
+     * 관련 project·회원 잠금을 확보한 탈퇴 transaction에서 해당 회원의 membership만 제거한다.
+     * 미저장 변경을 flush한 뒤 캐시를 비우므로 호출자는 이후 필요한 Entity를 다시 조회한다.
+     *
+     * @return 제거한 membership 수
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("DELETE FROM ProjectCollaborator collaborator WHERE collaborator.member.id = :memberId")
+    int deleteAllByMemberId(@Param("memberId") Long memberId);
 
     /**
      * project와 member가 가진 collaborator membership을 조회한다.
@@ -36,6 +59,18 @@ public interface ProjectCollaboratorRepository
      * @return project collaborator 목록
      */
     List<ProjectCollaborator> findAllByProjectId(Long projectId);
+
+    /** project 잠금 이후 활성 승계 후보를 조회하며, 후보별 회원 조회가 반복되지 않게 함께 가져온다. */
+    @Query("""
+            SELECT collaborator
+            FROM ProjectCollaborator collaborator
+            JOIN FETCH collaborator.member member
+            WHERE collaborator.project.id = :projectId
+              AND member.isActive = true
+            """)
+    List<ProjectCollaborator> findActiveSuccessionCandidatesByProjectId(
+            @Param("projectId") Long projectId
+    );
 
     /**
      * project에서 지정한 member의 collaborator membership을 삭제한다.

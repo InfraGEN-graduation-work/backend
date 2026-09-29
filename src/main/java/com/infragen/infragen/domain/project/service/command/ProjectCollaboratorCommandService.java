@@ -31,6 +31,7 @@ public class ProjectCollaboratorCommandService {
 
     /**
      * owner가 collaborator의 역할을 EDITOR 또는 VIEWER로 변경한다.
+     * project 잠금 뒤 현재 owner를 확인한다.
      */
     @Transactional
     public void changeRole(
@@ -39,7 +40,7 @@ public class ProjectCollaboratorCommandService {
             Long memberId,
             ProjectCollaboratorReqDTO.ChangeRole request
     ) {
-        Project project = projectQueryService.getOwnedProject(projectId, ownerId);
+        Project project = findOwnedProjectForUpdate(projectId, ownerId);
         ProjectCollaborator collaborator = findCollaborator(projectId, memberId);
         ensureGuestOwnerOnlyManagesGuests(project, collaborator.getMember());
         collaborator.changeRole(request.role());
@@ -47,10 +48,11 @@ public class ProjectCollaboratorCommandService {
 
     /**
      * owner가 project에서 collaborator membership을 삭제한다.
+     * project 잠금 뒤 현재 owner를 확인한다.
      */
     @Transactional
     public void delete(Long projectId, Long ownerId, Long memberId) {
-        Project project = projectQueryService.getOwnedProject(projectId, ownerId);
+        Project project = findOwnedProjectForUpdate(projectId, ownerId);
         if (project.getMember().getRole() == Role.ROLE_GUEST) {
             ProjectCollaborator collaborator = findCollaborator(projectId, memberId);
             ensureGuestOwnerOnlyManagesGuests(project, collaborator.getMember());
@@ -60,15 +62,26 @@ public class ProjectCollaboratorCommandService {
         }
     }
 
-    /** owner는 나갈 수 없으며, 인증된 회원의 collaborator membership만 삭제한다. */
+    /** project 잠금 뒤 owner 여부를 확인하고, 인증된 collaborator의 membership만 삭제한다. */
     @Transactional
     public void leave(Long projectId, Long memberId) {
-        if (projectRepository.existsByIdAndMemberId(projectId, memberId)) {
+        Project project = projectRepository.findByIdForUpdate(projectId)
+                .orElseThrow(() -> new ProjectException(ProjectErrorCode.COLLABORATOR_NOT_FOUND));
+        if (memberId.equals(project.getMember().getId())) {
             throw new ProjectException(ProjectErrorCode.OWNER_CANNOT_LEAVE_PROJECT);
         }
         if (collaboratorRepository.deleteByProjectIdAndMemberId(projectId, memberId) == 0) {
             throw new ProjectException(ProjectErrorCode.COLLABORATOR_NOT_FOUND);
         }
+    }
+
+    private Project findOwnedProjectForUpdate(Long projectId, Long ownerId) {
+        Project project = projectRepository.findByIdForUpdate(projectId)
+                .orElseThrow(() -> new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
+        if (!ownerId.equals(project.getMember().getId())) {
+            throw new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND);
+        }
+        return project;
     }
 
     private ProjectCollaborator findCollaborator(Long projectId, Long memberId) {

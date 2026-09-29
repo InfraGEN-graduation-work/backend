@@ -27,6 +27,15 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
             """)
     Optional<Project> findByIdForUpdate(@Param("projectId") Long projectId);
 
+    /** 탈퇴 처리의 project 잠금 순서를 고정하고, 삭제 시 캐시가 비워져도 재조회할 ID만 반환한다. */
+    @Query("""
+            SELECT project.id
+            FROM Project project
+            WHERE project.member.id = :memberId
+            ORDER BY project.id ASC
+            """)
+    List<Long> findOwnedProjectIdsOrderByIdAsc(@Param("memberId") Long memberId);
+
     /**
      * owner와 collaborator 프로젝트를 최신순으로 조회한다.
      * 현재 회원만 조인하고 project·member unique 제약으로 프로젝트당 최대 한 행을 반환한다.

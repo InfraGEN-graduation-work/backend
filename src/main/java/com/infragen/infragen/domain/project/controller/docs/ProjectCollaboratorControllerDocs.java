@@ -21,7 +21,7 @@ public interface ProjectCollaboratorControllerDocs {
 
     @Operation(
             summary = "프로젝트 발신 초대 목록 조회",
-            description = "프로젝트 협업 관리 화면에서 owner가 자신이 보낸 초대의 처리 상태를 확인할 때 사용합니다. 로그인한 owner가 projectId를 지정해 GET /api/v1/projects/{projectId}/collaborators/invitations를 호출하면, 대상 회원 표시명·역할·상태(PENDING, ACCEPTED, DECLINED, EXPIRED)와 생성·만료·응답 시각을 확인할 수 있습니다."
+            description = "프로젝트 협업 관리 화면에서 현재 owner가 프로젝트에 발신된 초대의 처리 상태를 확인할 때 사용합니다. 로그인한 owner가 projectId를 지정해 GET /api/v1/projects/{projectId}/collaborators/invitations를 호출하면, 대상 회원 표시명·역할·상태(PENDING, ACCEPTED, DECLINED, EXPIRED, CANCELLED)와 생성·만료·처리 시각을 확인할 수 있습니다. respondedAt은 ACCEPTED·DECLINED에서는 응답 시각, CANCELLED에서는 취소 시각이며 PENDING·EXPIRED에서는 null입니다. 취소된 초대는 만료 시각이 지나도 CANCELLED로 표시됩니다."
     )
     ApiResponse<ProjectCollaboratorInvitationResDTO.SentList> getSentInvitations(
             @AuthenticationPrincipal CustomUserDetails userDetails,
@@ -30,7 +30,7 @@ public interface ProjectCollaboratorControllerDocs {
 
     @Operation(
             summary = "프로젝트 collaborator 초대 발신",
-            description = "프로젝트 owner가 협업할 회원의 초대코드와 역할을 보내 특정 프로젝트 초대를 생성할 때 사용합니다. POST /api/v1/projects/{projectId}/collaborators/invitations 요청에 inviteeCode와 EDITOR 또는 VIEWER 역할을 담으면 초대가 PENDING으로 저장됩니다. 초대받은 회원이 수락하기 전까지 collaborator membership은 생성되지 않습니다."
+            description = "프로젝트 owner가 자신과 같은 계정 유형의 회원을 초대할 때 사용합니다. POST /api/v1/projects/{projectId}/collaborators/invitations 요청에 inviteeCode와 EDITOR 또는 VIEWER 역할을 담으면 초대가 PENDING으로 저장됩니다. 계정 유형이 다르면 PROJECT400_7로 거부하며, 초대받은 회원이 수락하기 전까지 collaborator membership은 생성되지 않습니다."
     )
     ApiResponse<Void> inviteCollaborator(
             @AuthenticationPrincipal CustomUserDetails userDetails,

@@ -44,7 +44,6 @@ class ProjectCollaborationVersionServiceTest {
         // given
         Long projectId = 1L;
         Project project = project();
-        when(stateRepository.existsByProjectId(projectId)).thenReturn(false);
         when(projectRepository.findByIdForUpdate(projectId))
                 .thenReturn(Optional.of(project));
         when(stateRepository.findByProjectIdForUpdate(projectId)).thenReturn(Optional.empty());
@@ -71,7 +70,7 @@ class ProjectCollaborationVersionServiceTest {
         Project project = project();
         ProjectCollaborationState state = new ProjectCollaborationState(project);
         state.advanceServerVersion();
-        when(stateRepository.existsByProjectId(projectId)).thenReturn(true);
+        when(projectRepository.findByIdForUpdate(projectId)).thenReturn(Optional.of(project));
         when(stateRepository.findByProjectIdForUpdate(projectId)).thenReturn(Optional.of(state));
 
         // when
@@ -79,7 +78,9 @@ class ProjectCollaborationVersionServiceTest {
 
         // then
         assertEquals(2L, serverVersion);
-        verify(projectRepository, org.mockito.Mockito.never()).findByIdForUpdate(projectId);
+        org.mockito.InOrder locks = org.mockito.Mockito.inOrder(projectRepository, stateRepository);
+        locks.verify(projectRepository).findByIdForUpdate(projectId);
+        locks.verify(stateRepository).findByProjectIdForUpdate(projectId);
     }
 
     @Test
@@ -89,7 +90,7 @@ class ProjectCollaborationVersionServiceTest {
         Long projectId = 1L;
         Project project = project();
         ProjectCollaborationState state = new ProjectCollaborationState(project);
-        when(stateRepository.existsByProjectId(projectId)).thenReturn(true);
+        when(projectRepository.findByIdForUpdate(projectId)).thenReturn(Optional.of(project));
         when(stateRepository.findByProjectIdForUpdate(projectId)).thenReturn(Optional.of(state));
 
         // when
@@ -107,7 +108,6 @@ class ProjectCollaborationVersionServiceTest {
     void issueNextVersion_withUnknownProject_throwsProjectNotFound() {
         // given
         Long projectId = 1L;
-        when(stateRepository.existsByProjectId(projectId)).thenReturn(false);
         when(projectRepository.findByIdForUpdate(projectId))
                 .thenReturn(Optional.empty());
 
@@ -128,7 +128,7 @@ class ProjectCollaborationVersionServiceTest {
         // given
         var state = new ProjectCollaborationState(project());
         state.advanceServerVersion();
-        when(stateRepository.existsByProjectId(1L)).thenReturn(true);
+        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(state.getProject()));
         when(stateRepository.findByProjectIdForUpdate(1L)).thenReturn(Optional.of(state));
 
         // when
@@ -147,7 +147,7 @@ class ProjectCollaborationVersionServiceTest {
         // given
         var state = new ProjectCollaborationState(project());
         state.advanceServerVersion();
-        when(stateRepository.existsByProjectId(1L)).thenReturn(true);
+        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(state.getProject()));
         when(stateRepository.findByProjectIdForUpdate(1L)).thenReturn(Optional.of(state));
 
         // when

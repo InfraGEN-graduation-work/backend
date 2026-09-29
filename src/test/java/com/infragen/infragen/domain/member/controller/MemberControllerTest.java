@@ -6,12 +6,14 @@ import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.enums.WithdrawalProjectOutcome;
 import com.infragen.infragen.domain.member.exception.code.success.MemberSuccessCode;
 import com.infragen.infragen.domain.member.service.command.MemberCommandService;
+import com.infragen.infragen.domain.member.service.command.MemberWithdrawalCommandService;
 import com.infragen.infragen.domain.member.service.query.MemberQueryService;
 import com.infragen.infragen.domain.member.service.query.MemberWithdrawalQueryService;
 import com.infragen.infragen.global.auth.CustomUserDetails;
 import com.infragen.infragen.global.auth.RefreshTokenCookieWriter;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,6 +37,9 @@ class MemberControllerTest {
 
     @Mock
     private MemberWithdrawalQueryService memberWithdrawalQueryService;
+
+    @Mock
+    private MemberWithdrawalCommandService memberWithdrawalCommandService;
 
     @Mock
     private AuthService authService;
@@ -73,7 +78,7 @@ class MemberControllerTest {
     }
 
     @Test
-    void withdrawMember_Success_ClearsRefreshTokenCookie() {
+    void withdrawMember_Success_WithdrawsThenClearsRefreshTokenCookie() {
         // given
         CustomUserDetails userDetails = new CustomUserDetails(
                 MemberResDTO.MemberResultDTO.builder()
@@ -83,12 +88,29 @@ class MemberControllerTest {
         );
 
         // when
-        memberController.withdrawMember(userDetails, response);
+        memberController.withdrawMember(userDetails, Set.of(2L, 5L), response);
 
         // then
-        var inOrder = inOrder(memberCommandService, refreshTokenCookieWriter);
-        inOrder.verify(memberCommandService).withdrawMember(1L);
+        var inOrder = inOrder(memberWithdrawalCommandService, refreshTokenCookieWriter);
+        inOrder.verify(memberWithdrawalCommandService).withdraw(1L, Set.of(2L, 5L));
         inOrder.verify(refreshTokenCookieWriter).clear(response);
+    }
+
+    @Test
+    void withdrawMember_NoConfirmation_PassesEmptySet() {
+        // given
+        CustomUserDetails userDetails = new CustomUserDetails(
+                MemberResDTO.MemberResultDTO.builder()
+                        .id(1L)
+                        .isActive(true)
+                        .build()
+        );
+
+        // when
+        memberController.withdrawMember(userDetails, null, response);
+
+        // then
+        verify(memberWithdrawalCommandService).withdraw(1L, Set.of());
     }
 
     @Test

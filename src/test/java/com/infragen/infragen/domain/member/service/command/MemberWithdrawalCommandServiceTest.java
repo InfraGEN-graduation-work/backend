@@ -18,6 +18,7 @@ import com.infragen.infragen.global.apiPayload.code.GeneralErrorCode;
 import com.infragen.infragen.global.apiPayload.exception.GeneralException;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -79,7 +80,7 @@ class MemberWithdrawalCommandServiceTest {
         when(memberRepository.findByIdForUpdate(MEMBER_ID)).thenReturn(Optional.of(member));
 
         // when
-        service.withdraw(MEMBER_ID);
+        service.withdraw(MEMBER_ID, Set.of(10L));
 
         // then
         InOrder order = inOrder(projectRepository, successionService, memberRepository,
@@ -114,7 +115,7 @@ class MemberWithdrawalCommandServiceTest {
                 .thenReturn(Optional.of(member(MEMBER_ID, Role.ROLE_USER, true)));
 
         // when
-        service.withdraw(MEMBER_ID);
+        service.withdraw(MEMBER_ID, Set.of());
 
         // then
         InOrder order = inOrder(memberRepository);
@@ -132,7 +133,7 @@ class MemberWithdrawalCommandServiceTest {
         when(memberRepository.findByIdForUpdate(MEMBER_ID)).thenReturn(Optional.of(member));
 
         // when
-        service.withdraw(MEMBER_ID);
+        service.withdraw(MEMBER_ID, Set.of());
 
         // then
         verify(projectRepository, never()).findByIdForUpdate(anyLong());
@@ -151,7 +152,7 @@ class MemberWithdrawalCommandServiceTest {
                 .thenReturn(Optional.of(member(MEMBER_ID, Role.ROLE_USER, true)));
 
         // when
-        service.withdraw(MEMBER_ID);
+        service.withdraw(MEMBER_ID, Set.of(10L));
 
         // then
         verify(memberRepository, never()).findByIdForUpdate(SUCCESSOR_ID);
@@ -167,7 +168,7 @@ class MemberWithdrawalCommandServiceTest {
                 .thenReturn(Optional.of(member(MEMBER_ID, Role.ROLE_GUEST, true)));
 
         // when
-        MemberException exception = assertThrows(MemberException.class, () -> service.withdraw(MEMBER_ID));
+        MemberException exception = assertThrows(MemberException.class, () -> service.withdraw(MEMBER_ID, Set.of()));
 
         // then
         assertEquals(MemberErrorCode.GUEST_ACTION_NOT_ALLOWED, exception.getCode());
@@ -184,7 +185,7 @@ class MemberWithdrawalCommandServiceTest {
         when(memberRepository.findByIdForUpdate(MEMBER_ID)).thenReturn(Optional.empty());
 
         // when
-        MemberException exception = assertThrows(MemberException.class, () -> service.withdraw(MEMBER_ID));
+        MemberException exception = assertThrows(MemberException.class, () -> service.withdraw(MEMBER_ID, Set.of()));
 
         // then
         assertEquals(MemberErrorCode.MEMBER_NOT_FOUND, exception.getCode());
@@ -205,7 +206,7 @@ class MemberWithdrawalCommandServiceTest {
                 .thenReturn(Optional.of(member(MEMBER_ID, Role.ROLE_USER, true)));
 
         // when
-        GeneralException exception = assertThrows(GeneralException.class, () -> service.withdraw(MEMBER_ID));
+        GeneralException exception = assertThrows(GeneralException.class, () -> service.withdraw(MEMBER_ID, Set.of()));
 
         // then
         assertEquals(GeneralErrorCode.CONCURRENT_MODIFICATION, exception.getCode());
@@ -228,7 +229,7 @@ class MemberWithdrawalCommandServiceTest {
                 .thenReturn(Optional.of(member(MEMBER_ID, Role.ROLE_USER, true)));
 
         // when
-        GeneralException exception = assertThrows(GeneralException.class, () -> service.withdraw(MEMBER_ID));
+        GeneralException exception = assertThrows(GeneralException.class, () -> service.withdraw(MEMBER_ID, Set.of(10L)));
 
         // then
         assertEquals(GeneralErrorCode.CONCURRENT_MODIFICATION, exception.getCode());
@@ -249,7 +250,7 @@ class MemberWithdrawalCommandServiceTest {
         doThrow(failure).when(successionService).executeSuccessionPlans(plans);
 
         // when
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> service.withdraw(MEMBER_ID));
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> service.withdraw(MEMBER_ID, Set.of(10L)));
 
         // then
         assertSame(failure, exception);
@@ -267,7 +268,7 @@ class MemberWithdrawalCommandServiceTest {
 
         // when
         PessimisticLockingFailureException exception =
-                assertThrows(PessimisticLockingFailureException.class, () -> service.withdraw(MEMBER_ID));
+                assertThrows(PessimisticLockingFailureException.class, () -> service.withdraw(MEMBER_ID, Set.of()));
 
         // then
         assertSame(failure, exception);
@@ -287,11 +288,93 @@ class MemberWithdrawalCommandServiceTest {
         doThrow(failure).when(tokenService).deleteRefreshToken(MEMBER_ID);
 
         // when
-        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> service.withdraw(MEMBER_ID));
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> service.withdraw(MEMBER_ID, Set.of()));
 
         // then
         assertSame(failure, exception);
         verify(memberRepository).flush();
+    }
+
+    @Test
+    @DisplayName("확인하지 않은 삭제 프로젝트가 있으면 아무것도 변경하기 전에 탈퇴를 중단한다")
+    void withdraw_UnconfirmedDeletion_ThrowsBeforeAnyChange() {
+        // given
+        stubRelatedProjects(List.of(10L, 20L), List.of(), List.of());
+        when(successionService.prepareSuccessionPlans(MEMBER_ID, List.of(10L, 20L)))
+                .thenReturn(List.of(new Deletion(10L, MEMBER_ID), new Deletion(20L, MEMBER_ID)));
+        when(memberRepository.findByIdForUpdate(MEMBER_ID))
+                .thenReturn(Optional.of(member(MEMBER_ID, Role.ROLE_USER, true)));
+
+        // when
+        MemberException exception = assertThrows(MemberException.class,
+                () -> service.withdraw(MEMBER_ID, Set.of(10L)));
+
+        // then
+        assertEquals(MemberErrorCode.WITHDRAWAL_DELETION_NOT_CONFIRMED, exception.getCode());
+        verify(successionService, never()).executeSuccessionPlans(anyList());
+        verify(collaboratorRepository, never()).deleteAllByMemberId(anyLong());
+        verifyNoInteractions(invitationCommandService, tokenService);
+    }
+
+    @Test
+    @DisplayName("삭제 계획이 있는데 확인 목록이 비어 있어도 탈퇴를 중단한다")
+    void withdraw_DeletionWithEmptyConfirmation_ThrowsNotConfirmed() {
+        // given
+        stubRelatedProjects(List.of(10L), List.of(), List.of());
+        when(successionService.prepareSuccessionPlans(MEMBER_ID, List.of(10L)))
+                .thenReturn(List.of(new Deletion(10L, MEMBER_ID)));
+        when(memberRepository.findByIdForUpdate(MEMBER_ID))
+                .thenReturn(Optional.of(member(MEMBER_ID, Role.ROLE_USER, true)));
+
+        // when
+        MemberException exception = assertThrows(MemberException.class,
+                () -> service.withdraw(MEMBER_ID, Set.of()));
+
+        // then
+        assertEquals(MemberErrorCode.WITHDRAWAL_DELETION_NOT_CONFIRMED, exception.getCode());
+        verify(successionService, never()).executeSuccessionPlans(anyList());
+    }
+
+    @Test
+    @DisplayName("확인한 목록이 실제 삭제보다 넓거나 승계 프로젝트가 섞여 있어도 탈퇴를 진행한다")
+    void withdraw_ConfirmationCoversDeletions_Proceeds() {
+        // given
+        List<ProjectOwnershipSuccessionPlan> plans = List.of(
+                new Transfer(30L, MEMBER_ID, SUCCESSOR_ID, Role.ROLE_USER),
+                new Deletion(10L, MEMBER_ID));
+        stubRelatedProjects(List.of(10L, 30L), List.of(), List.of());
+        when(successionService.prepareSuccessionPlans(MEMBER_ID, List.of(10L, 30L))).thenReturn(plans);
+        when(memberRepository.findByIdForUpdate(SUCCESSOR_ID))
+                .thenReturn(Optional.of(member(SUCCESSOR_ID, Role.ROLE_USER, true)));
+        when(memberRepository.findByIdForUpdate(MEMBER_ID))
+                .thenReturn(Optional.of(member(MEMBER_ID, Role.ROLE_USER, true)));
+
+        // when
+        service.withdraw(MEMBER_ID, Set.of(10L, 30L, 99L));
+
+        // then
+        verify(successionService).executeSuccessionPlans(plans);
+        verify(tokenService).deleteRefreshToken(MEMBER_ID);
+    }
+
+    @Test
+    @DisplayName("새 프로젝트 관계가 생겼으면 확인 여부와 관계없이 동시 수정 오류가 먼저 발생한다")
+    void withdraw_NewRelatedProjectAndUnconfirmedDeletion_ThrowsConcurrentModificationFirst() {
+        // given
+        stubRelatedProjects(List.of(10L), List.of(), List.of());
+        when(projectRepository.findOwnedProjectIdsOrderByIdAsc(MEMBER_ID))
+                .thenReturn(List.of(10L), List.of(10L, 50L));
+        when(successionService.prepareSuccessionPlans(MEMBER_ID, List.of(10L)))
+                .thenReturn(List.of(new Deletion(10L, MEMBER_ID)));
+        when(memberRepository.findByIdForUpdate(MEMBER_ID))
+                .thenReturn(Optional.of(member(MEMBER_ID, Role.ROLE_USER, true)));
+
+        // when
+        GeneralException exception = assertThrows(GeneralException.class,
+                () -> service.withdraw(MEMBER_ID, Set.of()));
+
+        // then
+        assertEquals(GeneralErrorCode.CONCURRENT_MODIFICATION, exception.getCode());
     }
 
     // 관련 project ID 조회는 처음·회원 잠금 뒤 재확인·정리 뒤 확인까지 최대 세 번 호출된다.

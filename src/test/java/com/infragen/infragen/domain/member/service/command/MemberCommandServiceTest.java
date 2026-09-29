@@ -1,6 +1,5 @@
 package com.infragen.infragen.domain.member.service.command;
 
-import com.infragen.infragen.domain.auth.service.TokenService;
 import com.infragen.infragen.domain.auth.service.EmailVerificationService;
 import com.infragen.infragen.domain.auth.dto.request.AuthReqDTO;
 import com.infragen.infragen.domain.auth.exception.AuthException;
@@ -13,7 +12,6 @@ import com.infragen.infragen.domain.member.enums.SocialProvider;
 import com.infragen.infragen.domain.member.exception.MemberException;
 import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
-import com.infragen.infragen.domain.project.repository.ProjectCollaboratorInvitationRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -85,11 +83,7 @@ class MemberCommandServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
 
-    @Mock
-    private ProjectCollaboratorInvitationRepository invitationRepository;
 
-    @Mock
-    private TokenService tokenService;
 
     @Mock
     private Member member;
@@ -123,7 +117,6 @@ class MemberCommandServiceTest {
                 () -> assertTrue(result.isActive())
         );
         verify(memberRepository, never()).findById(anyLong());
-        verifyNoInteractions(invitationRepository, tokenService);
     }
 
     @Test
@@ -368,7 +361,6 @@ class MemberCommandServiceTest {
         // then
         assertEquals(MemberErrorCode.GUEST_ACTION_NOT_ALLOWED, exception.getCode());
         verifyNoInteractions(passwordEncoder);
-        verify(tokenService, never()).deleteRefreshToken(99L);
     }
 
     @ParameterizedTest
@@ -393,7 +385,7 @@ class MemberCommandServiceTest {
                 () -> assertEquals("oldEncodedPassword", lockedMember.getPassword()),
                 () -> assertEquals(active, lockedMember.getIsActive())
         );
-        verifyNoInteractions(passwordEncoder, invitationRepository, tokenService);
+        verifyNoInteractions(passwordEncoder);
     }
 
     @Test
@@ -410,7 +402,7 @@ class MemberCommandServiceTest {
 
         // then
         assertSame(failure, exception);
-        verifyNoInteractions(member, passwordEncoder, invitationRepository, tokenService);
+        verifyNoInteractions(member, passwordEncoder);
     }
 
     @Test
@@ -432,7 +424,7 @@ class MemberCommandServiceTest {
                 () -> assertTrue(lockedMember.getIsActive())
         );
         verify(memberRepository).findByIdForUpdate(1L);
-        verifyNoInteractions(passwordEncoder, invitationRepository, tokenService);
+        verifyNoInteractions(passwordEncoder);
     }
 
     @Test
@@ -456,56 +448,6 @@ class MemberCommandServiceTest {
                 () -> assertEquals("oldNickname", lockedMember.getNickname()),
                 () -> assertEquals("oldEncodedPassword", lockedMember.getPassword())
         );
-        verifyNoInteractions(invitationRepository, tokenService);
-    }
-
-    @Test
-    void withdrawMember_Success() {
-        // given
-        when(memberRepository.findById(1L)).thenReturn(Optional.of(member));
-
-        // when
-        memberCommandService.withdrawMember(1L);
-
-        // then
-        var inOrder = inOrder(invitationRepository, member, tokenService);
-        inOrder.verify(invitationRepository).deleteAllByMemberId(1L);
-        inOrder.verify(member).withdraw();
-        inOrder.verify(tokenService).deleteRefreshToken(1L);
-    }
-
-    @Test
-    void withdrawMember_MemberNotFound() {
-        // given
-        when(memberRepository.findById(1L)).thenReturn(Optional.empty());
-
-        // when
-        MemberException exception = assertThrows(MemberException.class,
-                () -> memberCommandService.withdrawMember(1L));
-
-        // then
-        assertEquals(MemberErrorCode.MEMBER_NOT_FOUND, exception.getCode());
-        verify(member, never()).withdraw();
-        verify(invitationRepository, never()).deleteAllByMemberId(anyLong());
-        verifyNoInteractions(tokenService);
-    }
-
-    @Test
-    void withdrawMember_GuestMember_ThrowsForbidden() {
-        // given
-        when(memberRepository.findById(99L)).thenReturn(Optional.of(guestMember()));
-
-        // when
-        MemberException exception = assertThrows(
-                MemberException.class,
-                () -> memberCommandService.withdrawMember(99L)
-        );
-
-        // then
-        assertEquals(MemberErrorCode.GUEST_ACTION_NOT_ALLOWED, exception.getCode());
-        verify(member, never()).withdraw();
-        verify(invitationRepository, never()).deleteAllByMemberId(anyLong());
-        verify(tokenService, never()).deleteRefreshToken(99L);
     }
 
     private Member guestMember() {

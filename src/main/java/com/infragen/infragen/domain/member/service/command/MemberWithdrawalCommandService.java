@@ -33,7 +33,7 @@ import lombok.RequiredArgsConstructor;
  * 다른 프로젝트의 참여 기록은 제거한다. 세부 처리는 각 부품 서비스가 하고 이 서비스는 순서와 잠금을 맡는다.
  * 부품 서비스 세 개(MANDATORY)가 이 서비스가 여는 하나의 transaction 안에서만 돌기 때문에,
  * 중간에 실패하면 승계·삭제·취소·비활성화가 모두 함께 되돌려진다.
- * 아직 어떤 API에서도 호출하지 않는다. 기존 회원 탈퇴 API는 계속 {@link MemberCommandService#withdrawMember}를 쓴다.
+ * 회원 탈퇴 API({@code DELETE /api/v1/members/me})가 호출한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -51,13 +51,18 @@ public class MemberWithdrawalCommandService {
      * 이 서비스가 최상위 transaction을 열어야 READ_COMMITTED가 적용된다. 다른 transaction 안에서 호출하면
      * 바깥 transaction의 격리 수준을 따르므로 새 관계 재확인이 오래된 snapshot을 볼 수 있다.
      * Redis 삭제는 마지막에 하므로 삭제가 실패하면 DB 변경 전체가 롤백된다.
+     * 사용자가 탈퇴 전 안내에서 확인한 삭제 프로젝트 ID를 받아, 잠금 아래에서 계산한 삭제 계획이 그 안에 모두 들어 있을 때만 진행한다.
+     * 안내 뒤 승계 후보가 사라져 삭제로 바뀐 프로젝트가 있으면 아무것도 변경하기 전에 중단한다.
+     * 확인한 것보다 삭제가 줄어드는 경우와 확인 목록에 소유하지 않은 ID가 섞인 경우는 막지 않는다.
      *
      * @param memberId 탈퇴할 일반 회원 ID
-     * @throws MemberException 회원이 없거나 이미 비활성이면 MEMBER_NOT_FOUND, guest면 GUEST_ACTION_NOT_ALLOWED
+     * @param confirmedDeletionProjectIds 사용자가 삭제된다고 확인한 프로젝트 ID. 확인한 것이 없으면 빈 집합을 전달한다
+     * @throws MemberException 회원이 없거나 이미 비활성이면 MEMBER_NOT_FOUND, guest면 GUEST_ACTION_NOT_ALLOWED,
+     *                         확인하지 않은 삭제 프로젝트가 있으면 WITHDRAWAL_DELETION_NOT_CONFIRMED
      * @throws GeneralException 잠금 뒤 새 프로젝트 관계가 생겼거나 정리 뒤에도 관계가 남으면 CONCURRENT_MODIFICATION
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public void withdraw(Long memberId) {
+    public void withdraw(Long memberId, Set<Long> confirmedDeletionProjectIds) {
         // 프로젝트를 먼저, 회원을 나중에 잠근다. 프로젝트 이전·초대 요청도 같은 순서로 잠가 서로 기다리다 멈추지 않게 한다.
         List<Long> projectIds = findRelatedProjectIds(memberId);
         projectIds.forEach(projectRepository::findByIdForUpdate);
@@ -68,6 +73,9 @@ public class MemberWithdrawalCommandService {
         // 회원 잠금을 얻은 뒤에는 이 회원을 새 owner·참여자·초대 대상으로 만드는 요청이 대기한다.
         // 잠금 전에 이미 커밋된 새 관계는 여기서 찾아 전체를 중단한다.
         ensureNoNewRelatedProject(memberId, projectIds);
+
+        // 아직 아무것도 변경하지 않은 시점이라, 확인하지 않은 삭제가 있으면 잠금만 풀고 그대로 중단한다.
+        ensureDeletionsConfirmed(plans, confirmedDeletionProjectIds);
 
         successionService.executeSuccessionPlans(plans);
         invitationCommandService.cancelRelatedPendingInvitations(memberId, projectIds);
@@ -129,6 +137,19 @@ public class MemberWithdrawalCommandService {
     private void ensureNoNewRelatedProject(Long memberId, List<Long> lockedProjectIds) {
         if (!lockedProjectIds.containsAll(findRelatedProjectIds(memberId))) {
             throw new GeneralException(GeneralErrorCode.CONCURRENT_MODIFICATION);
+        }
+    }
+
+    // 삭제 계획의 프로젝트가 모두 사용자가 확인한 목록에 있어야 한다. 안내 뒤 후보가 사라져 삭제로 바뀐 프로젝트를 막는다.
+    private void ensureDeletionsConfirmed(
+            List<ProjectOwnershipSuccessionPlan> plans, Set<Long> confirmedDeletionProjectIds
+    ) {
+        boolean hasUnconfirmedDeletion = plans.stream()
+                .filter(ProjectOwnershipSuccessionPlan.Deletion.class::isInstance)
+                .map(ProjectOwnershipSuccessionPlan.Deletion.class::cast)
+                .anyMatch(deletion -> !confirmedDeletionProjectIds.contains(deletion.projectId()));
+        if (hasUnconfirmedDeletion) {
+            throw new MemberException(MemberErrorCode.WITHDRAWAL_DELETION_NOT_CONFIRMED);
         }
     }
 

@@ -38,6 +38,21 @@ public interface MemberControllerDocs {
             @Valid MemberReqDTO.UpdateMember request
     );
 
+    @Operation(
+            summary = "회원 탈퇴 전 프로젝트 처리 안내 조회 API",
+            description = """
+                    탈퇴하면 내가 소유한 프로젝트가 어떻게 처리되는지 project ID 순으로 알려줍니다.
+                    outcome이 SUCCESSION이면 활성 참여자 중 한 명이 새 owner가 되어 프로젝트가 유지되고,
+                    DELETION이면 승계할 활성 참여자가 없어 프로젝트와 종속 데이터가 삭제됩니다.
+                    소유한 프로젝트가 없으면 ownedProjects는 빈 목록입니다.
+                    조회 시점의 참고용 안내이며 조회만 할 뿐 탈퇴는 진행하지 않습니다.
+                    일반 회원만 조회할 수 있고 guest는 GUEST_ACTION_NOT_ALLOWED로 거부됩니다.
+                    """
+    )
+    ApiResponse<MemberResDTO.WithdrawalPreview> getWithdrawalPreview(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    );
+
     @Operation(summary = "회원 탈퇴 API", description = "로그인한 회원을 Soft Delete 방식으로 탈퇴 처리합니다.")
     ApiResponse<Void> withdrawMember(
             @AuthenticationPrincipal CustomUserDetails userDetails,

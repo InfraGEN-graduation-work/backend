@@ -3,12 +3,16 @@ package com.infragen.infragen.domain.member.controller;
 import com.infragen.infragen.domain.auth.service.AuthService;
 import com.infragen.infragen.domain.member.dto.response.MemberResDTO;
 import com.infragen.infragen.domain.member.enums.Role;
+import com.infragen.infragen.domain.member.enums.WithdrawalProjectOutcome;
 import com.infragen.infragen.domain.member.exception.code.success.MemberSuccessCode;
 import com.infragen.infragen.domain.member.service.command.MemberCommandService;
 import com.infragen.infragen.domain.member.service.query.MemberQueryService;
+import com.infragen.infragen.domain.member.service.query.MemberWithdrawalQueryService;
 import com.infragen.infragen.global.auth.CustomUserDetails;
 import com.infragen.infragen.global.auth.RefreshTokenCookieWriter;
 import jakarta.servlet.http.HttpServletResponse;
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -28,6 +32,9 @@ class MemberControllerTest {
 
     @Mock
     private MemberCommandService memberCommandService;
+
+    @Mock
+    private MemberWithdrawalQueryService memberWithdrawalQueryService;
 
     @Mock
     private AuthService authService;
@@ -82,5 +89,33 @@ class MemberControllerTest {
         var inOrder = inOrder(memberCommandService, refreshTokenCookieWriter);
         inOrder.verify(memberCommandService).withdrawMember(1L);
         inOrder.verify(refreshTokenCookieWriter).clear(response);
+    }
+
+    @Test
+    void getWithdrawalPreview_Success_DelegatesWithAuthenticatedMemberId() {
+        // given
+        CustomUserDetails userDetails = new CustomUserDetails(
+                MemberResDTO.MemberResultDTO.builder()
+                        .id(5L)
+                        .role(Role.ROLE_USER)
+                        .isActive(true)
+                        .build()
+        );
+        MemberResDTO.WithdrawalPreview expected = MemberResDTO.WithdrawalPreview.builder()
+                .ownedProjects(List.of(MemberResDTO.WithdrawalOwnedProject.builder()
+                        .projectId(10L)
+                        .title("삭제 프로젝트")
+                        .outcome(WithdrawalProjectOutcome.DELETION)
+                        .build()))
+                .build();
+        when(memberWithdrawalQueryService.getWithdrawalPreview(5L)).thenReturn(expected);
+
+        // when
+        var response = memberController.getWithdrawalPreview(userDetails);
+
+        // then
+        assertEquals(MemberSuccessCode.MEMBER_WITHDRAWAL_PREVIEW_SUCCESS.getCode(), response.getCode());
+        assertEquals(expected, response.getResult());
+        verify(memberWithdrawalQueryService).getWithdrawalPreview(5L);
     }
 }

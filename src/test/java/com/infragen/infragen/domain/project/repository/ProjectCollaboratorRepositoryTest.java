@@ -10,6 +10,7 @@ import com.infragen.infragen.domain.project.entity.ProjectHistory;
 import com.infragen.infragen.domain.project.entity.ProjectNode;
 import com.infragen.infragen.domain.project.enums.ProjectCollaboratorRole;
 import com.infragen.infragen.domain.project.enums.ProjectStatus;
+import com.infragen.infragen.domain.project.repository.projection.OwnedProjectWithdrawalPreview;
 import com.infragen.infragen.domain.project.repository.projection.ProjectSuccessionCandidatePreview;
 import com.infragen.infragen.global.enums.ComponentType;
 import jakarta.persistence.EntityManager;
@@ -59,6 +60,8 @@ class ProjectCollaboratorRepositoryTest {
     private EntityManager entityManager;
     @Autowired
     private ProjectCollaboratorRepository repository;
+    @Autowired
+    private ProjectRepository projectRepository;
 
     @Test
     @DisplayName("참여 project ID는 지정 회원의 membership만 project ID 순으로 반환하고 Entity를 적재하지 않는다")
@@ -321,6 +324,59 @@ class ProjectCollaboratorRepositoryTest {
         // then
         assertEquals(1, previews.size());
         assertEquals(candidate.getId(), previews.get(0).getMemberId());
+    }
+
+    @Test
+    @DisplayName("탈퇴 전 안내는 소유 project만 ID 순으로 반환하고 활성 참여자가 있을 때만 승계 후보가 있다고 표시한다")
+    void findOwnedProjectWithdrawalPreviews_OwnedProjects_MarksSuccessorAvailability() {
+        // given
+        Member departingMember = member("departing");
+        Member otherOwner = member("otherOwner");
+        Member activeCollaborator = member("active");
+        Member inactiveCollaborator = member("inactive");
+        Project withActiveCollaborator = project(departingMember);
+        Project withoutCollaborator = project(departingMember);
+        Project withOnlyInactiveCollaborator = project(departingMember);
+        Project othersProject = project(otherOwner);
+        membership(withActiveCollaborator, activeCollaborator);
+        membership(withActiveCollaborator, inactiveCollaborator);
+        membership(withOnlyInactiveCollaborator, inactiveCollaborator);
+        membership(othersProject, activeCollaborator);
+        inactiveCollaborator.withdraw();
+        flushAndClear();
+
+        // when
+        List<OwnedProjectWithdrawalPreview> previews
+                = projectRepository.findOwnedProjectWithdrawalPreviewsByMemberId(departingMember.getId());
+
+        // then
+        assertAll(
+                () -> assertEquals(
+                        List.of(withActiveCollaborator.getId(), withoutCollaborator.getId(),
+                                withOnlyInactiveCollaborator.getId()),
+                        previews.stream().map(OwnedProjectWithdrawalPreview::getProjectId).toList()),
+                () -> assertEquals(List.of(true, false, false),
+                        previews.stream().map(OwnedProjectWithdrawalPreview::getHasSuccessor).toList()),
+                () -> assertEquals("project", previews.get(0).getTitle()));
+    }
+
+    @Test
+    @DisplayName("탈퇴 전 안내는 소유 project가 없으면 빈 목록을 반환하고 Entity를 적재하지 않는다")
+    void findOwnedProjectWithdrawalPreviews_NoOwnedProject_ReturnsEmpty() {
+        // given
+        Member owner = member("owner");
+        Member participant = member("participant");
+        membership(project(owner), participant);
+        flushAndClear();
+
+        // when
+        List<OwnedProjectWithdrawalPreview> previews
+                = projectRepository.findOwnedProjectWithdrawalPreviewsByMemberId(participant.getId());
+
+        // then
+        assertAll(
+                () -> assertTrue(previews.isEmpty()),
+                () -> assertEquals(0, entityManager.unwrap(Session.class).getStatistics().getEntityCount()));
     }
 
     private Member member(String nickname) {

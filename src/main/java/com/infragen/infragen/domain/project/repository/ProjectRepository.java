@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.infragen.infragen.domain.project.entity.Project;
+import com.infragen.infragen.domain.project.repository.projection.OwnedProjectWithdrawalPreview;
 import com.infragen.infragen.domain.project.repository.projection.ProjectAccessPreview;
 
 import jakarta.persistence.LockModeType;
@@ -35,6 +36,29 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
             ORDER BY project.id ASC
             """)
     List<Long> findOwnedProjectIdsOrderByIdAsc(@Param("memberId") Long memberId);
+
+    /**
+     * 탈퇴 전 안내를 위해 회원이 소유한 프로젝트를 project ID 순으로 조회하고, 프로젝트마다 승계 후보 유무를 함께 반환한다.
+     * 후보 유무는 자동 승계의 삭제 계획과 같은 기준인 "활성 참여자 존재 여부"다. 잠그거나 변경하지 않는 참고용 조회이며,
+     * 실제 탈퇴 시점의 승계·삭제 결과는 탈퇴 command가 다시 계산한다.
+     */
+    @Query("""
+            SELECT project.id AS projectId,
+                   project.title AS title,
+                   CASE WHEN EXISTS (
+                       SELECT 1
+                       FROM ProjectCollaborator collaborator
+                       JOIN collaborator.member candidate
+                       WHERE collaborator.project = project
+                         AND candidate.isActive = true
+                   ) THEN true ELSE false END AS hasSuccessor
+            FROM Project project
+            WHERE project.member.id = :memberId
+            ORDER BY project.id ASC
+            """)
+    List<OwnedProjectWithdrawalPreview> findOwnedProjectWithdrawalPreviewsByMemberId(
+            @Param("memberId") Long memberId
+    );
 
     /**
      * owner와 collaborator 프로젝트를 최신순으로 조회한다.

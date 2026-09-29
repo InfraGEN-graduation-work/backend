@@ -7,6 +7,7 @@ import com.infragen.infragen.domain.member.dto.response.MemberResDTO;
 import com.infragen.infragen.domain.member.exception.code.success.MemberSuccessCode;
 import com.infragen.infragen.domain.member.service.command.MemberCommandService;
 import com.infragen.infragen.domain.member.service.query.MemberQueryService;
+import com.infragen.infragen.domain.member.service.query.MemberWithdrawalQueryService;
 import com.infragen.infragen.global.apiPayload.ApiResponse;
 import com.infragen.infragen.global.auth.CustomUserDetails;
 import com.infragen.infragen.global.auth.RefreshTokenCookieWriter;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class MemberController implements MemberControllerDocs {
     private final MemberQueryService memberQueryService;
     private final MemberCommandService memberCommandService;
+    private final MemberWithdrawalQueryService memberWithdrawalQueryService;
     private final AuthService authService;
     private final RefreshTokenCookieWriter refreshTokenCookieWriter;
 
@@ -73,6 +75,16 @@ public class MemberController implements MemberControllerDocs {
     ) {
         var result = memberCommandService.updateMember(userDetails.getMemberId(), request);
         return ApiResponse.onSuccess(MemberSuccessCode.MEMBER_UPDATE_SUCCESS, result);
+    }
+
+    /** 탈퇴 전에 소유 프로젝트가 승계될지 삭제될지 조회한다. 조회만 하며 탈퇴는 진행하지 않는다. */
+    @Override
+    @GetMapping("/me/withdrawal-preview")
+    public ApiResponse<MemberResDTO.WithdrawalPreview> getWithdrawalPreview(
+            @AuthenticationPrincipal CustomUserDetails userDetails
+    ) {
+        var result = memberWithdrawalQueryService.getWithdrawalPreview(userDetails.getMemberId());
+        return ApiResponse.onSuccess(MemberSuccessCode.MEMBER_WITHDRAWAL_PREVIEW_SUCCESS, result);
     }
 
     @Override

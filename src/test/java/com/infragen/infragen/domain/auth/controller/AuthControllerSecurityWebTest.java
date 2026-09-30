@@ -39,6 +39,7 @@ import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
 import com.infragen.infragen.domain.project.dto.response.ProjectResDTO;
 import com.infragen.infragen.domain.project.service.command.ProjectCommandService;
+import com.infragen.infragen.domain.project.service.command.ProjectOwnershipTransferCommandService;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 import com.infragen.infragen.global.apiPayload.handler.GeneralExceptionAdvice;
 import com.infragen.infragen.global.auth.AuthenticationEntryPointImpl;
@@ -103,6 +104,9 @@ class AuthControllerSecurityWebTest {
 
     @MockitoBean
     private ProjectQueryService projectQueryService;
+
+    @MockitoBean
+    private ProjectOwnershipTransferCommandService ownershipTransferCommandService;
 
     @Test
     @DisplayName("permitAll guest endpoint에서 받은 ROLE_GUEST token으로 보호 API 인증")

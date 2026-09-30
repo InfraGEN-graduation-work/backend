@@ -18,6 +18,7 @@ import com.infragen.infragen.domain.collaboration.service.command.ProjectCollabo
 import com.infragen.infragen.domain.collaboration.service.command.ProjectCollaborationVersionService;
 import com.infragen.infragen.domain.collaboration.service.query.CollaborationSnapshotQueryService;
 import com.infragen.infragen.domain.member.entity.Member;
+import com.infragen.infragen.domain.member.repository.MemberRepository;
 import com.infragen.infragen.domain.member.service.query.MemberQueryService;
 import com.infragen.infragen.domain.project.converter.ProjectConverter;
 import com.infragen.infragen.domain.project.dto.request.ProjectEdgeReqDTO;
@@ -109,6 +110,8 @@ class ProjectFullReplaceSnapshotIntegrationTest {
     @MockitoBean
     private MemberQueryService memberQueryService;
     @MockitoBean
+    private MemberRepository memberRepository;
+    @MockitoBean
     private ProjectQueryService projectQueryService;
     @MockitoBean
     private ProjectAccessService projectAccessService;
@@ -164,6 +167,8 @@ class ProjectFullReplaceSnapshotIntegrationTest {
 
         when(projectQueryService.getWriteableProject(1L, 2L)).thenReturn(project);
         when(projectRepository.findById(1L)).thenReturn(Optional.of(project));
+        // #71부터 PUT·metadata PATCH는 권한 확인 전에 project를 먼저 잠근다.
+        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(project));
         when(versionService.issueNextVersionForFullReplace(1L, 50L)).thenAnswer(invocation -> {
             state.advanceServerVersion();
             return state.getServerVersion();

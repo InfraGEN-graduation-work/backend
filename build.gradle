@@ -67,6 +67,9 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+	// 종료 시 캐시된 컨텍스트가 이미 내려간 Testcontainers DB에 create-drop 접속을 시도하며
+	// 기본 30초씩 대기하므로, 테스트에서는 커넥션 획득 대기를 짧게 둔다. 동시성 테스트는 최대 2스레드라 풀 고갈과 무관하다.
+	systemProperty 'spring.datasource.hikari.connection-timeout', '3000'
 }
 
 // plain.jar 생성 방지

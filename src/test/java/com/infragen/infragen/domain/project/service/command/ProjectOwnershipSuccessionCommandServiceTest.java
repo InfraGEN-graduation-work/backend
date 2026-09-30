@@ -155,6 +155,31 @@ class ProjectOwnershipSuccessionCommandServiceTest {
     }
 
     @Test
+    @DisplayName("guest owner가 이용을 종료하면 활성 guest 참여자 중 무작위로 선정한 승계 계획을 만든다")
+    void prepareSuccessionPlans_GuestOwnerWithGuestCandidates_PlansRandomGuest() {
+        // given
+        Project project = project(PROJECT_ID, member(OWNER_ID, Role.ROLE_GUEST, true));
+        when(projectRepository.findByIdForUpdate(PROJECT_ID)).thenReturn(Optional.of(project));
+        List<ProjectSuccessionCandidatePreview> guests = List.of(
+                candidate(20L, Role.ROLE_GUEST, ProjectCollaboratorRole.EDITOR, 100L, JOINED_AT),
+                candidate(30L, Role.ROLE_GUEST, ProjectCollaboratorRole.VIEWER, 200L, JOINED_AT));
+        when(collaboratorRepository.findActiveSuccessionCandidatePreviewsByProjectId(PROJECT_ID)).thenReturn(guests);
+        ThreadLocalRandom random = mock(ThreadLocalRandom.class);
+        when(random.nextInt(2)).thenReturn(1);
+
+        try (MockedStatic<ThreadLocalRandom> randomSource = mockStatic(ThreadLocalRandom.class)) {
+            randomSource.when(ThreadLocalRandom::current).thenReturn(random);
+
+            // when
+            List<ProjectOwnershipSuccessionPlan> plans =
+                    service.prepareSuccessionPlans(OWNER_ID, List.of(PROJECT_ID));
+
+            // then
+            assertEquals(List.of(new Transfer(PROJECT_ID, OWNER_ID, 30L, Role.ROLE_GUEST)), plans);
+        }
+    }
+
+    @Test
     @DisplayName("승계 후보가 없으면 삭제 계획을 만든다")
     void prepareSuccessionPlans_NoCandidates_PlansDeletion() {
         // given

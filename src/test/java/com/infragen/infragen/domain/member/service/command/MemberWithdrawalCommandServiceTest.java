@@ -159,11 +159,37 @@ class MemberWithdrawalCommandServiceTest {
     }
 
     @Test
-    @DisplayName("guest는 프로젝트를 변경하기 전에 탈퇴를 거부한다")
-    void withdraw_GuestMember_ThrowsGuestActionNotAllowed() {
+    @DisplayName("guest 이용 종료는 guest 승계·확인된 삭제를 실행하고 초대 취소·참여 정리 뒤 비활성화와 토큰 삭제까지 진행한다")
+    void withdraw_GuestMember_RunsSuccessionAndDeactivates() {
         // given
-        stubRelatedProjects(List.of(), List.of(), List.of());
-        when(successionService.prepareSuccessionPlans(MEMBER_ID, List.of())).thenReturn(List.of());
+        Member guest = member(MEMBER_ID, Role.ROLE_GUEST, true);
+        List<ProjectOwnershipSuccessionPlan> plans = List.of(
+                new Transfer(10L, MEMBER_ID, SUCCESSOR_ID, Role.ROLE_GUEST),
+                new Deletion(20L, MEMBER_ID));
+        stubRelatedProjects(List.of(10L, 20L), List.of(30L), List.of());
+        when(successionService.prepareSuccessionPlans(MEMBER_ID, List.of(10L, 20L, 30L))).thenReturn(plans);
+        when(memberRepository.findByIdForUpdate(SUCCESSOR_ID))
+                .thenReturn(Optional.of(member(SUCCESSOR_ID, Role.ROLE_GUEST, true)));
+        when(memberRepository.findByIdForUpdate(MEMBER_ID)).thenReturn(Optional.of(guest));
+
+        // when
+        service.withdraw(MEMBER_ID, Set.of(20L));
+
+        // then
+        verify(successionService).executeSuccessionPlans(plans);
+        verify(invitationCommandService).cancelRelatedPendingInvitations(MEMBER_ID, List.of(10L, 20L, 30L));
+        verify(collaboratorRepository).deleteAllByMemberId(MEMBER_ID);
+        verify(tokenService).deleteRefreshToken(MEMBER_ID);
+        assertFalse(guest.getIsActive());
+    }
+
+    @Test
+    @DisplayName("guest도 확인하지 않은 삭제 프로젝트가 있으면 아무것도 변경하지 않고 이용 종료를 거부한다")
+    void withdraw_GuestWithUnconfirmedDeletion_ThrowsDeletionNotConfirmed() {
+        // given
+        stubRelatedProjects(List.of(20L), List.of(), List.of());
+        when(successionService.prepareSuccessionPlans(MEMBER_ID, List.of(20L)))
+                .thenReturn(List.of(new Deletion(20L, MEMBER_ID)));
         when(memberRepository.findByIdForUpdate(MEMBER_ID))
                 .thenReturn(Optional.of(member(MEMBER_ID, Role.ROLE_GUEST, true)));
 
@@ -171,9 +197,9 @@ class MemberWithdrawalCommandServiceTest {
         MemberException exception = assertThrows(MemberException.class, () -> service.withdraw(MEMBER_ID, Set.of()));
 
         // then
-        assertEquals(MemberErrorCode.GUEST_ACTION_NOT_ALLOWED, exception.getCode());
-        verifyNoInteractions(invitationCommandService, tokenService);
+        assertEquals(MemberErrorCode.WITHDRAWAL_DELETION_NOT_CONFIRMED, exception.getCode());
         verify(successionService, never()).executeSuccessionPlans(anyList());
+        verifyNoInteractions(invitationCommandService, tokenService);
     }
 
     @Test

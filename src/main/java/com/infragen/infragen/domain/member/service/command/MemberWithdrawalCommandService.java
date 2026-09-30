@@ -12,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.infragen.infragen.domain.auth.service.TokenService;
 import com.infragen.infragen.domain.member.entity.Member;
-import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.exception.MemberException;
 import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
@@ -28,12 +27,13 @@ import com.infragen.infragen.global.apiPayload.exception.GeneralException;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 일반 회원 탈퇴 때 그 회원의 프로젝트 관계를 정리하고 회원을 비활성화하는 전체 흐름을 조립한다.
+ * 일반 회원 탈퇴와 guest 이용 종료 때 그 회원의 프로젝트 관계를 정리하고 회원을 비활성화하는 전체 흐름을 조립한다.
+ * guest에게 데이터 정리 없이 끝나는 경로를 남기지 않으려고 두 경우를 같은 흐름으로 처리한다.
  * 소유 프로젝트는 다른 참여자에게 승계하거나 후보가 없으면 삭제하고, 대기 초대는 취소하며,
  * 다른 프로젝트의 참여 기록은 제거한다. 세부 처리는 각 부품 서비스가 하고 이 서비스는 순서와 잠금을 맡는다.
  * 부품 서비스 세 개(MANDATORY)가 이 서비스가 여는 하나의 transaction 안에서만 돌기 때문에,
  * 중간에 실패하면 승계·삭제·취소·비활성화가 모두 함께 되돌려진다.
- * 회원 탈퇴 API({@code DELETE /api/v1/members/me})가 호출한다.
+ * 회원 탈퇴·guest 이용 종료 API({@code DELETE /api/v1/members/me})가 호출한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -47,7 +47,8 @@ public class MemberWithdrawalCommandService {
     private final TokenService tokenService;
 
     /**
-     * 일반 회원 한 명의 프로젝트 관계를 정리하고 회원을 비활성화한 뒤 refresh token을 삭제한다.
+     * 회원 한 명(일반 회원 또는 guest)의 프로젝트 관계를 정리하고 회원을 비활성화한 뒤 refresh token을 삭제한다.
+     * guest owner의 프로젝트에는 활성 일반 회원 참여자가 없으므로(초대·이전이 같은 계정 유형만 허용) 승계 대상은 활성 guest다.
      * 이 서비스가 최상위 transaction을 열어야 READ_COMMITTED가 적용된다. 다른 transaction 안에서 호출하면
      * 바깥 transaction의 격리 수준을 따르므로 새 관계 재확인이 오래된 snapshot을 볼 수 있다.
      * Redis 삭제는 마지막에 하므로 삭제가 실패하면 DB 변경 전체가 롤백된다.
@@ -55,9 +56,9 @@ public class MemberWithdrawalCommandService {
      * 안내 뒤 승계 후보가 사라져 삭제로 바뀐 프로젝트가 있으면 아무것도 변경하기 전에 중단한다.
      * 확인한 것보다 삭제가 줄어드는 경우와 확인 목록에 소유하지 않은 ID가 섞인 경우는 막지 않는다.
      *
-     * @param memberId 탈퇴할 일반 회원 ID
+     * @param memberId 탈퇴하거나 이용을 종료할 회원 ID
      * @param confirmedDeletionProjectIds 사용자가 삭제된다고 확인한 프로젝트 ID. 확인한 것이 없으면 빈 집합을 전달한다
-     * @throws MemberException 회원이 없거나 이미 비활성이면 MEMBER_NOT_FOUND, guest면 GUEST_ACTION_NOT_ALLOWED,
+     * @throws MemberException 회원이 없거나 이미 비활성이면 MEMBER_NOT_FOUND,
      *                         확인하지 않은 삭제 프로젝트가 있으면 WITHDRAWAL_DELETION_NOT_CONFIRMED
      * @throws GeneralException 잠금 뒤 새 프로젝트 관계가 생겼거나 정리 뒤에도 관계가 남으면 CONCURRENT_MODIFICATION
      */
@@ -125,12 +126,9 @@ public class MemberWithdrawalCommandService {
     }
 
     private void ensureWithdrawable(Optional<Member> departingMember) {
-        Member member = departingMember
+        departingMember
                 .filter(found -> Boolean.TRUE.equals(found.getIsActive()))
                 .orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
-        if (member.getRole() == Role.ROLE_GUEST) {
-            throw new MemberException(MemberErrorCode.GUEST_ACTION_NOT_ALLOWED);
-        }
     }
 
     // 처음 잠근 범위에 없는 project가 생겼다면 늦게 잠그지 않고 중단한다. 늦은 잠금은 다른 요청과 순서가 어긋난다.

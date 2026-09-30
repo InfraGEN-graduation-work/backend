@@ -9,6 +9,7 @@ import com.infragen.infragen.domain.auth.exception.AuthException;
 import com.infragen.infragen.domain.auth.exception.code.error.AuthErrorCode;
 import com.infragen.infragen.domain.member.dto.response.MemberResDTO;
 import com.infragen.infragen.domain.member.entity.Member;
+import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.enums.SocialProvider;
 import com.infragen.infragen.domain.member.exception.MemberException;
 import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
@@ -76,10 +77,21 @@ public class AuthService {
         return tokenService.issueTokens(memberDTO.id(), memberDTO.role());
     }
 
-    // 로그아웃
+    /**
+     * 일반 회원의 refresh token을 삭제하고 access token을 blacklist에 등록한다.
+     * guest는 로그아웃하면 소유 프로젝트가 정리되지 않은 채 남으므로 거부하고, 이용 종료({@code DELETE /api/v1/members/me})를 쓰게 한다.
+     * 인증된 요청에서만 호출되므로 token subject의 회원은 활성 상태다.
+     *
+     * @throws MemberException guest면 GUEST_LOGOUT_NOT_ALLOWED. 이때 토큰은 변경하지 않는다
+     */
     public void logout(String accessToken) {
         String resolvedToken = tokenService.resolveToken(accessToken);
         Long memberId = tokenService.extractMemberIdForLogout(resolvedToken);
+
+        // 토큰을 지우기 전에 거부해야 guest가 로그인 상태를 유지한 채 이용 종료로 이어갈 수 있다.
+        if (memberQueryService.findById(memberId).getRole() == Role.ROLE_GUEST) {
+            throw new MemberException(MemberErrorCode.GUEST_LOGOUT_NOT_ALLOWED);
+        }
 
         tokenService.deleteRefreshToken(memberId);
         tokenService.blacklistAccessToken(resolvedToken);

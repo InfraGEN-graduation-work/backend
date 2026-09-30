@@ -3,6 +3,9 @@ name: infragen CI
 on:
   pull_request:
     branches: [ "develop" ]
+  # PR에서 저장한 캐시는 그 PR에서만 복원되므로, develop 병합 때도 실행해 다른 PR이 쓸 Terraform provider 캐시를 채운다.
+  push:
+    branches: [ "develop" ]
 
 permissions:
   contents: read
@@ -28,6 +31,16 @@ jobs:
         with:
           terraform_version: '1.15.8'
           terraform_wrapper: false
+
+      # TerraformIaCGeneratorTest의 terraform init이 매번 provider를 내려받지 않도록 캐시한다.
+      # provider 버전은 renderer에 있으므로 renderer가 바뀌면 새 키로 저장하고, 이전 캐시를 복원해 바뀐 provider만 내려받는다.
+      - name: Cache Terraform providers
+        uses: actions/cache@v4
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: terraform-providers-${{ runner.os }}-1.15.8-${{ hashFiles('src/main/java/**/generation/generator/cloud/*TerraformRenderer.java') }}
+          restore-keys: |
+            terraform-providers-${{ runner.os }}-1.15.8-
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew

@@ -34,6 +34,7 @@ import com.infragen.infragen.domain.auth.service.EmailVerificationService;
 import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
+import com.infragen.infragen.domain.project.controller.ProjectController;
 import com.infragen.infragen.domain.project.dto.response.ProjectResDTO;
 import com.infragen.infragen.domain.project.service.command.ProjectCommandService;
 import com.infragen.infragen.domain.project.service.command.ProjectOwnershipTransferCommandService;
@@ -52,7 +53,7 @@ import com.infragen.infragen.global.util.RedisUtil;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 
-@WebMvcTest(controllers = {AuthController.class, com.infragen.infragen.domain.project.controller.ProjectController.class}, properties = {
+@WebMvcTest(controllers = {AuthController.class, ProjectController.class}, properties = {
         "cors.allowed-origins=http://localhost",
         "jwt.secret=guest-security-test-secret-guest-security-test-secret",
         "jwt.issuer=infra-gen",

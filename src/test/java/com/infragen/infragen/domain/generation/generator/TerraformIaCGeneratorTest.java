@@ -489,6 +489,7 @@ class TerraformIaCGeneratorTest {
             .directory(moduleDirectory.toFile())
             .redirectErrorStream(true)
             .redirectOutput(logFile.toFile());
+        useProviderCache(processBuilder);
         Process process = processBuilder.start();
         boolean completed = process.waitFor(3, TimeUnit.MINUTES);
 
@@ -499,6 +500,20 @@ class TerraformIaCGeneratorTest {
 
         String output = Files.readString(logFile);
         assertEquals(0, process.exitValue(), output);
+    }
+
+    // init이 실행마다 aws·oci provider를 새로 내려받아 이 테스트가 4분 가까이 걸리므로 provider를 캐시 디렉터리에 재사용한다.
+    // 이미 지정된 TF_PLUGIN_CACHE_DIR(CI 등)은 그대로 쓰고, 없으면 사용자 기본 위치를 만든다. terraform은 이 디렉터리가 없으면 캐시를 쓰지 않는다.
+    // 검증마다 새 임시 디렉터리를 쓰므로 .terraform.lock.hcl이 없다. terraform은 잠금 파일에 체크섬이 없으면 캐시를 무시하고 다시 내려받으므로,
+    // 버려지는 임시 모듈에서는 잠금 파일 검증을 건너뛰도록 허용한다.
+    private static void useProviderCache(ProcessBuilder processBuilder) throws IOException {
+        processBuilder.environment().put("TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE", "true");
+        if (System.getenv("TF_PLUGIN_CACHE_DIR") != null) {
+            return;
+        }
+        Path cacheDirectory = Path.of(System.getProperty("user.home"), ".terraform.d", "plugin-cache");
+        Files.createDirectories(cacheDirectory);
+        processBuilder.environment().put("TF_PLUGIN_CACHE_DIR", cacheDirectory.toString());
     }
 
     private static List<String> buildTerraformCommand(String... arguments) {

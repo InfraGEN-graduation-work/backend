@@ -43,6 +43,11 @@ public enum MemberErrorCode implements BaseErrorCode {
             "게스트 계정에서는 회원 정보를 변경할 수 없습니다.",
             "MEMBER403_1"
     ),
+    GUEST_LOGOUT_NOT_ALLOWED(
+            HttpStatus.FORBIDDEN,
+            "게스트는 로그아웃 대신 이용 종료를 사용해 주세요.",
+            "MEMBER403_2"
+    ),
     INVITATION_CODE_GENERATION_FAILED(
             HttpStatus.INTERNAL_SERVER_ERROR,
             "초대코드 발급에 실패했습니다.",

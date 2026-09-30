@@ -106,18 +106,21 @@ class MemberWithdrawalQueryServiceTest {
     }
 
     @Test
-    @DisplayName("getWithdrawalPreview_guest이면_GUEST_ACTION_NOT_ALLOWED를 던진다")
-    void getWithdrawalPreview_Guest_ThrowsGuestNotAllowed() {
+    @DisplayName("getWithdrawalPreview_활성 guest_이용 종료 안내로 소유 프로젝트별 승계와 삭제를 반환한다")
+    void getWithdrawalPreview_ActiveGuest_ReturnsOutcomes() {
         // given
+        OwnedProjectWithdrawalPreview succession = preview(10L, "승계", true);
+        OwnedProjectWithdrawalPreview deletion = preview(20L, "삭제", false);
         when(memberRepository.findById(MEMBER_ID)).thenReturn(Optional.of(member(Role.ROLE_GUEST, true)));
+        when(projectRepository.findOwnedProjectWithdrawalPreviewsByMemberId(MEMBER_ID))
+                .thenReturn(List.of(succession, deletion));
 
         // when
-        MemberException exception = assertThrows(MemberException.class, () -> service.getWithdrawalPreview(MEMBER_ID));
+        MemberResDTO.WithdrawalPreview response = service.getWithdrawalPreview(MEMBER_ID);
 
         // then
-        assertAll(
-                () -> assertEquals(MemberErrorCode.GUEST_ACTION_NOT_ALLOWED, exception.getCode()),
-                () -> verify(projectRepository, never()).findOwnedProjectWithdrawalPreviewsByMemberId(MEMBER_ID));
+        assertEquals(List.of(WithdrawalProjectOutcome.SUCCESSION, WithdrawalProjectOutcome.DELETION),
+                response.ownedProjects().stream().map(MemberResDTO.WithdrawalOwnedProject::outcome).toList());
     }
 
     private Member member(Role role, boolean active) {

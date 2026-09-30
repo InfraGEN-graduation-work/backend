@@ -154,8 +154,8 @@ class MemberControllerWithdrawalSecurityWebTest {
     }
 
     @Test
-    @DisplayName("확인 ID가 숫자가 아니면 서비스를 호출하지 않고 오류로 끝난다")
-    void withdrawMember_NonNumericConfirmation_RejectsWithoutCallingService() throws Exception {
+    @DisplayName("확인 ID가 숫자가 아니면 서비스를 호출하지 않고 400 COMMON400_1을 반환한다")
+    void withdrawMember_NonNumericConfirmation_ReturnsBadRequestWithoutCallingService() throws Exception {
         // given
         String token = authenticatedToken(7L);
 
@@ -165,8 +165,9 @@ class MemberControllerWithdrawalSecurityWebTest {
                 .header("Authorization", "Bearer " + token));
 
         // then
-        // 타입 불일치가 400이 아닌 500이 되는 것은 GeneralExceptionAdvice의 기존 전역 동작이라 상태 코드는 단정하지 않는다.
-        assertTrue(response.andReturn().getResponse().getStatus() >= 400);
+        response.andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("COMMON400_1"))
+                .andExpect(jsonPath("$.result").value("[confirmedDeletionProjectIds] 요청 값의 형식이 올바르지 않습니다."));
         verifyNoInteractions(withdrawalCommandService);
     }
 

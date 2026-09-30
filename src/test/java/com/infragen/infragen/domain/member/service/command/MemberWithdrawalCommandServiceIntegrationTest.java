@@ -37,6 +37,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mysql.MySQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -146,6 +147,42 @@ class MemberWithdrawalCommandServiceIntegrationTest {
         assertEquals(departing.getId(), jdbcTemplate.queryForObject(
                 "SELECT responded_by_member_id FROM project_collaborator_invitation WHERE id = ?",
                 Long.class, sentByDeparting.getId()));
+        verify(tokenService).deleteRefreshToken(departing.getId());
+    }
+
+    @Test
+    @DisplayName("guest 이용 종료는 활성 guest에게 무작위 승계하고 후보 없는 프로젝트는 삭제하며 참여·대기 초대를 정리한다")
+    void withdraw_GuestTermination_SucceedsToGuestAndCleansUp() {
+        // given
+        Member departing = member("departing-guest", Role.ROLE_GUEST);
+        Member guestEditor = member("guest-editor", Role.ROLE_GUEST);
+        Member guestViewer = member("guest-viewer", Role.ROLE_GUEST);
+        Member otherGuestOwner = member("other-guest-owner", Role.ROLE_GUEST);
+        Project withGuests = project(departing);
+        Project withNobody = project(departing);
+        Project participating = project(otherGuestOwner);
+        Project invitedOnly = project(otherGuestOwner);
+        collaborator(withGuests, guestEditor, ProjectCollaboratorRole.EDITOR);
+        collaborator(withGuests, guestViewer, ProjectCollaboratorRole.VIEWER);
+        collaborator(participating, departing, ProjectCollaboratorRole.VIEWER);
+        ProjectCollaboratorInvitation receivedByDeparting = invitation(invitedOnly, otherGuestOwner, departing);
+
+        // when
+        withdrawalService.withdraw(departing.getId(), Set.of(withNobody.getId()));
+
+        // then
+        Long newOwnerId = ownerOf(withGuests.getId());
+        Long remainingGuestId = newOwnerId.equals(guestEditor.getId()) ? guestViewer.getId() : guestEditor.getId();
+        assertAll(
+                () -> assertTrue(List.of(guestEditor.getId(), guestViewer.getId()).contains(newOwnerId)),
+                () -> assertEquals(List.of(remainingGuestId), membersOf(withGuests.getId())),
+                () -> assertEquals(0, count("SELECT COUNT(*) FROM project WHERE id = ?", withNobody.getId())),
+                () -> assertEquals(List.of(), membersOf(participating.getId())),
+                () -> assertEquals("CANCELLED", statusOf(receivedByDeparting.getId())),
+                () -> assertFalse(isActive(departing.getId())),
+                () -> assertNotNull(deletedAtOf(departing.getId())),
+                () -> assertEquals("탈퇴회원", jdbcTemplate.queryForObject(
+                        "SELECT nickname FROM member WHERE id = ?", String.class, departing.getId())));
         verify(tokenService).deleteRefreshToken(departing.getId());
     }
 

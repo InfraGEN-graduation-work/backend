@@ -1,23 +1,26 @@
 package com.infragen.infragen.global.apiPayload.handler;
 
-import com.infragen.infragen.global.apiPayload.ApiResponse;
-import com.infragen.infragen.global.apiPayload.code.BaseErrorCode;
-import com.infragen.infragen.global.apiPayload.code.GeneralErrorCode;
-import com.infragen.infragen.global.apiPayload.exception.GeneralException;
-import lombok.NonNull;
-import lombok.extern.slf4j.Slf4j;
+import java.sql.SQLException;
+import java.util.function.Predicate;
+
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
-import java.sql.SQLException;
-import java.util.function.Predicate;
+import com.infragen.infragen.global.apiPayload.ApiResponse;
+import com.infragen.infragen.global.apiPayload.code.BaseErrorCode;
+import com.infragen.infragen.global.apiPayload.code.GeneralErrorCode;
+import com.infragen.infragen.global.apiPayload.exception.GeneralException;
+
+import lombok.NonNull;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @RestControllerAdvice
@@ -81,6 +84,22 @@ public class GeneralExceptionAdvice {
                 .body(ApiResponse.onFailure(
                         GeneralErrorCode.BAD_REQUEST,
                         e.getMessage()
+                ));
+    }
+
+    // PathVariable·RequestParam 값을 선언 타입(Long, enum 등)으로 바꾸지 못한 요청은 클라이언트 오류로 400 처리한다.
+    // 입력값은 응답에 되돌려 싣지 않고 파라미터 이름만 알려준다.
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<@NonNull ApiResponse<String>> handleMethodArgumentTypeMismatch(
+            MethodArgumentTypeMismatchException e
+    ) {
+        log.warn("Request parameter type mismatch: '{}'", e.getName());
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.onFailure(
+                        GeneralErrorCode.BAD_REQUEST,
+                        String.format("[%s] 요청 값의 형식이 올바르지 않습니다.", e.getName())
                 ));
     }
 

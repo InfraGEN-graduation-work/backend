@@ -1,5 +1,7 @@
 package com.infragen.infragen.domain.project.entity;
 
+import java.util.Objects;
+
 import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.project.enums.ProjectStatus;
 import com.infragen.infragen.global.entity.BaseEntity;
@@ -48,5 +50,10 @@ public class Project extends BaseEntity {
     public void updateInfo(String title, String description) {
         this.title = title;
         this.description = description;
+    }
+
+    /** 기존 프로젝트의 graph와 이력을 유지하면서 단일 owner를 교체한다. */
+    public void transferOwnershipTo(Member newOwner) {
+        this.member = Objects.requireNonNull(newOwner);
     }
 }

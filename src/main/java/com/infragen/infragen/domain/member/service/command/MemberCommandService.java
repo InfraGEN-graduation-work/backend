@@ -1,7 +1,12 @@
 package com.infragen.infragen.domain.member.service.command;
 
+import java.util.UUID;
+
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.infragen.infragen.domain.auth.dto.request.AuthReqDTO;
-import com.infragen.infragen.domain.auth.service.TokenService;
 import com.infragen.infragen.domain.auth.service.EmailVerificationService;
 import com.infragen.infragen.domain.member.converter.MemberConverter;
 import com.infragen.infragen.domain.member.dto.request.MemberReqDTO;
@@ -12,14 +17,9 @@ import com.infragen.infragen.domain.member.enums.SocialProvider;
 import com.infragen.infragen.domain.member.exception.MemberException;
 import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
-import com.infragen.infragen.domain.project.repository.ProjectCollaboratorInvitationRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.UUID;
 
 @Slf4j
 @Service
@@ -29,9 +29,7 @@ public class MemberCommandService {
     private static final int MAX_INVITATION_CODE_GENERATION_ATTEMPTS = 10;
 
     private final MemberRepository memberRepository;
-    private final ProjectCollaboratorInvitationRepository invitationRepository;
     private final PasswordEncoder passwordEncoder;
-    private final TokenService tokenService;
     private final EmailVerificationService emailVerificationService;
 
     // 일반 회원가입
@@ -105,29 +103,25 @@ public class MemberCommandService {
         return MemberConverter.toInvitationCode(member.getInvitationCode());
     }
 
+    /** 활성 회원을 잠근 뒤 프로필을 수정한다. guest 수정 금지와 소셜 회원 비밀번호 변경 제한은 유지한다. */
+    @Transactional
     public MemberResDTO.MemberResultDTO updateMember(Long memberId, MemberReqDTO.UpdateMember request) {
-        Member member = memberRepository.findById(memberId)
+        Member member = memberRepository.findByIdForUpdate(memberId)
+                .filter(lockedMember -> Boolean.TRUE.equals(lockedMember.getIsActive()))
                 .orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
+                
         ensureNotGuest(member);
+
         if (member.getSocialProvider() != null && request.password() != null) {
             throw new MemberException(MemberErrorCode.CANNOT_CHANGE_SOCIAL_PASSWORD);
         }
+
         String nickname = request.nickname() != null ? request.nickname() : member.getNickname();
         String password = request.password() != null
                 ? passwordEncoder.encode(request.password())
                 : member.getPassword();
         member.updateProfile(nickname, password);
         return MemberConverter.toResultDTO(member);
-    }
-
-    @Transactional
-    public void withdrawMember(Long memberId) {
-        Member member = memberRepository.findById(memberId)
-                .orElseThrow(() -> new MemberException(MemberErrorCode.MEMBER_NOT_FOUND));
-        ensureNotGuest(member);
-        invitationRepository.deleteAllByMemberId(memberId);
-        member.withdraw();
-        tokenService.deleteRefreshToken(memberId);
     }
 
     private void ensureNotGuest(Member member) {

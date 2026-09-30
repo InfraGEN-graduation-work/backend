@@ -14,18 +14,18 @@ import org.springframework.web.bind.annotation.RequestParam;
 public interface ProjectCollaboratorInvitationControllerDocs {
     @Operation(
             summary = "받은 프로젝트 초대 목록 조회",
-            description = "로그인한 회원이 자신의 받은 초대함을 확인할 때 사용합니다. GET /api/v1/project-collaborator-invitations/received를 호출하면 JWT 회원에게 온 초대만 반환합니다. status를 PENDING, ACCEPTED, DECLINED 또는 EXPIRED로 지정하면 해당 상태만 조회하고, 생략하면 모든 상태의 초대를 조회합니다. 목록에는 프로젝트명, 초대한 사람, 요청 역할, 상태, 생성 시각과 만료 시각이 포함됩니다."
+            description = "로그인한 회원이 자신의 받은 초대함을 확인할 때 사용합니다. GET /api/v1/project-collaborator-invitations/received를 호출하면 JWT 회원에게 온 초대만 반환합니다. status를 PENDING, ACCEPTED, DECLINED, EXPIRED 또는 CANCELLED로 지정하면 해당 상태만 조회하고, 생략하면 모든 상태의 초대를 조회합니다. 만료 시각이 지난 PENDING 초대는 EXPIRED로 표시하며, 취소된 초대는 만료 시각과 무관하게 CANCELLED로 표시합니다. 목록에는 프로젝트명, 초대한 사람, 요청 역할, 상태, 생성 시각과 만료 시각이 포함됩니다."
     )
     ApiResponse<ProjectCollaboratorInvitationResDTO.ReceivedList> getReceivedInvitations(
             @AuthenticationPrincipal CustomUserDetails userDetails,
-            @Parameter(description = "조회할 초대 상태. 생략하면 전체 상태를 반환합니다.", example = "PENDING")
+            @Parameter(description = "조회할 초대 상태: PENDING, ACCEPTED, DECLINED, EXPIRED, CANCELLED. 생략하면 전체 상태를 반환합니다.", example = "CANCELLED")
             @RequestParam(name = "status", required = false)
             ProjectCollaboratorInvitationResDTO.InvitationStatus statusFilter
     );
 
     @Operation(
             summary = "프로젝트 초대 수락",
-            description = "로그인한 초대 대상 회원이 받은 초대를 수락할 때 사용합니다. POST /api/v1/project-collaborator-invitations/{invitationId}/accept를 호출하면 서버가 JWT 회원 ID와 초대 대상을 확인하고 collaborator membership을 생성합니다. 요청 body에 회원 ID나 초대코드는 넣지 않습니다."
+            description = "로그인한 초대 대상 회원이 받은 유효한 PENDING 초대를 수락할 때 사용합니다. POST /api/v1/project-collaborator-invitations/{invitationId}/accept를 호출하면 서버가 JWT 회원 ID와 초대 대상을 확인하고 collaborator membership을 생성합니다. CANCELLED 초대는 PROJECT404_3으로 거부하며 membership과 취소 기록을 변경하지 않습니다. 요청 body에 회원 ID나 초대코드는 넣지 않습니다."
     )
     ApiResponse<Void> acceptInvitation(
             @AuthenticationPrincipal CustomUserDetails userDetails,
@@ -34,7 +34,7 @@ public interface ProjectCollaboratorInvitationControllerDocs {
 
     @Operation(
             summary = "프로젝트 초대 거절",
-            description = "로그인한 초대 대상 회원이 받은 초대를 거절할 때 사용합니다. POST /api/v1/project-collaborator-invitations/{invitationId}/decline를 호출하면 서버가 JWT 회원 ID와 초대 대상을 확인하고 invitation 상태만 DECLINED로 변경합니다. 요청 body에 회원 ID나 초대코드는 넣지 않습니다."
+            description = "로그인한 초대 대상 회원이 받은 유효한 PENDING 초대를 거절할 때 사용합니다. POST /api/v1/project-collaborator-invitations/{invitationId}/decline를 호출하면 서버가 JWT 회원 ID와 초대 대상을 확인하고 invitation 상태만 DECLINED로 변경합니다. CANCELLED 초대는 PROJECT404_3으로 거부하며 취소 기록을 유지합니다. 요청 body에 회원 ID나 초대코드는 넣지 않습니다."
     )
     ApiResponse<Void> declineInvitation(
             @AuthenticationPrincipal CustomUserDetails userDetails,

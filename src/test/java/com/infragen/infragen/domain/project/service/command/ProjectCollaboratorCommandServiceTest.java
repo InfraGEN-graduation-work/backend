@@ -74,7 +74,7 @@ class ProjectCollaboratorCommandServiceTest {
                 .member(member(20L, "viewer"))
                 .role(ProjectCollaboratorRole.VIEWER)
                 .build();
-        when(projectQueryService.getOwnedProject(1L, 10L)).thenReturn(collaborator.getProject());
+        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(collaborator.getProject()));
         when(collaboratorRepository.findByProjectIdAndMemberId(1L, 20L))
                 .thenReturn(Optional.of(collaborator));
 
@@ -94,7 +94,7 @@ class ProjectCollaboratorCommandServiceTest {
     @DisplayName("없는 collaborator를 삭제하면 조회 오류를 발생시킨다")
     void delete_MissingCollaborator_ThrowsNotFound() {
         // given
-        when(projectQueryService.getOwnedProject(1L, 10L)).thenReturn(project(1L, 10L));
+        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(project(1L, 10L)));
         when(collaboratorRepository.deleteByProjectIdAndMemberId(1L, 20L)).thenReturn(0L);
 
         // when
@@ -112,13 +112,14 @@ class ProjectCollaboratorCommandServiceTest {
     @DisplayName("서로 다른 collaborator가 자신의 membership만 삭제할 수 있다")
     void leave_Collaborator_DeletesOwnMembership(long memberId) {
         // given
+        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(project(1L, 10L)));
         when(collaboratorRepository.deleteByProjectIdAndMemberId(1L, memberId)).thenReturn(1L);
 
         // when
         service.leave(1L, memberId);
 
         // then
-        verify(projectRepository).existsByIdAndMemberId(1L, memberId);
+        verify(projectRepository).findByIdForUpdate(1L);
         verify(collaboratorRepository).deleteByProjectIdAndMemberId(1L, memberId);
     }
 
@@ -126,7 +127,7 @@ class ProjectCollaboratorCommandServiceTest {
     @DisplayName("owner는 본인 탈퇴 API로 프로젝트에서 나갈 수 없다")
     void leave_Owner_ThrowsOwnerCannotLeave() {
         // given
-        when(projectRepository.existsByIdAndMemberId(1L, 10L)).thenReturn(true);
+        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(project(1L, 10L)));
 
         // when
         ProjectException exception = assertThrows(
@@ -142,6 +143,9 @@ class ProjectCollaboratorCommandServiceTest {
     @Test
     @DisplayName("프로젝트에 참여하지 않은 회원은 탈퇴할 수 없다")
     void leave_NonCollaborator_ThrowsNotFound() {
+        // given
+        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(project(1L, 10L)));
+
         // when
         ProjectException exception = assertThrows(
                 ProjectException.class,
@@ -157,6 +161,7 @@ class ProjectCollaboratorCommandServiceTest {
     @DisplayName("프로젝트에서 두 번 나가면 두 번째 요청은 거부한다")
     void leave_Twice_SecondRequestThrowsNotFound() {
         // given
+        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(project(1L, 10L)));
         when(collaboratorRepository.deleteByProjectIdAndMemberId(1L, 20L))
                 .thenReturn(1L, 0L);
 
@@ -183,7 +188,7 @@ class ProjectCollaboratorCommandServiceTest {
                 .member(member(20L, "guest collaborator", Role.ROLE_GUEST))
                 .role(ProjectCollaboratorRole.VIEWER)
                 .build();
-        when(projectQueryService.getOwnedProject(1L, 99L)).thenReturn(guestProject);
+        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(guestProject));
         when(collaboratorRepository.findByProjectIdAndMemberId(1L, 20L))
                 .thenReturn(Optional.of(collaborator));
         when(collaboratorRepository.deleteByProjectIdAndMemberId(1L, 20L)).thenReturn(1L);
@@ -213,7 +218,7 @@ class ProjectCollaboratorCommandServiceTest {
                 .member(regularMember)
                 .role(ProjectCollaboratorRole.VIEWER)
                 .build();
-        when(projectQueryService.getOwnedProject(1L, 99L)).thenReturn(guestProject);
+        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(guestProject));
         when(collaboratorRepository.findByProjectIdAndMemberId(1L, 20L))
                 .thenReturn(Optional.of(collaborator));
 
@@ -241,6 +246,42 @@ class ProjectCollaboratorCommandServiceTest {
 
     private Project project(Long projectId, Long ownerId) {
         return project(projectId, ownerId, Role.ROLE_USER);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"changeRole", "delete"})
+    @DisplayName("owner가 이전됐으면 전 owner의 참여자 관리 요청은 잠금 후 거부한다")
+    void manageCollaborator_TransferredOwner_ThrowsProjectNotFound(String operation) {
+        // given
+        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(project(1L, 20L)));
+
+        // when
+        ProjectException exception = assertThrows(ProjectException.class, () -> {
+            if (operation.equals("changeRole")) {
+                service.changeRole(1L, 10L, 30L,
+                        new ProjectCollaboratorReqDTO.ChangeRole(ProjectCollaboratorRole.EDITOR));
+            } else {
+                service.delete(1L, 10L, 30L);
+            }
+        });
+
+        // then
+        assertEquals(ProjectErrorCode.PROJECT_NOT_FOUND, exception.getCode());
+        verifyNoInteractions(collaboratorRepository);
+    }
+
+    @Test
+    @DisplayName("프로젝트가 사라진 후 나가기 요청은 기존 참여자 없음 오류를 유지한다")
+    void leave_MissingProject_ThrowsCollaboratorNotFound() {
+        // given
+        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.empty());
+
+        // when
+        ProjectException exception = assertThrows(ProjectException.class, () -> service.leave(1L, 20L));
+
+        // then
+        assertEquals(ProjectErrorCode.COLLABORATOR_NOT_FOUND, exception.getCode());
+        verifyNoInteractions(collaboratorRepository);
     }
 
     private Project project(Long projectId, Long ownerId, Role role) {

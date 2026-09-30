@@ -5,6 +5,8 @@ import java.time.LocalDateTime;
 import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.project.enums.ProjectCollaboratorInvitationStatus;
 import com.infragen.infragen.domain.project.enums.ProjectCollaboratorRole;
+import com.infragen.infragen.domain.project.exception.ProjectException;
+import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.global.entity.BaseEntity;
 
 import jakarta.persistence.Column;
@@ -53,17 +55,17 @@ public class ProjectCollaboratorInvitation extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private ProjectCollaboratorInvitationStatus status; // 초대 상태를 저장한다. (PENDING, ACCEPTED, DECLINED)
+    private ProjectCollaboratorInvitationStatus status;
 
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt; // 초대가 만료되는 시각을 저장한다.
 
     @Column(name = "responded_at")
-    private LocalDateTime respondedAt; // 초대에 대한 응답 시각을 저장한다. (수락 또는 거절 시각)
+    private LocalDateTime respondedAt; // CANCELLED에서는 취소 처리 시각을 저장한다.
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "responded_by_member_id")
-    private Member respondedBy; // 초대에 응답한 회원을 저장한다. (수락 또는 거절한 회원)
+    private Member respondedBy; // CANCELLED에서는 취소 처리자를 저장한다.
 
     /**
      * 프로젝트 초대 정보를 만들고 초기 상태를 PENDING으로 둔다.
@@ -85,7 +87,7 @@ public class ProjectCollaboratorInvitation extends BaseEntity {
     }
 
     /**
-     * 초대 응답자와 수락 시각을 기록한다.
+     * PENDING 초대의 응답자와 수락 시각을 기록한다.
      *
      * @param responder 초대를 수락한 회원
      * @param respondedAt 수락 시각
@@ -99,7 +101,7 @@ public class ProjectCollaboratorInvitation extends BaseEntity {
     }
 
     /**
-     * 초대 응답자와 거절 시각을 기록한다.
+     * PENDING 초대의 응답자와 거절 시각을 기록한다.
      *
      * @param responder 초대를 거절한 회원
      * @param respondedAt 거절 시각
@@ -112,12 +114,29 @@ public class ProjectCollaboratorInvitation extends BaseEntity {
         );
     }
 
-    // 초대 응답자와 응답 시각, 응답 상태를 기록한다.
+    /**
+     * PENDING 초대를 취소하고 처리자·시각을 기록한다. 이미 처리된 초대의 이력은 그대로 유지한다.
+     * 만료 시각이 지난 PENDING도 취소하며, 호출자가 관련 회원과 transaction 잠금을 확인한다.
+     */
+    public void cancel(Member cancelledBy, LocalDateTime cancelledAt) {
+        if (status != ProjectCollaboratorInvitationStatus.PENDING) {
+            return;
+        }
+        if (cancelledBy == null || cancelledAt == null) {
+            throw new ProjectException(ProjectErrorCode.COLLABORATOR_INVITATION_UNAVAILABLE);
+        }
+        recordResponse(cancelledBy, cancelledAt, ProjectCollaboratorInvitationStatus.CANCELLED);
+    }
+
+    // 완료된 응답·취소 이력이 다른 처리로 덮어써지지 않게 한다.
     private void recordResponse(
             Member responder,
             LocalDateTime respondedAt,
             ProjectCollaboratorInvitationStatus responseStatus
     ) {
+        if (status != ProjectCollaboratorInvitationStatus.PENDING) {
+            throw new ProjectException(ProjectErrorCode.COLLABORATOR_INVITATION_UNAVAILABLE);
+        }
         this.status = responseStatus;
         this.respondedBy = responder;
         this.respondedAt = respondedAt;

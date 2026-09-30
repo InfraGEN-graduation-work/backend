@@ -33,6 +33,11 @@ public enum MemberSuccessCode implements BaseSuccessCode {
             "초대코드 조회에 성공했습니다.",
             "MEMBER200_5"
     ),
+    MEMBER_WITHDRAWAL_PREVIEW_SUCCESS(
+            HttpStatus.OK,
+            "회원 탈퇴 전 프로젝트 처리 안내 조회에 성공했습니다.",
+            "MEMBER200_6"
+    ),
     ;
 
     private final HttpStatus httpStatus;

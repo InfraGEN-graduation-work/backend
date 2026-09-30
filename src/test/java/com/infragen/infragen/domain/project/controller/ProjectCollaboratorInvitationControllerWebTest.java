@@ -10,6 +10,8 @@ import com.infragen.infragen.global.auth.CustomUserDetails;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -78,9 +80,12 @@ class ProjectCollaboratorInvitationControllerWebTest {
         SecurityContextHolder.clearContext();
     }
 
-    @Test
+    @ParameterizedTest
+    @EnumSource(ProjectCollaboratorInvitationResDTO.InvitationStatus.class)
     @DisplayName("받은 초대 목록 조회는 로그인 회원과 요청 상태로 필터링한다")
-    void getReceivedInvitations_WithStatus_ReturnsList() throws Exception {
+    void getReceivedInvitations_WithStatus_ReturnsList(
+            ProjectCollaboratorInvitationResDTO.InvitationStatus requestedStatus
+    ) throws Exception {
         // given
         ProjectCollaboratorInvitationResDTO.ReceivedList invitations =
                 ProjectCollaboratorInvitationResDTO.ReceivedList.builder()
@@ -89,17 +94,17 @@ class ProjectCollaboratorInvitationControllerWebTest {
                                 .projectTitle("InfraGEN")
                                 .inviterNickname("project-owner")
                                 .role(ProjectCollaboratorRole.VIEWER)
-                                .status(ProjectCollaboratorInvitationResDTO.InvitationStatus.PENDING)
+                                .status(requestedStatus)
                                 .build()))
                         .build();
         when(invitationQueryService.getReceivedInvitations(
                 42L,
-                ProjectCollaboratorInvitationResDTO.InvitationStatus.PENDING
+                requestedStatus
         )).thenReturn(invitations);
 
         // when
         var response = mockMvc.perform(get(RECEIVED_URL)
-                .queryParam("status", "PENDING")
+                .queryParam("status", requestedStatus.name())
                 .with(authenticatedAs(42L)));
 
         // then
@@ -109,10 +114,10 @@ class ProjectCollaboratorInvitationControllerWebTest {
                 .andExpect(jsonPath("$.result.invitations[0].invitationId").value(31))
                 .andExpect(jsonPath("$.result.invitations[0].projectTitle").value("InfraGEN"))
                 .andExpect(jsonPath("$.result.invitations[0].inviterNickname").value("project-owner"))
-                .andExpect(jsonPath("$.result.invitations[0].status").value("PENDING"));
+                .andExpect(jsonPath("$.result.invitations[0].status").value(requestedStatus.name()));
         verify(invitationQueryService).getReceivedInvitations(
                 42L,
-                ProjectCollaboratorInvitationResDTO.InvitationStatus.PENDING
+                requestedStatus
         );
     }
 

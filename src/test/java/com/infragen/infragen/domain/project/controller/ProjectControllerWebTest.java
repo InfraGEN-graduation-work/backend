@@ -1,7 +1,9 @@
 package com.infragen.infragen.domain.project.controller;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -9,6 +11,7 @@ import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -53,6 +56,7 @@ import com.infragen.infragen.domain.project.dto.response.ProjectEdgeResDTO;
 import com.infragen.infragen.domain.project.dto.response.ProjectNodeResDTO;
 import com.infragen.infragen.domain.project.dto.response.ProjectResDTO;
 import com.infragen.infragen.domain.project.service.command.ProjectCommandService;
+import com.infragen.infragen.domain.project.service.command.ProjectOwnershipTransferCommandService;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 import com.infragen.infragen.global.apiPayload.handler.GeneralExceptionAdvice;
 import com.infragen.infragen.global.auth.CustomUserDetails;
@@ -104,6 +108,9 @@ class ProjectControllerWebTest {
 
     @MockitoBean
     private ProjectCommandService projectCommandService;
+
+    @MockitoBean
+    private ProjectOwnershipTransferCommandService ownershipTransferCommandService;
 
     @MockitoBean
     private ProjectQueryService projectQueryService;
@@ -328,6 +335,55 @@ class ProjectControllerWebTest {
 
         // then
         response.andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("PROJECT404_1"));
+    }
+
+    @Test
+    @DisplayName("owner가 기존 참여자에게 이전하면 인증 회원 ID로 service를 호출한다")
+    void transferOwnership_ValidTarget_ReturnsSuccess() throws Exception {
+        // given
+        var request = post(PROJECT_URL + "/ownership-transfer/{targetMemberId}", 1L, 9L)
+                .with(authenticatedAs(7L)).param("memberId", "999");
+
+        // when
+        var response = mockMvc.perform(request);
+
+        // then
+        response.andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("PROJECT200_13"))
+                .andExpect(jsonPath("$.result").value(nullValue()));
+        verify(ownershipTransferCommandService).transfer(1L, 7L, 9L);
+    }
+
+    @Test
+    @DisplayName("소유 프로젝트가 아니면 이전 요청에 404를 반환한다")
+    void transferOwnership_NotOwner_ReturnsNotFound() throws Exception {
+        // given
+        doThrow(new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND))
+                .when(ownershipTransferCommandService).transfer(1L, 7L, 9L);
+
+        // when
+        var response = mockMvc.perform(post(PROJECT_URL + "/ownership-transfer/{targetMemberId}", 1L, 9L)
+                .with(authenticatedAs(7L)));
+
+        // then
+        response.andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PROJECT404_1"));
+    }
+
+    @Test
+    @DisplayName("이전할 수 없는 대상이면 전용 오류 코드를 반환한다")
+    void transferOwnership_UnavailableTarget_ReturnsNotFound() throws Exception {
+        // given
+        doThrow(new ProjectException(ProjectErrorCode.OWNERSHIP_TRANSFER_TARGET_UNAVAILABLE))
+                .when(ownershipTransferCommandService).transfer(1L, 7L, 9L);
+
+        // when
+        var response = mockMvc.perform(post(PROJECT_URL + "/ownership-transfer/{targetMemberId}", 1L, 9L)
+                .with(authenticatedAs(7L)));
+
+        // then
+        response.andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PROJECT404_4"));
     }
 
     private static RequestPostProcessor authenticatedAs(Long memberId) {

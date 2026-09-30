@@ -18,6 +18,7 @@ import com.infragen.infragen.domain.project.dto.request.ProjectReqDTO;
 import com.infragen.infragen.domain.project.dto.response.ProjectResDTO;
 import com.infragen.infragen.domain.project.exception.code.success.ProjectSuccessCode;
 import com.infragen.infragen.domain.project.service.command.ProjectCommandService;
+import com.infragen.infragen.domain.project.service.command.ProjectOwnershipTransferCommandService;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 import com.infragen.infragen.global.apiPayload.ApiResponse;
 import com.infragen.infragen.global.auth.CustomUserDetails;
@@ -29,6 +30,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ProjectController implements ProjectControllerDocs {
     private final ProjectCommandService projectCommandService;
+    private final ProjectOwnershipTransferCommandService ownershipTransferCommandService;
     private final ProjectQueryService projectQueryService;
 
     @Override
@@ -73,6 +75,18 @@ public class ProjectController implements ProjectControllerDocs {
             ProjectSuccessCode.PROJECT_DELETE_SUCCESS,
             null
         );
+    }
+
+    /** 현재 owner가 같은 계정 유형의 활성 참여자에게 소유권을 즉시 넘긴다. */
+    @Override
+    @PostMapping("/{projectId}/ownership-transfer/{targetMemberId}")
+    public ApiResponse<Void> transferOwnership(
+        @AuthenticationPrincipal CustomUserDetails userDetails,
+        @PathVariable Long projectId,
+        @PathVariable Long targetMemberId
+    ) {
+        ownershipTransferCommandService.transfer(projectId, userDetails.getMemberId(), targetMemberId);
+        return ApiResponse.onSuccess(ProjectSuccessCode.PROJECT_OWNERSHIP_TRANSFER_SUCCESS, null);
     }
 
     @Override

@@ -1,23 +1,20 @@
 package com.infragen.infragen.domain.auth.controller;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.util.List;
-import java.util.Optional;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.List;
+import java.util.Optional;
 
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +36,7 @@ import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
 import com.infragen.infragen.domain.project.dto.response.ProjectResDTO;
 import com.infragen.infragen.domain.project.service.command.ProjectCommandService;
+import com.infragen.infragen.domain.project.service.command.ProjectOwnershipTransferCommandService;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 import com.infragen.infragen.global.apiPayload.handler.GeneralExceptionAdvice;
 import com.infragen.infragen.global.auth.AuthenticationEntryPointImpl;
@@ -50,6 +48,9 @@ import com.infragen.infragen.global.config.SecurityConfig;
 import com.infragen.infragen.global.properties.JwtProperties;
 import com.infragen.infragen.global.util.JwtUtil;
 import com.infragen.infragen.global.util.RedisUtil;
+
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 
 @WebMvcTest(controllers = {AuthController.class, com.infragen.infragen.domain.project.controller.ProjectController.class}, properties = {
         "cors.allowed-origins=http://localhost",
@@ -103,6 +104,9 @@ class AuthControllerSecurityWebTest {
 
     @MockitoBean
     private ProjectQueryService projectQueryService;
+
+    @MockitoBean
+    private ProjectOwnershipTransferCommandService ownershipTransferCommandService;
 
     @Test
     @DisplayName("permitAll guest endpoint에서 받은 ROLE_GUEST token으로 보호 API 인증")

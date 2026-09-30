@@ -23,6 +23,11 @@ public enum MemberErrorCode implements BaseErrorCode {
             "저장된 초대코드는 변경할 수 없습니다.",
             "MEMBER409_2"
     ),
+    WITHDRAWAL_DELETION_NOT_CONFIRMED(
+            HttpStatus.CONFLICT,
+            "탈퇴하면 삭제되는 프로젝트가 있습니다. 삭제 대상을 다시 확인해 주세요.",
+            "MEMBER409_3"
+    ),
     INVALID_SOCIAL_PROVIDER(
             HttpStatus.BAD_REQUEST,
             "해당 이메일은 다른 소셜 로그인으로 가입되어 있습니다.",

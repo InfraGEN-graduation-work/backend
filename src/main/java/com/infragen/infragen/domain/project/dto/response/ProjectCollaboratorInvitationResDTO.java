@@ -13,13 +13,15 @@ public final class ProjectCollaboratorInvitationResDTO {
         PENDING,
         ACCEPTED,
         DECLINED,
-        EXPIRED
+        EXPIRED,
+        CANCELLED
     }
 
     @Builder
     public record SentList(List<SentItem> invitations) {
     }
 
+    /** 발신 초대 정보다. respondedAt은 수락·거절·취소가 처리된 시각이다. */
     @Builder
     public record SentItem(
             Long invitationId,

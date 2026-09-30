@@ -9,11 +9,16 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import java.lang.reflect.Method;
 import java.sql.SQLException;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @ExtendWith(MockitoExtension.class)
@@ -82,5 +87,33 @@ class GeneralExceptionAdviceTest {
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals(GeneralErrorCode.BAD_REQUEST.getCode(), response.getBody().getCode());
+    }
+
+    @Test
+    @DisplayName("파라미터 타입 불일치는 입력값을 싣지 않고 파라미터 이름과 함께 COMMON400_1로 매핑된다")
+    void handleMethodArgumentTypeMismatch_nonNumericLong_returnsBadRequestWithoutInputValue() throws Exception {
+        // given
+        Method method = GeneralExceptionAdviceTest.class.getDeclaredMethod("projectIdParameter", Long.class);
+        var exception = new MethodArgumentTypeMismatchException(
+                "<script>", Long.class, "projectId", new MethodParameter(method, 0),
+                new NumberFormatException("For input string: \"<script>\""));
+
+        // when
+        var response = advice.handleMethodArgumentTypeMismatch(exception);
+
+        // then
+        assertNotNull(response.getBody());
+        assertAll(
+                () -> assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode()),
+                () -> assertEquals(GeneralErrorCode.BAD_REQUEST.getCode(), response.getBody().getCode()),
+                () -> assertEquals(GeneralErrorCode.BAD_REQUEST.getMessage(), response.getBody().getMessage()),
+                () -> assertEquals("[projectId] 요청 값의 형식이 올바르지 않습니다.", response.getBody().getResult()),
+                () -> assertFalse(response.getBody().getResult().contains("<script>"))
+        );
+    }
+
+    // MethodArgumentTypeMismatchException 생성에 필요한 실제 MethodParameter를 제공한다.
+    @SuppressWarnings("unused")
+    private void projectIdParameter(Long projectId) {
     }
 }

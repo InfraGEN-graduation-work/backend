@@ -7,6 +7,7 @@ import com.infragen.infragen.domain.project.dto.response.ProjectResDTO;
 import com.infragen.infragen.global.apiPayload.ApiResponse;
 import com.infragen.infragen.global.auth.CustomUserDetails;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @Tag(name = "Project API", description = "프로젝트 관련 API")
@@ -26,6 +27,17 @@ public interface ProjectControllerDocs {
     ApiResponse<Void> deleteProject(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @PathVariable Long projectId
+    );
+
+    @Operation(
+            summary = "프로젝트 소유권 즉시 이전 API",
+            description = "현재 owner가 같은 계정 유형의 활성 EDITOR 또는 VIEWER 참여자를 지정해 소유권을 즉시 이전합니다. 대상의 collaborator 기록은 제거되고 이전 owner는 EDITOR로 남습니다. 프로젝트와 graph·생성 이력은 유지됩니다. 성공 코드는 PROJECT200_13, 소유 프로젝트가 아니면 PROJECT404_1, 이전할 수 없는 대상이면 PROJECT404_4입니다."
+    )
+    ApiResponse<Void> transferOwnership(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable Long projectId,
+            @Parameter(description = "새 owner가 될 기존 참여자의 회원 ID", example = "9")
+            @PathVariable Long targetMemberId
     );
 
     @Operation(summary = "프로젝트 상세 캔버스 조회 API", description = "특정 프로젝트의 식별자(ID)를 바탕으로 캔버스 내 노드 및 엣지 세부 매핑 정보를 복원 조회합니다.")

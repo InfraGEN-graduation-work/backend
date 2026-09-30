@@ -34,4 +34,27 @@ class ProjectRepositoryQueryTest {
             assertEquals(Long.class, query.getParameter("memberId").getParameterType());
         }
     }
+
+    @Test
+    @DisplayName("탈퇴 전 안내 query는 MySQL dialect의 Hibernate 모델에서 해석된다")
+    void ownedProjectWithdrawalPreviews_Query_ParsesWithMappedEntities() throws Exception {
+        // given
+        String hql = ProjectRepository.class
+                .getMethod("findOwnedProjectWithdrawalPreviewsByMemberId", Long.class)
+                .getAnnotation(Query.class).value();
+        Configuration configuration = new Configuration()
+                .addAnnotatedClass(Member.class)
+                .addAnnotatedClass(Project.class)
+                .addAnnotatedClass(ProjectCollaborator.class)
+                .setProperty("hibernate.dialect", "org.hibernate.dialect.MySQLDialect")
+                .setProperty("hibernate.boot.allow_jdbc_metadata_access", "false")
+                .setProperty("hibernate.hbm2ddl.auto", "none");
+        try (var factory = configuration.buildSessionFactory(); var session = factory.openSession()) {
+            // when
+            var query = session.createQuery(hql, Tuple.class);
+
+            // then
+            assertEquals(Long.class, query.getParameter("memberId").getParameterType());
+        }
+    }
 }

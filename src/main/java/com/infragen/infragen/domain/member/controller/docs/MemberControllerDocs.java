@@ -28,7 +28,14 @@ public interface MemberControllerDocs {
             @AuthenticationPrincipal CustomUserDetails userDetails
     );
 
-    @Operation(summary = "로그아웃 API", description = "액세스 토큰을 블랙리스트에 등록하고 리프레시 토큰을 삭제합니다.")
+    @Operation(
+            summary = "로그아웃 API",
+            description = """
+                    액세스 토큰을 블랙리스트에 등록하고 리프레시 토큰을 삭제합니다.
+                    guest는 로그아웃할 수 없으며 MEMBER403_2(403)를 반환하고 토큰을 변경하지 않습니다.
+                    guest는 이용 종료 API(DELETE /api/v1/members/me)로 소유 프로젝트를 정리한 뒤 종료해야 합니다.
+                    """
+    )
     ApiResponse<String> logout(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             String authorization,

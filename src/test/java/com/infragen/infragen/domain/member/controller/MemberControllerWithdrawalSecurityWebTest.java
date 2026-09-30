@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -220,6 +221,24 @@ class MemberControllerWithdrawalSecurityWebTest {
                 .andExpect(jsonPath("$.code").value("MEMBER200_4"));
         assertTrue(clearsRefreshToken(deleteResponse.andReturn().getResponse().getHeaders("Set-Cookie")));
         verify(withdrawalCommandService).withdraw(8L, Set.of(3L));
+    }
+
+    @Test
+    @DisplayName("guest 로그아웃은 403 MEMBER403_2를 반환하고 refresh 쿠키를 지우지 않는다")
+    void logout_GuestJwt_ReturnsForbiddenWithoutClearingCookie() throws Exception {
+        // given
+        String token = authenticatedToken(8L, Role.ROLE_GUEST);
+        doThrow(new MemberException(MemberErrorCode.GUEST_LOGOUT_NOT_ALLOWED))
+                .when(authService).logout("Bearer " + token);
+
+        // when
+        var response = mockMvc.perform(post("/api/v1/members/logout")
+                .header("Authorization", "Bearer " + token));
+
+        // then
+        response.andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("MEMBER403_2"));
+        assertFalse(clearsRefreshToken(response.andReturn().getResponse().getHeaders("Set-Cookie")));
     }
 
     // Spring Security의 CSRF 쿠키(XSRF-TOKEN)도 Set-Cookie에 실리므로 refresh_token 삭제 쿠키만 골라 확인한다.

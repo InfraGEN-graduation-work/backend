@@ -178,6 +178,8 @@ class AuthServiceTest {
         String accessToken = "Bearer access_token";
         when(tokenService.resolveToken(accessToken)).thenReturn("access_token");
         when(tokenService.extractMemberIdForLogout("access_token")).thenReturn(1L);
+        when(memberQueryService.findById(1L)).thenReturn(Member.builder()
+                .email("test@test.com").password("encoded_pw").role(Role.ROLE_USER).isActive(true).build());
 
         // when
         authService.logout(accessToken);
@@ -187,6 +189,25 @@ class AuthServiceTest {
         verify(tokenService).extractMemberIdForLogout("access_token");
         verify(tokenService).deleteRefreshToken(1L);
         verify(tokenService).blacklistAccessToken("access_token");
+    }
+
+    @Test
+    @DisplayName("로그아웃 - guest는 토큰을 변경하지 않고 GUEST_LOGOUT_NOT_ALLOWED로 거부")
+    void logout_Guest_ThrowsWithoutTouchingTokens() {
+        // given
+        String accessToken = "Bearer guest_token";
+        when(tokenService.resolveToken(accessToken)).thenReturn("guest_token");
+        when(tokenService.extractMemberIdForLogout("guest_token")).thenReturn(99L);
+        when(memberQueryService.findById(99L)).thenReturn(Member.builder()
+                .email("guest@guest.infragen.local").password("encoded_pw").role(Role.ROLE_GUEST).isActive(true).build());
+
+        // when
+        MemberException exception = assertThrows(MemberException.class, () -> authService.logout(accessToken));
+
+        // then
+        assertEquals(MemberErrorCode.GUEST_LOGOUT_NOT_ALLOWED, exception.getCode());
+        verify(tokenService, never()).deleteRefreshToken(anyLong());
+        verify(tokenService, never()).blacklistAccessToken(anyString());
     }
 
     @Test

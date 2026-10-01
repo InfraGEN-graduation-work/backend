@@ -36,7 +36,7 @@ public enum ParsingErrorCode implements BaseErrorCode {
     ),
     INVALID_DB_PASSWORD(
             HttpStatus.BAD_REQUEST,
-            "MySQL 루트 비밀번호는 최소 8자리 이상이어야 합니다.",
+            "데이터베이스 비밀번호는 최소 8자리 이상이어야 합니다.",
             "PARSING400_7"
     ),
     INVALID_EDGE_NODE(
@@ -113,6 +113,21 @@ public enum ParsingErrorCode implements BaseErrorCode {
             HttpStatus.BAD_REQUEST,
             "Java 버전은 숫자 형식이어야 합니다.",
             "PARSING400_21"
+    ),
+    MISSING_POSTGRES_IMAGE_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "PostgreSQL 이미지 버전이 누락되었습니다.",
+            "PARSING400_23"
+    ),
+    MISSING_POSTGRES_USERNAME(
+            HttpStatus.BAD_REQUEST,
+            "PostgreSQL 사용자 이름이 누락되었습니다.",
+            "PARSING400_24"
+    ),
+    DUPLICATE_DEPENDENCY_TYPE(
+            HttpStatus.BAD_REQUEST,
+            "하나의 애플리케이션에 같은 타입의 의존 컴포넌트를 둘 이상 연결할 수 없습니다.",
+            "PARSING400_25"
     );
 
     private final HttpStatus httpStatus;

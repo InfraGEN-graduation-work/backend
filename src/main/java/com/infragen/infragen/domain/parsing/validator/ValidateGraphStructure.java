@@ -1,5 +1,11 @@
 package com.infragen.infragen.domain.parsing.validator;
 
+import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
+import com.infragen.infragen.domain.parsing.dto.request.NodeDTO;
+import com.infragen.infragen.domain.parsing.exception.ParsingException;
+import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
+import com.infragen.infragen.global.enums.ComponentType;
+import com.infragen.infragen.global.enums.ComponentType.ComponentCategory;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -8,18 +14,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
-
 import org.springframework.stereotype.Component;
-
-import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
-import com.infragen.infragen.domain.parsing.dto.request.NodeDTO;
-import com.infragen.infragen.domain.parsing.exception.ParsingException;
-import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
-import com.infragen.infragen.global.enums.ComponentType;
 
 @Component
 public class ValidateGraphStructure {
-
     public void validate(List<NodeDTO> nodes, List<EdgeDTO> edges) {
         if (nodes == null || nodes.isEmpty()) {
             return;
@@ -54,6 +52,7 @@ public class ValidateGraphStructure {
         }
 
         Set<String> seenEdges = new HashSet<>();
+        Map<String, Set<ComponentType>> applicationDependencyTypes = new HashMap<>();
 
         for (EdgeDTO edge : edges) {
             if (edge == null) {
@@ -85,6 +84,14 @@ public class ValidateGraphStructure {
                 throw new ParsingException(ParsingErrorCode.INVALID_COMPONENT_DEPENDENCY);
             }
 
+            // 앱 하나에 같은 타입 의존이 둘이면 접속 변수(MYSQL_*, SPRING_DATASOURCE_* 등)가 서로 덮어써진다.
+            if (targetType.getCategory() == ComponentCategory.APPLICATION
+                    && !applicationDependencyTypes
+                    .computeIfAbsent(target, key -> new HashSet<>())
+                    .add(sourceType)) {
+                throw new ParsingException(ParsingErrorCode.DUPLICATE_DEPENDENCY_TYPE);
+            }
+
             adjList.get(source).add(target);
             // target 노드의 진입 차수 증가
             indegree.put(target, indegree.get(target) + 1);
@@ -100,7 +107,7 @@ public class ValidateGraphStructure {
         }
 
         int visitedCount = 0;
-        
+
         // 위상 정렬을 위한 큐 처리
         while (!queue.isEmpty()) {
             String current = queue.poll();

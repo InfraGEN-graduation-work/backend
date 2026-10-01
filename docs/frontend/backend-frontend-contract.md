@@ -405,15 +405,23 @@ operation 전송 형식:
 - `type`은 `UPDATE_NODE_NAME`, `UPDATE_NODE_POSITION`이다. 위치 수정 payload는 `positionX`, `positionY`다.
 - `baseVersion`은 클라이언트가 마지막으로 반영한 `serverVersion`이다.
 - 적용된 operation은 `operations` 구독으로 `operationId`, `clientId`, `serverVersion`, `actorMemberId`, `type`, `nodeId`, `payload`가 broadcast된다.
-- 같은 `operationId`와 같은 내용을 다시 보내면 서버는 다시 적용하지 않고 응답도 보내지 않는다. 같은 `operationId`에 다른 내용을 보내면 `COLLAB409_1`이다.
+- 같은 `operationId`와 같은 내용을 다시 보냈을 때의 결과는 서버에 원본 log가 남아 있는지에 따라 다르다.
+  - 원본 log가 남아 있으면 서버는 다시 적용하지 않고 **응답도 보내지 않는다.** 같은 `operationId`에 다른 내용을 보내면 `COLLAB409_1`이다.
+  - 원본 log가 compaction으로 삭제됐고 `baseVersion`이 정리 경계보다 작으면, 같은 내용의 재전송이라도 무응답이 아니라 `COLLAB409_2`가 온다. 서버는 이 요청이 이미 적용된 재전송인지 새 요청인지 구분하지 못한다.
+- 서버가 보장하는 범위: 같은 `operationId`의 중복 적용 방지는 원본 log가 남아 있는 `baseVersion`에서만 보장한다. 경계보다 오래된 요청은 적용 여부와 관계없이 `COLLAB409_2`로 거부해 중복 적용을 막는다.
 
 `COLLAB409_2`가 operation-results로 오면:
 
 1. 편집 입력을 잠시 막고, 이후 보낼 operation은 보류한다.
 2. `GET .../collaboration?afterVersion={마지막으로 반영한 serverVersion}`을 호출한다.
-3. 응답 graph로 캔버스를 교체하고 `operations`를 순서대로 적용한다.
-4. 이후 operation은 새 `serverVersion`을 `baseVersion`으로 보낸다.
-5. 보류한 편집은 새 상태 위에서 사용자가 확인한 뒤 다시 보낸다.
+3. 응답은 위 "진입과 재연결"과 같은 분기로 처리한다. 항상 graph가 오는 것은 아니다.
+   - `project`가 있으면 캔버스를 그 graph로 교체하고 `operations`를 순서대로 적용한다.
+   - `project`가 없으면(`afterVersion`이 최신 snapshot version 이상인 delta 응답) 현재 캔버스를 유지하고 `operations`만 순서대로 적용한다. 이때 캔버스를 비우거나 교체하면 안 된다.
+4. 이후 operation은 응답의 `serverVersion`을 `baseVersion`으로 보낸다.
+5. 거부된 operation은 **이미 서버에 적용됐을 수 있다.** 서버는 적용 여부를 알려 주지 않으므로 다음 규칙을 따른다.
+   - 거부된 operation을 같은 `operationId`로 다시 보내지 않는다. 재동기화 뒤에는 `baseVersion`이 경계 이상이라 검사를 통과하는데, 원본 log가 이미 삭제됐다면 새 operation으로 다시 적용된다.
+   - 응답으로 갱신한 캔버스에 사용자의 편집 결과가 이미 반영되어 있으면 그 operation은 버린다.
+   - 반영되어 있지 않으면 사용자가 확인한 뒤 **새 `operationId`로** 다시 보낸다.
 
 - 서버는 오래된 operation log를 정리(compaction)하며 최근 100 version 이전 구간은 보존하지 않는다. 그래서 `baseVersion`이 정리된 구간보다 오래된 operation은 `COLLAB409_2`로 거부된다.
 - 메시지 문구 대신 code로 처리한다.

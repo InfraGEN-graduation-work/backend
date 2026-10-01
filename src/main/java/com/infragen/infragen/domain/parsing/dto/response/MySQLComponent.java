@@ -1,16 +1,11 @@
 package com.infragen.infragen.domain.parsing.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.infragen.infragen.global.enums.ComponentType;
 
 import lombok.Builder;
 import lombok.Getter;
 
 @Getter
-@JsonPropertyOrder({
-    "nodeId", "positionX", "positionY", "componentType", "imageVersion",
-    "containerName", "env", "port", "volumeName"
-})
 public class MySQLComponent extends BaseComponent implements VolumeComponent {
     private String imageVersion;
     private String containerName;

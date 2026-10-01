@@ -2,7 +2,9 @@ package com.infragen.infragen.domain.collaboration.service.command;
 
 import com.infragen.infragen.domain.collaboration.entity.ProjectCollaborationSnapshot;
 import com.infragen.infragen.domain.collaboration.repository.ProjectCollaborationOperationRepository;
+import com.infragen.infragen.domain.collaboration.entity.ProjectCollaborationState;
 import com.infragen.infragen.domain.collaboration.repository.ProjectCollaborationSnapshotRepository;
+import com.infragen.infragen.domain.collaboration.repository.ProjectCollaborationStateRepository;
 import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.project.entity.Project;
 import org.junit.jupiter.api.Test;
@@ -28,6 +30,9 @@ class CollaborationOperationCompactionServiceTest {
 
     @Mock
     private ProjectCollaborationSnapshotRepository snapshotRepository;
+
+    @Mock
+    private ProjectCollaborationStateRepository stateRepository;
 
     @InjectMocks
     private CollaborationOperationCompactionService compactionService;
@@ -62,6 +67,8 @@ class CollaborationOperationCompactionServiceTest {
                 .build();
         when(snapshotRepository.findTopByProjectIdOrderByServerVersionDesc(projectId))
                 .thenReturn(Optional.of(snapshot));
+        ProjectCollaborationState state = new ProjectCollaborationState(Project.builder().title("project").build());
+        when(stateRepository.findByProjectIdForUpdate(projectId)).thenReturn(Optional.of(state));
         when(operationRepository.deleteAllByProjectIdAndServerVersionLessThanEqual(projectId, 10L))
                 .thenReturn(10);
 
@@ -70,6 +77,7 @@ class CollaborationOperationCompactionServiceTest {
 
         // then
         assertEquals(10, deletedCount);
+        assertEquals(10L, state.getCompactedVersion());
         verify(operationRepository)
                 .deleteAllByProjectIdAndServerVersionLessThanEqual(projectId, 10L);
     }
@@ -85,6 +93,8 @@ class CollaborationOperationCompactionServiceTest {
                 .build();
         when(snapshotRepository.findTopByProjectIdOrderByServerVersionDesc(projectId))
                 .thenReturn(Optional.of(snapshot));
+        ProjectCollaborationState state = new ProjectCollaborationState(Project.builder().title("project").build());
+        when(stateRepository.findByProjectIdForUpdate(projectId)).thenReturn(Optional.of(state));
         when(operationRepository.deleteAllByProjectIdAndServerVersionLessThanEqual(projectId, 7L))
                 .thenReturn(7);
 
@@ -93,7 +103,54 @@ class CollaborationOperationCompactionServiceTest {
 
         // then
         assertEquals(7, deletedCount);
+        assertEquals(7L, state.getCompactedVersion());
         verify(operationRepository)
                 .deleteAllByProjectIdAndServerVersionLessThanEqual(projectId, 7L);
+    }
+
+    @Test
+    @DisplayName("이미 기록된 경계 version보다 낮은 compaction은 경계를 되돌리지 않는다")
+    void compact_lowerThanRecordedBoundary_keepsHigherBoundary() {
+        // given
+        Long projectId = 1L;
+        ProjectCollaborationSnapshot snapshot = ProjectCollaborationSnapshot.builder()
+                .serverVersion(10L)
+                .graphPayload(Map.of("projectId", projectId))
+                .build();
+        ProjectCollaborationState state = new ProjectCollaborationState(Project.builder().title("project").build());
+        state.raiseCompactedVersion(8L);
+        when(snapshotRepository.findTopByProjectIdOrderByServerVersionDesc(projectId))
+                .thenReturn(Optional.of(snapshot));
+        when(stateRepository.findByProjectIdForUpdate(projectId)).thenReturn(Optional.of(state));
+        when(operationRepository.deleteAllByProjectIdAndServerVersionLessThanEqual(projectId, 7L))
+                .thenReturn(0);
+
+        // when
+        compactionService.compact(projectId, 3L);
+
+        // then
+        assertEquals(8L, state.getCompactedVersion());
+    }
+
+    @Test
+    @DisplayName("state가 없으면 operation log를 삭제하지 않는다")
+    void compact_withoutState_doesNotDeleteOperationLog() {
+        // given
+        Long projectId = 1L;
+        ProjectCollaborationSnapshot snapshot = ProjectCollaborationSnapshot.builder()
+                .serverVersion(10L)
+                .graphPayload(Map.of("projectId", projectId))
+                .build();
+        when(snapshotRepository.findTopByProjectIdOrderByServerVersionDesc(projectId))
+                .thenReturn(Optional.of(snapshot));
+        when(stateRepository.findByProjectIdForUpdate(projectId)).thenReturn(Optional.empty());
+
+        // when
+        int deletedCount = compactionService.compact(projectId);
+
+        // then
+        assertEquals(0, deletedCount);
+        verify(operationRepository, never())
+                .deleteAllByProjectIdAndServerVersionLessThanEqual(eq(projectId), eq(10L));
     }
 }

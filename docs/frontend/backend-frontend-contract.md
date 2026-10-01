@@ -369,6 +369,63 @@ UX:
 - 삭제 전 확인 modal을 표시한다.
 - 성공 시 프로젝트 목록으로 이동한다.
 
+### 4.6 협업 동기화와 재동기화
+
+협업 편집은 HTTP snapshot 조회와 STOMP(WebSocket) 메시지를 함께 사용한다. 프로젝트마다 서버가 발급하는 `serverVersion`이 operation이 적용될 때마다 1씩 증가한다.
+
+진입과 재연결:
+
+    GET /api/v1/projects/{projectId}/collaboration?afterVersion={마지막으로 반영한 serverVersion}
+
+- 처음 진입하면 `afterVersion=0`으로 호출한다.
+- 응답 `project`가 있으면 캔버스를 그 graph로 통째로 교체하고 `graphVersion`을 기준 version으로 삼는다. 이어서 `operations`를 순서대로 적용하면 `serverVersion`에 도달한다.
+- `project`가 없으면 현재 graph 위에 `operations`만 순서대로 적용한다.
+- `afterVersion`이 서버 `serverVersion`보다 크면 HTTP 409 `COLLAB409_2`다. 이때는 `afterVersion=0`으로 다시 조회한다.
+- 재연결할 때는 operation을 보내기 전에 먼저 이 API로 동기화한다.
+
+STOMP 연결과 구독:
+
+- 접속: `/ws/collaboration`, CONNECT frame의 `Authorization: Bearer {accessToken}`.
+- 구독 `/topic/projects/{projectId}/operations`: 다른 사용자가 적용한 operation을 받는다.
+- 구독 `/topic/projects/{projectId}/resync`: PUT 전체 저장이나 metadata 수정 뒤 최신 graph(snapshot 응답과 같은 구조)를 받는다. 받으면 graph를 교체한다.
+- 구독 `/user/queue/projects/{projectId}/operation-results`: 내 operation의 오류를 받는다. 형식은 `{"code": "...", "message": "..."}`이다.
+- 전송 `/app/projects/{projectId}/operations`: operation을 보낸다.
+
+operation 전송 형식:
+
+    {
+      "operationId": "클라이언트가 만든 고유 ID",
+      "clientId": "클라이언트 식별자",
+      "baseVersion": 12,
+      "type": "UPDATE_NODE_NAME",
+      "nodeId": "mysql-node-1",
+      "payload": { "value": "mysql" }
+    }
+
+- `type`은 `UPDATE_NODE_NAME`, `UPDATE_NODE_POSITION`이다. 위치 수정 payload는 `positionX`, `positionY`다.
+- `baseVersion`은 클라이언트가 마지막으로 반영한 `serverVersion`이다.
+- 적용된 operation은 `operations` 구독으로 `operationId`, `clientId`, `serverVersion`, `actorMemberId`, `type`, `nodeId`, `payload`가 broadcast된다.
+- 같은 `operationId`와 같은 내용을 다시 보냈을 때의 결과는 서버에 원본 log가 남아 있는지에 따라 다르다.
+  - 원본 log가 남아 있으면 서버는 다시 적용하지 않고 **응답도 보내지 않는다.** 같은 `operationId`에 다른 내용을 보내면 `COLLAB409_1`이다.
+  - 원본 log가 compaction으로 삭제됐고 `baseVersion`이 정리 경계보다 작으면, 같은 내용의 재전송이라도 무응답이 아니라 `COLLAB409_2`가 온다. 서버는 이 요청이 이미 적용된 재전송인지 새 요청인지 구분하지 못한다.
+- 서버가 보장하는 범위: 같은 `operationId`의 중복 적용 방지는 원본 log가 남아 있는 `baseVersion`에서만 보장한다. 경계보다 오래된 요청은 적용 여부와 관계없이 `COLLAB409_2`로 거부해 중복 적용을 막는다.
+
+`COLLAB409_2`가 operation-results로 오면:
+
+1. 편집 입력을 잠시 막고, 이후 보낼 operation은 보류한다.
+2. `GET .../collaboration?afterVersion={마지막으로 반영한 serverVersion}`을 호출한다.
+3. 응답은 위 "진입과 재연결"과 같은 분기로 처리한다. 항상 graph가 오는 것은 아니다.
+   - `project`가 있으면 캔버스를 그 graph로 교체하고 `operations`를 순서대로 적용한다.
+   - `project`가 없으면(`afterVersion`이 최신 snapshot version 이상인 delta 응답) 현재 캔버스를 유지하고 `operations`만 순서대로 적용한다. 이때 캔버스를 비우거나 교체하면 안 된다.
+4. 이후 operation은 응답의 `serverVersion`을 `baseVersion`으로 보낸다.
+5. 거부된 operation은 **이미 서버에 적용됐을 수 있다.** 서버는 적용 여부를 알려 주지 않으므로 다음 규칙을 따른다.
+   - 거부된 operation을 같은 `operationId`로 다시 보내지 않는다. 재동기화 뒤에는 `baseVersion`이 경계 이상이라 검사를 통과하는데, 원본 log가 이미 삭제됐다면 새 operation으로 다시 적용된다.
+   - 응답으로 갱신한 캔버스에 사용자의 편집 결과가 이미 반영되어 있으면 그 operation은 버린다.
+   - 반영되어 있지 않으면 사용자가 확인한 뒤 **새 `operationId`로** 다시 보낸다.
+
+- 서버는 오래된 operation log를 정리(compaction)하며 최근 100 version 이전 구간은 보존하지 않는다. 그래서 `baseVersion`이 정리된 구간보다 오래된 operation은 `COLLAB409_2`로 거부된다.
+- 메시지 문구 대신 code로 처리한다.
+
 ## 5. 캔버스 컴포넌트 정책
 
 ### 5.1 공통 node 구조
@@ -677,6 +734,8 @@ UX:
 - AUTH400_1: 지원하지 않는 social provider
 - PROJECT404_1: 프로젝트 없음
 - PROJECT409_1: 동시 수정 충돌
+- COLLAB409_1: 같은 operationId에 다른 내용이 사용됨
+- COLLAB409_2: version 불일치. 4.6의 재동기화 절차를 따른다
 - PROJECT400_5: 프로젝트 내부 nodeId 중복
 - PARSING400_4: 포트 중복
 - PARSING400_5: 포트 범위 오류
@@ -708,6 +767,8 @@ UX:
 - 인증 Controller: src/main/java/com/infragen/infragen/domain/auth/controller/AuthController.java
 - 프로젝트 Controller: src/main/java/com/infragen/infragen/domain/project/controller/ProjectController.java
 - history Controller: src/main/java/com/infragen/infragen/domain/project/controller/ProjectHistoryController.java
+- 협업 snapshot Controller: src/main/java/com/infragen/infragen/domain/collaboration/controller/CollaborationSnapshotController.java
+- 협업 operation message Controller: src/main/java/com/infragen/infragen/domain/collaboration/controller/CollaborationOperationMessageController.java
 - Generate Controller: src/main/java/com/infragen/infragen/domain/generation/controller/GenerationController.java
 - parsing Service: src/main/java/com/infragen/infragen/domain/parsing/service/ParsingService.java
 - Issue #31 handoff: docs/handoff/regacy/issue-31-handoff.md

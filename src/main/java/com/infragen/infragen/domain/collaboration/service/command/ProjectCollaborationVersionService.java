@@ -1,7 +1,10 @@
 package com.infragen.infragen.domain.collaboration.service.command;
 
-import com.infragen.infragen.domain.collaboration.entity.ProjectCollaborationState;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.infragen.infragen.domain.collaboration.entity.ProjectCollaborationOperation;
+import com.infragen.infragen.domain.collaboration.entity.ProjectCollaborationState;
 import com.infragen.infragen.domain.collaboration.exception.CollaborationException;
 import com.infragen.infragen.domain.collaboration.exception.code.error.CollaborationErrorCode;
 import com.infragen.infragen.domain.collaboration.repository.ProjectCollaborationOperationRepository;
@@ -10,9 +13,8 @@ import com.infragen.infragen.domain.project.entity.Project;
 import com.infragen.infragen.domain.project.exception.ProjectException;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.repository.ProjectRepository;
+
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /** project → state 잠금 순서를 유지해 graph 변경과 프로젝트 관리 요청을 조정한다. */
 @Service
@@ -87,6 +89,12 @@ public class ProjectCollaborationVersionService {
             if (existing != null) {
                 return new VersionIssuance(null, existing);
             }
+        }
+
+        // compaction으로 로그가 지워진 구간의 요청은 재전송 여부를 알 수 없어 거부한다.
+        // 경계 version과 같은 baseVersion의 원본은 경계보다 큰 version이라 로그가 남아 있으므로 허용한다.
+        if (operationId != null && baseVersion != null && baseVersion < lockedState.getCompactedVersion()) {
+            throw new CollaborationException(CollaborationErrorCode.VERSION_CONFLICT);
         }
 
         boolean versionConflict = requireExactBaseVersion

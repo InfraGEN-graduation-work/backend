@@ -270,6 +270,8 @@ class ProjectFullReplaceSnapshotIntegrationTest {
         ProjectResDTO.ProjectDetailResDTO updated = projectCommandService.updateProject(1L, updateRequest(), 2L);
         state.advanceServerVersion();
         operations.add(operation(52L));
+        // compaction은 state를 잠가 경계 version을 기록하므로 같은 state를 잠금 조회로도 돌려준다.
+        when(stateRepository.findByProjectIdForUpdate(1L)).thenReturn(Optional.of(state));
         when(operationRepository.deleteAllByProjectIdAndServerVersionLessThanEqual(1L, 51L))
                 .thenAnswer(invocation -> {
                     int previousSize = operations.size();
@@ -284,6 +286,7 @@ class ProjectFullReplaceSnapshotIntegrationTest {
         // then
         assertAll(
                 () -> assertEquals(50, deleted),
+                () -> assertEquals(51L, state.getCompactedVersion()),
                 () -> assertEquals(updated, restored.project()),
                 () -> assertEquals(51L, restored.graphVersion()),
                 () -> assertEquals(52L, restored.serverVersion()),

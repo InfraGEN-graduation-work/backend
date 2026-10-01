@@ -30,7 +30,7 @@ public enum CollaborationErrorCode implements BaseErrorCode {
     ),
     VERSION_CONFLICT(
             HttpStatus.CONFLICT,
-            "client가 알고 있는 graph version이 현재 서버 version보다 앞섭니다.",
+            "client의 graph version이 서버와 맞지 않습니다. 최신 snapshot을 다시 조회해야 합니다.",
             "COLLAB409_2"
     ),
     ;

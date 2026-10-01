@@ -1,8 +1,10 @@
 package com.infragen.infragen.domain.collaboration.service.command;
 
+import com.infragen.infragen.domain.collaboration.entity.ProjectCollaborationOperation;
 import com.infragen.infragen.domain.collaboration.entity.ProjectCollaborationState;
 import com.infragen.infragen.domain.collaboration.exception.CollaborationException;
 import com.infragen.infragen.domain.collaboration.exception.code.error.CollaborationErrorCode;
+import com.infragen.infragen.domain.collaboration.repository.ProjectCollaborationOperationRepository;
 import com.infragen.infragen.domain.collaboration.repository.ProjectCollaborationStateRepository;
 import com.infragen.infragen.domain.project.entity.Project;
 import com.infragen.infragen.domain.project.enums.ProjectStatus;
@@ -34,6 +36,9 @@ class ProjectCollaborationVersionServiceTest {
 
     @Mock
     private ProjectCollaborationStateRepository stateRepository;
+
+    @Mock
+    private ProjectCollaborationOperationRepository operationRepository;
 
     @InjectMocks
     private ProjectCollaborationVersionService versionService;
@@ -156,6 +161,67 @@ class ProjectCollaborationVersionServiceTest {
         // then
         assertEquals(2L, version);
         verify(stateRepository, org.mockito.Mockito.never()).findByProjectId(1L);
+    }
+
+    @Test
+    @DisplayName("compaction 경계보다 오래된 baseVersion의 operation은 중복 확인 없이 거부한다")
+    void issueNextVersion_BaseVersionBelowCompactedVersion_Rejects() {
+        // given
+        ProjectCollaborationState state = stateAt(250L, 150L);
+        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(state.getProject()));
+        when(stateRepository.findByProjectIdForUpdate(1L)).thenReturn(Optional.of(state));
+        when(operationRepository.findByProjectIdAndOperationId(1L, "op-a")).thenReturn(Optional.empty());
+
+        // when
+        var exception = assertThrows(CollaborationException.class,
+                () -> versionService.issueNextVersion(1L, 149L, "op-a"));
+
+        // then
+        assertEquals(CollaborationErrorCode.VERSION_CONFLICT, exception.getCode());
+        assertEquals(250L, state.getServerVersion());
+    }
+
+    @Test
+    @DisplayName("baseVersion이 compaction 경계와 같으면 새 operation으로 발급한다")
+    void issueNextVersion_BaseVersionEqualsCompactedVersion_IssuesVersion() {
+        // given
+        ProjectCollaborationState state = stateAt(250L, 150L);
+        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(state.getProject()));
+        when(stateRepository.findByProjectIdForUpdate(1L)).thenReturn(Optional.of(state));
+        when(operationRepository.findByProjectIdAndOperationId(1L, "op-a")).thenReturn(Optional.empty());
+
+        // when
+        var issuance = versionService.issueNextVersion(1L, 150L, "op-a");
+
+        // then
+        assertEquals(251L, issuance.serverVersion());
+    }
+
+    @Test
+    @DisplayName("로그가 남아 있는 operationId는 경계보다 오래된 baseVersion이어도 기존 operation을 돌려준다")
+    void issueNextVersion_ExistingLogBelowBoundary_ReturnsExisting() {
+        // given
+        ProjectCollaborationState state = stateAt(250L, 150L);
+        ProjectCollaborationOperation existing = org.mockito.Mockito.mock(ProjectCollaborationOperation.class);
+        when(projectRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(state.getProject()));
+        when(stateRepository.findByProjectIdForUpdate(1L)).thenReturn(Optional.of(state));
+        when(operationRepository.findByProjectIdAndOperationId(1L, "op-a")).thenReturn(Optional.of(existing));
+
+        // when
+        var issuance = versionService.issueNextVersion(1L, 100L, "op-a");
+
+        // then
+        assertEquals(existing, issuance.existingOperation());
+        assertEquals(250L, state.getServerVersion());
+    }
+
+    private ProjectCollaborationState stateAt(long serverVersion, long compactedVersion) {
+        var state = new ProjectCollaborationState(project());
+        for (long i = 0; i < serverVersion; i++) {
+            state.advanceServerVersion();
+        }
+        state.raiseCompactedVersion(compactedVersion);
+        return state;
     }
 
     private Project project() {

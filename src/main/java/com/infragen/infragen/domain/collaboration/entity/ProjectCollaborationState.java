@@ -41,6 +41,9 @@ public class ProjectCollaborationState extends BaseEntity {
     @Column(name = "server_version", nullable = false)
     private Long serverVersion;
 
+    @Column(name = "compacted_version", nullable = false, columnDefinition = "bigint not null default 0")
+    private Long compactedVersion = 0L;
+
     @Builder
     public ProjectCollaborationState(Project project) {
         this.project = project;
@@ -52,5 +55,16 @@ public class ProjectCollaborationState extends BaseEntity {
      */
     public void advanceServerVersion() {
         this.serverVersion++;
+    }
+
+    /**
+     * operation log를 삭제한 상한 version을 기록한다. 이미 기록된 값보다 낮은 값은 무시한다.
+     *
+     * @param version 이번 compaction에서 로그를 삭제한 상한 version
+     */
+    public void raiseCompactedVersion(long version) {
+        if (version > this.compactedVersion) {
+            this.compactedVersion = version;
+        }
     }
 }

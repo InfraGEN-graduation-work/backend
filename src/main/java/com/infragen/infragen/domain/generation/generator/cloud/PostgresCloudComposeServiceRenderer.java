@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 public class PostgresCloudComposeServiceRenderer implements CloudComposeServiceRenderer {
 
     private static final String DATA_DIR = "/var/lib/postgresql/data";
+    // Cloud는 Compose 내부 네트워크로 접속하므로 사용자 입력(호스트) 포트가 아니라 컨테이너 포트를 쓴다.
     private static final int CONTAINER_PORT = 5432;
 
     @Override

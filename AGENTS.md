@@ -2,9 +2,8 @@
 
 ## Where to Start
 
-- Issue work: read `docs/handoff/issue-{number}-handoff.md` first. It holds the scope, contracts, decisions, current state, and next task, and links the rules that apply.
-- Project-wide order and future scope: `docs/handoff/plan/backend-future-plan.md`. Product context: `docs/infra-gen-project-overview.md`.
-- Read only the documents relevant to the task. `docs/handoff/` and `docs/harness/personal_convention/` are personal local documents (gitignored); follow them when present.
+- Product context: `docs/infra-gen-project-overview.md`.
+- Read only the documents relevant to the task. `docs/harness/personal_convention/` holds personal local documents (gitignored); follow them when present.
 
 ## Always Apply
 

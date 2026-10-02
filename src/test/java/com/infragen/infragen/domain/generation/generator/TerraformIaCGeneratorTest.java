@@ -27,10 +27,12 @@ import com.infragen.infragen.domain.generation.generator.cloud.CloudComposeRende
 import com.infragen.infragen.domain.generation.generator.cloud.AwsTerraformRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.MysqlCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.OciTerraformRenderer;
+import com.infragen.infragen.domain.generation.generator.cloud.PostgresCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.RedisCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
+import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.RedisComponent;
 import com.infragen.infragen.domain.parsing.dto.response.SpringBootComponent;
 
@@ -43,6 +45,7 @@ class TerraformIaCGeneratorTest {
     private final TerraformIaCGenerator generator = new TerraformIaCGenerator(
         new CloudComposeRenderer(List.of(
             new MysqlCloudComposeServiceRenderer(),
+            new PostgresCloudComposeServiceRenderer(),
             new RedisCloudComposeServiceRenderer()
         )),
         List.of(new AwsTerraformRenderer(), new OciTerraformRenderer())
@@ -305,6 +308,95 @@ class TerraformIaCGeneratorTest {
     }
 
     @Test
+    @DisplayName("PostgreSQL만 선택 — postgres 서비스, PGDATA 고정, 내부 DNS DataSource 생성")
+    void generate_PostgresOnly_RendersServiceAndDataSource() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        EdgeDTO edge = new EdgeDTO();
+        edge.setSourceNodeId("pg-1");
+        edge.setTargetNodeId("node-1");
+        parsingResult.setComponents(List.of(parsingResult.getComponents().get(0), postgresComponent()));
+        parsingResult.setEdges(List.of(edge));
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
+        String compose = fileContent(bundle, "docker-compose.cloud.yml");
+
+        // then
+        assertAll(
+            () -> assertTrue(compose.contains("""
+
+                  postgres:
+                    image: postgres:17
+                    env_file:
+                      - .env
+                    environment:
+                      POSTGRES_DB: ${POSTGRES_DB:?외부 .env에 설정 필요}
+                      POSTGRES_USER: ${POSTGRES_USER:?외부 .env에 설정 필요}
+                      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?외부 .env에 설정 필요}
+                      PGDATA: /var/lib/postgresql/data
+                    volumes:
+                      - pg_data:/var/lib/postgresql/data
+                """)),
+            () -> assertTrue(compose.contains("\nvolumes:\n  pg_data:\n")),
+            () -> assertTrue(compose.contains("depends_on:\n      - postgres\n")),
+            () -> assertTrue(compose.contains(
+                "SPRING_DATASOURCE_URL: \"jdbc:postgresql://postgres:5432/${POSTGRES_DB:?외부 .env에 설정 필요}\"")),
+            () -> assertTrue(compose.contains("SPRING_DATASOURCE_USERNAME: \"${POSTGRES_USER:?외부 .env에 설정 필요}\"")),
+            () -> assertTrue(compose.contains("POSTGRES_HOST: postgres\n")),
+            () -> assertTrue(compose.contains("POSTGRES_PORT: \"5432\"\n")),
+            () -> assertFalse(compose.contains("데이터베이스가 2개 이상"))
+        );
+    }
+
+    @Test
+    @DisplayName("MySQL + PostgreSQL — 타입별 접속 변수만 생성하고 SPRING_DATASOURCE_* 대신 안내 주석 추가")
+    void generate_MysqlAndPostgres_SkipsDataSourceAndAddsNotice() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        MySQLComponent mysql = MySQLComponent.builder()
+            .id("mysql-1")
+            .posX(0f)
+            .posY(0f)
+            .imageVersion("mysql:8.4")
+            .containerName("mysql")
+            .port(3306)
+            .volumeName("mysql_data")
+            .build();
+        EdgeDTO mysqlEdge = new EdgeDTO();
+        mysqlEdge.setSourceNodeId("mysql-1");
+        mysqlEdge.setTargetNodeId("node-1");
+        EdgeDTO postgresEdge = new EdgeDTO();
+        postgresEdge.setSourceNodeId("pg-1");
+        postgresEdge.setTargetNodeId("node-1");
+        parsingResult.setComponents(List.of(parsingResult.getComponents().get(0), mysql, postgresComponent()));
+        parsingResult.setEdges(List.of(mysqlEdge, postgresEdge));
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
+        String compose = fileContent(bundle, "docker-compose.cloud.yml");
+
+        // then
+        assertAll(
+            () -> assertTrue(compose.startsWith("""
+                # CLOUD_DEPLOY 부트스트랩입니다. 민감한 값은 외부 .env 파일에서 주입해 주세요.
+                # 애플리케이션에 데이터베이스가 2개 이상 연결되어 SPRING_DATASOURCE_*를 생성하지 않았습니다.
+                # DataSource를 직접 설정하고 타입별 접속 변수(MYSQL_*, POSTGRES_*)를 사용하세요.
+                services:
+                """)),
+            () -> assertTrue(compose.contains("\n  mysql:\n")),
+            () -> assertTrue(compose.contains("\n  postgres:\n")),
+            () -> assertTrue(compose.contains("MYSQL_HOST: mysql\n")),
+            () -> assertTrue(compose.contains("POSTGRES_HOST: postgres\n")),
+            () -> assertTrue(compose.contains("      - mysql\n")),
+            () -> assertTrue(compose.contains("      - postgres\n")),
+            () -> assertFalse(compose.contains("SPRING_DATASOURCE_URL:")),
+            () -> assertFalse(compose.contains("SPRING_DATASOURCE_USERNAME:")),
+            () -> assertFalse(compose.contains("SPRING_DATASOURCE_PASSWORD:"))
+        );
+    }
+
+    @Test
     @DisplayName("동일한 연결 MySQL 중복 — AMBIGUOUS_DEPENDENCY_CONFIGURATION")
     void generate_DuplicateConnectedMysql_ThrowsAmbiguousDependencyConfiguration() {
         // given
@@ -365,6 +457,18 @@ class TerraformIaCGeneratorTest {
 
         // then
         assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
+    }
+
+    private static PostgreSQLComponent postgresComponent() {
+        return PostgreSQLComponent.builder()
+            .id("pg-1")
+            .posX(0f)
+            .posY(200f)
+            .imageVersion("postgres:17")
+            .containerName("postgres")
+            .port(5432)
+            .volumeName("pg_data")
+            .build();
     }
 
     private static ParsingResultDTO validParsingResult() {

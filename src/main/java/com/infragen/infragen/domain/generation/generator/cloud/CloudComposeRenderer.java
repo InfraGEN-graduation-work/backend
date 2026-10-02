@@ -17,6 +17,11 @@ import com.infragen.infragen.global.enums.ComponentType;
 /** CLOUD_DEPLOY에서 애플리케이션과 선택된 의존 인프라의 Compose bootstrap을 생성한다. */
 @Component
 public class CloudComposeRenderer {
+    private static final String MULTIPLE_DATABASE_NOTICE = """
+        # 애플리케이션에 데이터베이스가 2개 이상 연결되어 SPRING_DATASOURCE_*를 생성하지 않았습니다.
+        # DataSource를 직접 설정하고 타입별 접속 변수(MYSQL_*, POSTGRES_*)를 사용하세요.
+        """;
+
     private final List<CloudComposeServiceRenderer> serviceRenderers;
 
     public CloudComposeRenderer(List<CloudComposeServiceRenderer> serviceRenderers) {
@@ -34,6 +39,11 @@ public class CloudComposeRenderer {
 
         StringBuilder content = new StringBuilder("""
             # CLOUD_DEPLOY 부트스트랩입니다. 민감한 값은 외부 .env 파일에서 주입해 주세요.
+            """);
+        if (context.hasMultipleDatabaseDependencies()) {
+            content.append(MULTIPLE_DATABASE_NOTICE);
+        }
+        content.append("""
             services:
               app:
                 build:
@@ -127,18 +137,32 @@ public class CloudComposeRenderer {
         CloudDeployContext context
     ) {
         boolean hasMysql = context.hasIncomingDependency(ComponentType.MYSQL);
+        boolean hasPostgres = context.hasIncomingDependency(ComponentType.POSTGRESQL);
         boolean hasRedis = context.hasIncomingDependency(ComponentType.REDIS);
-        if (!hasMysql && !hasRedis) {
+        if (!hasMysql && !hasPostgres && !hasRedis) {
             return;
         }
+        // DB가 둘 이상이면 기본 DataSource를 정할 수 없어 Spring 변수 없이 타입별 접속 변수만 넣는다.
+        boolean singleDatabase = context.hasSingleDatabaseDependency();
 
         content.append("    environment:\n");
         if (hasMysql) {
-            content.append("      SPRING_DATASOURCE_URL: \"jdbc:mysql://mysql:3306/${MYSQL_DATABASE:?외부 .env에 설정 필요}\"\n")
-                .append("      SPRING_DATASOURCE_USERNAME: \"${MYSQL_USER:?외부 .env에 설정 필요}\"\n")
-                .append("      SPRING_DATASOURCE_PASSWORD: \"${MYSQL_PASSWORD:?외부 .env에 설정 필요}\"\n")
-                .append("      MYSQL_HOST: mysql\n")
+            if (singleDatabase) {
+                content.append("      SPRING_DATASOURCE_URL: \"jdbc:mysql://mysql:3306/${MYSQL_DATABASE:?외부 .env에 설정 필요}\"\n")
+                    .append("      SPRING_DATASOURCE_USERNAME: \"${MYSQL_USER:?외부 .env에 설정 필요}\"\n")
+                    .append("      SPRING_DATASOURCE_PASSWORD: \"${MYSQL_PASSWORD:?외부 .env에 설정 필요}\"\n");
+            }
+            content.append("      MYSQL_HOST: mysql\n")
                 .append("      MYSQL_PORT: \"3306\"\n");
+        }
+        if (hasPostgres) {
+            if (singleDatabase) {
+                content.append("      SPRING_DATASOURCE_URL: \"jdbc:postgresql://postgres:5432/${POSTGRES_DB:?외부 .env에 설정 필요}\"\n")
+                    .append("      SPRING_DATASOURCE_USERNAME: \"${POSTGRES_USER:?외부 .env에 설정 필요}\"\n")
+                    .append("      SPRING_DATASOURCE_PASSWORD: \"${POSTGRES_PASSWORD:?외부 .env에 설정 필요}\"\n");
+            }
+            content.append("      POSTGRES_HOST: postgres\n")
+                .append("      POSTGRES_PORT: \"5432\"\n");
         }
         if (hasRedis) {
             content.append("      REDIS_HOST: redis\n")

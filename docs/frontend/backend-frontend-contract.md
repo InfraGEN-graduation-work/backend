@@ -2,7 +2,7 @@
 
 > 프론트엔드가 사용자 흐름에 따라 API를 연동할 때 사용하는 기준 문서다.
 >
-> 최종 갱신일: 2026-09-23 (#67 Generate 대상 graph 입력 계약 갱신)
+> 최종 갱신일: 2026-10-02 (#80 PostgreSQL 컴포넌트와 다중 DB 접속 정보 규칙 추가)
 >
 > 상태: 현재는 현재 코드에 구현된 계약, 예정은 설계만 있고 아직 구현되지 않은 계약, 진행 중은 Issue #31 등에서 변경 중인 계약이다.
 
@@ -444,15 +444,15 @@ nodeId는 캔버스가 생성하고 유지하는 문자열 식별자다. nodeNam
 
 ### 5.2 현재 지원 컴포넌트
 
-현재 parsing과 LOCAL_DEV 생성이 지원되는 컴포넌트:
+현재 parsing, LOCAL_DEV, CLOUD_DEPLOY 생성이 지원되는 컴포넌트:
 
 - SPRING_BOOT
 - MYSQL
+- POSTGRESQL
 - REDIS
 
 enum에는 있지만 parser가 없는 컴포넌트:
 
-- POSTGRESQL
 - MONGODB
 - NGINX
 - APACHE
@@ -499,6 +499,32 @@ enum에는 있지만 parser가 없는 컴포넌트:
 - userPassword 필수
 - volumeName 선택
 
+### 5.4.1 PostgreSQL properties
+
+    {
+      "imageVersion": "postgres:17",
+      "containerName": "postgres",
+      "volumeName": "postgres_data",
+      "port": 5432,
+      "env": {
+        "databaseName": "appdb",
+        "username": "appuser",
+        "password": "password12"
+      }
+    }
+
+검증:
+
+- imageVersion 필수 (`PARSING400_23`)
+- databaseName은 영문·숫자·언더바만 허용 (`PARSING400_6`)
+- username 필수 (`PARSING400_24`)
+- password 8자 이상 (`PARSING400_7`)
+- port 1024~65535, 전체 graph에서 중복 불가
+- volumeName 선택
+- rootPassword는 받지 않는다. PostgreSQL 공식 이미지에서 username이 superuser다.
+
+생성되는 Compose는 데이터 경로를 `/var/lib/postgresql/data`로 고정한다(`PGDATA` 명시). PostgreSQL 18 이상 이미지도 같은 볼륨 경로를 사용한다.
+
 ### 5.5 Redis properties
 
     {
@@ -532,7 +558,9 @@ Generate graph edge 구조:
 
 - source → target 방향이다.
 - source가 먼저 준비되고 target이 나중에 실행된다.
-- MySQL·Redis → Spring Boot 연결을 사용한다.
+- MySQL·PostgreSQL·Redis → Spring Boot 연결을 사용한다.
+- 하나의 Spring Boot에 같은 타입의 dependency를 둘 이상 연결할 수 없다(`PARSING400_25`). 예: MySQL 둘, Redis 둘
+- 서로 다른 타입의 DB는 함께 연결할 수 있다. 예: MySQL 하나 + PostgreSQL 하나
 - 존재하지 않는 node를 edge가 참조할 수 없다.
 - 순환 참조를 허용하지 않는다.
 - 중복 edge는 무시된다.
@@ -582,8 +610,14 @@ query parameter는 사용하지 않는다. 배포 범위와 target은 request bo
 실행 방식:
 
 - Spring Boot는 호스트에서 실행
-- MySQL·Redis는 Docker Compose에서 실행
+- MySQL·PostgreSQL·Redis는 Docker Compose에서 실행
 - .env에는 DB와 Redis password가 포함될 수 있음
+
+DB 접속 정보 규칙 (LOCAL_DEV, CLOUD_DEPLOY 공통):
+
+- 연결된 DB마다 타입별 접속 변수(`MYSQL_HOST/PORT`, `POSTGRES_HOST/PORT` 등)를 항상 생성한다.
+- Spring Boot에 연결된 DB가 하나일 때만 `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`를 생성한다.
+- DB가 둘 이상이면 `SPRING_DATASOURCE_*`를 생성하지 않고, Compose 파일 맨 위에 DataSource를 직접 설정하라는 안내 주석을 넣는다. 파일 미리보기에서 이 주석이 보여야 한다.
 
 UX:
 
@@ -614,7 +648,7 @@ UX:
 
 선택한 provider의 Terraform만 생성한다. AWS·OCI는 runtime graph node가 아니라 `deploymentTarget` metadata다.
 
-Cloud Compose에는 graph에 연결된 MySQL·Redis dependency만 포함하며, 애플리케이션 container는 `mysql`·`redis` service DNS로 연결한다.
+Cloud Compose에는 graph에 연결된 MySQL·PostgreSQL·Redis dependency만 포함하며, 애플리케이션 container는 `mysql`·`postgres`·`redis` service DNS로 연결한다. DB 접속 정보 규칙은 6.2와 같고, 비밀값은 서버의 외부 `.env`에서 읽는다.
 
 CLOUD_DEPLOY는 plan-only scaffold이며 자동 terraform apply를 제공하지 않는다.
 
@@ -743,6 +777,11 @@ UX:
 - PARSING400_10: 잘못된 dependency 방향
 - PARSING400_20: Redis imageVersion 누락
 - PARSING400_22: Redis password 누락
+- PARSING400_6: DB 이름 형식 오류(영문·숫자·언더바만)
+- PARSING400_7: DB 비밀번호 8자 미만(MySQL rootPassword, PostgreSQL password)
+- PARSING400_23: PostgreSQL imageVersion 누락
+- PARSING400_24: PostgreSQL username 누락
+- PARSING400_25: 하나의 애플리케이션에 같은 타입 dependency를 둘 이상 연결
 - COMMON400_1: 잘못된 JSON·enum·deployment target 또는 validation 오류
 - GENERATION400_2: 생성에 필요한 component 상태 오류
 
@@ -750,7 +789,7 @@ UX:
 
 - access token은 localStorage보다 메모리 보관을 우선한다.
 - refresh token은 HttpOnly cookie로만 관리한다.
-- MySQL·Redis password가 포함된 .env는 기본 마스킹한다.
+- MySQL·PostgreSQL·Redis password가 포함된 .env는 기본 마스킹한다.
 - password를 일반 로그, analytics, URL query parameter에 넣지 않는다.
 - CLOUD_DEPLOY Terraform에 DB password, JWT secret, runtime credential을 넣지 않는다.
 - .env 다운로드 전 민감 정보 포함 안내를 표시한다.

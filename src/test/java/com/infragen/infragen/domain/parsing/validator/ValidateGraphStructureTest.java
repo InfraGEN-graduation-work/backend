@@ -178,8 +178,106 @@ class ValidateGraphStructureTest {
         assertEquals(ParsingErrorCode.INVALID_EDGE_ENDPOINT, exception.getCode());
     }
 
+    @Test
+    @DisplayName("앱 하나에 같은 타입 DB 둘 연결 — PARSING400_25")
+    void validate_SameTypeDatabasesToOneApplication_Throws() {
+        // given
+        List<NodeDTO> nodes = List.of(
+            mysqlNode("mysql-1"),
+            mysqlNode("mysql-2"),
+            springBootNode("app")
+        );
+        List<EdgeDTO> edges = List.of(
+            edge("mysql-1", "app"),
+            edge("mysql-2", "app")
+        );
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> validateGraphStructure.validate(nodes, edges)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.DUPLICATE_DEPENDENCY_TYPE, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("앱 하나에 Redis 둘 연결 — PARSING400_25")
+    void validate_SameTypeCachesToOneApplication_Throws() {
+        // given
+        List<NodeDTO> nodes = List.of(
+            redisNode("redis-1"),
+            redisNode("redis-2"),
+            springBootNode("app")
+        );
+        List<EdgeDTO> edges = List.of(
+            edge("redis-1", "app"),
+            edge("redis-2", "app")
+        );
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> validateGraphStructure.validate(nodes, edges)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.DUPLICATE_DEPENDENCY_TYPE, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("앱 하나에 MySQL과 PostgreSQL 연결 — 통과")
+    void validate_DifferentTypeDatabasesToOneApplication_DoesNotThrow() {
+        // given
+        List<NodeDTO> nodes = List.of(
+            mysqlNode("mysql"),
+            postgresqlNode("postgres"),
+            springBootNode("app")
+        );
+        List<EdgeDTO> edges = List.of(
+            edge("mysql", "app"),
+            edge("postgres", "app")
+        );
+
+        // when
+        Runnable validation = () -> validateGraphStructure.validate(nodes, edges);
+
+        // then
+        assertDoesNotThrow(validation::run);
+    }
+
+    @Test
+    @DisplayName("MySQL 하나를 앱 둘이 공유 — 통과")
+    void validate_SharedDatabaseAcrossApplications_DoesNotThrow() {
+        // given
+        List<NodeDTO> nodes = List.of(
+            mysqlNode("mysql"),
+            springBootNode("app-1"),
+            springBootNode("app-2")
+        );
+        List<EdgeDTO> edges = List.of(
+            edge("mysql", "app-1"),
+            edge("mysql", "app-2")
+        );
+
+        // when
+        Runnable validation = () -> validateGraphStructure.validate(nodes, edges);
+
+        // then
+        assertDoesNotThrow(validation::run);
+    }
+
     private static NodeDTO mysqlNode(String nodeId) {
         return new NodeDTO(nodeId, "MYSQL", 100f, 200f, Map.of());
+    }
+
+    private static NodeDTO postgresqlNode(String nodeId) {
+        return new NodeDTO(nodeId, "POSTGRESQL", 100f, 300f, Map.of());
+    }
+
+    private static NodeDTO redisNode(String nodeId) {
+        return new NodeDTO(nodeId, "REDIS", 100f, 400f, Map.of());
     }
 
     private static NodeDTO springBootNode(String nodeId) {

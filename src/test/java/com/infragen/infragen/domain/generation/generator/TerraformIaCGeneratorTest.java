@@ -41,6 +41,44 @@ class TerraformIaCGeneratorTest {
     private static final String TERRAFORM_REQUIRED_VERSION = ">= 1.13.5, < 2.0.0";
     private static final String AWS_PROVIDER_SOURCE = "hashicorp/aws";
     private static final String AWS_PROVIDER_VERSION = "6.22.0";
+    private static final String MYSQL_SERVICE_BLOCK = """
+
+          mysql:
+            image: mysql:8.4
+            env_file:
+              - .env
+            environment:
+              MYSQL_DATABASE: ${MYSQL_DATABASE:?외부 .env에 설정 필요}
+              MYSQL_USER: ${MYSQL_USER:?외부 .env에 설정 필요}
+              MYSQL_PASSWORD: ${MYSQL_PASSWORD:?외부 .env에 설정 필요}
+              MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?외부 .env에 설정 필요}
+            volumes:
+              - mysql_data:/var/lib/mysql
+        """;
+    private static final String POSTGRES_SERVICE_BLOCK = """
+
+          postgres:
+            image: postgres:17
+            env_file:
+              - .env
+            environment:
+              POSTGRES_DB: ${POSTGRES_DB:?외부 .env에 설정 필요}
+              POSTGRES_USER: ${POSTGRES_USER:?외부 .env에 설정 필요}
+              POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?외부 .env에 설정 필요}
+              PGDATA: /var/lib/postgresql/data
+            volumes:
+              - pg_data:/var/lib/postgresql/data
+        """;
+    private static final String REDIS_SERVICE_BLOCK = """
+
+          redis:
+            image: redis:7.4
+            env_file:
+              - .env
+            command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?외부 .env에 설정 필요}", "--appendonly", "yes"]
+            volumes:
+              - redis_data:/data
+        """;
 
     private final TerraformIaCGenerator generator = new TerraformIaCGenerator(
         new CloudComposeRenderer(List.of(
@@ -397,6 +435,172 @@ class TerraformIaCGeneratorTest {
     }
 
     @Test
+    @DisplayName("MySQL만 선택 — Cloud Compose 전체 출력이 기준과 같다")
+    void generate_MysqlOnly_RendersExactCloudCompose() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        parsingResult.setComponents(List.of(parsingResult.getComponents().get(0), mysqlComponent()));
+        parsingResult.setEdges(List.of(edgeToApplication("mysql-1")));
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
+
+        // then
+        assertEquals("""
+            # CLOUD_DEPLOY 부트스트랩입니다. 민감한 값은 외부 .env 파일에서 주입해 주세요.
+            services:
+              app:
+                build:
+                  context: .
+                  dockerfile: Dockerfile
+                image: infragen-runtime:plan-only
+                ports:
+                  - "${APP_PORT:-9090}:9090"
+                environment:
+                  SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:?외부 .env에 설정 필요}"
+                  SPRING_DATASOURCE_USERNAME: "${MYSQL_USER:?외부 .env에 설정 필요}"
+                  SPRING_DATASOURCE_PASSWORD: "${MYSQL_PASSWORD:?외부 .env에 설정 필요}"
+                  MYSQL_HOST: mysql
+                  MYSQL_PORT: "3306"
+                env_file:
+                  - .env
+                depends_on:
+                  - mysql
+            """ + MYSQL_SERVICE_BLOCK + """
+
+            volumes:
+              mysql_data:
+            """, fileContent(bundle, "docker-compose.cloud.yml"));
+    }
+
+    @Test
+    @DisplayName("PostgreSQL만 선택 — Cloud Compose 전체 출력이 기준과 같다")
+    void generate_PostgresOnly_RendersExactCloudCompose() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        parsingResult.setComponents(List.of(parsingResult.getComponents().get(0), postgresComponent()));
+        parsingResult.setEdges(List.of(edgeToApplication("pg-1")));
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
+
+        // then
+        assertEquals("""
+            # CLOUD_DEPLOY 부트스트랩입니다. 민감한 값은 외부 .env 파일에서 주입해 주세요.
+            services:
+              app:
+                build:
+                  context: .
+                  dockerfile: Dockerfile
+                image: infragen-runtime:plan-only
+                ports:
+                  - "${APP_PORT:-9090}:9090"
+                environment:
+                  SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/${POSTGRES_DB:?외부 .env에 설정 필요}"
+                  SPRING_DATASOURCE_USERNAME: "${POSTGRES_USER:?외부 .env에 설정 필요}"
+                  SPRING_DATASOURCE_PASSWORD: "${POSTGRES_PASSWORD:?외부 .env에 설정 필요}"
+                  POSTGRES_HOST: postgres
+                  POSTGRES_PORT: "5432"
+                env_file:
+                  - .env
+                depends_on:
+                  - postgres
+            """ + POSTGRES_SERVICE_BLOCK + """
+
+            volumes:
+              pg_data:
+            """, fileContent(bundle, "docker-compose.cloud.yml"));
+    }
+
+    @Test
+    @DisplayName("MySQL + Redis 선택 — Cloud Compose 전체 출력이 기준과 같다")
+    void generate_MysqlAndRedis_RendersExactCloudCompose() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        parsingResult.setComponents(List.of(
+            parsingResult.getComponents().get(0), mysqlComponent(), redisComponent()));
+        parsingResult.setEdges(List.of(edgeToApplication("mysql-1"), edgeToApplication("redis-1")));
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
+
+        // then
+        assertEquals("""
+            # CLOUD_DEPLOY 부트스트랩입니다. 민감한 값은 외부 .env 파일에서 주입해 주세요.
+            services:
+              app:
+                build:
+                  context: .
+                  dockerfile: Dockerfile
+                image: infragen-runtime:plan-only
+                ports:
+                  - "${APP_PORT:-9090}:9090"
+                environment:
+                  SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:?외부 .env에 설정 필요}"
+                  SPRING_DATASOURCE_USERNAME: "${MYSQL_USER:?외부 .env에 설정 필요}"
+                  SPRING_DATASOURCE_PASSWORD: "${MYSQL_PASSWORD:?외부 .env에 설정 필요}"
+                  MYSQL_HOST: mysql
+                  MYSQL_PORT: "3306"
+                  REDIS_HOST: redis
+                  REDIS_PORT: "6379"
+                  REDIS_PASSWORD: "${REDIS_PASSWORD:?외부 .env에 설정 필요}"
+                env_file:
+                  - .env
+                depends_on:
+                  - mysql
+                  - redis
+            """ + MYSQL_SERVICE_BLOCK + REDIS_SERVICE_BLOCK + """
+
+            volumes:
+              mysql_data:
+              redis_data:
+            """, fileContent(bundle, "docker-compose.cloud.yml"));
+    }
+
+    @Test
+    @DisplayName("MySQL + PostgreSQL 선택 — Cloud Compose 전체 출력이 기준과 같다")
+    void generate_MysqlAndPostgres_RendersExactCloudCompose() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        parsingResult.setComponents(List.of(
+            parsingResult.getComponents().get(0), mysqlComponent(), postgresComponent()));
+        parsingResult.setEdges(List.of(edgeToApplication("mysql-1"), edgeToApplication("pg-1")));
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
+
+        // then
+        assertEquals("""
+            # CLOUD_DEPLOY 부트스트랩입니다. 민감한 값은 외부 .env 파일에서 주입해 주세요.
+            # 애플리케이션에 데이터베이스가 2개 이상 연결되어 SPRING_DATASOURCE_*를 생성하지 않았습니다.
+            # DataSource를 직접 설정하고 타입별 접속 변수(MYSQL_*, POSTGRES_*)를 사용하세요.
+            services:
+              app:
+                build:
+                  context: .
+                  dockerfile: Dockerfile
+                image: infragen-runtime:plan-only
+                ports:
+                  - "${APP_PORT:-9090}:9090"
+                environment:
+                  MYSQL_HOST: mysql
+                  MYSQL_PORT: "3306"
+                  POSTGRES_HOST: postgres
+                  POSTGRES_PORT: "5432"
+                env_file:
+                  - .env
+                depends_on:
+                  - mysql
+                  - postgres
+            """ + MYSQL_SERVICE_BLOCK + POSTGRES_SERVICE_BLOCK + """
+
+            volumes:
+              mysql_data:
+              pg_data:
+            """, fileContent(bundle, "docker-compose.cloud.yml"));
+    }
+
+    @Test
     @DisplayName("동일한 연결 MySQL 중복 — AMBIGUOUS_DEPENDENCY_CONFIGURATION")
     void generate_DuplicateConnectedMysql_ThrowsAmbiguousDependencyConfiguration() {
         // given
@@ -457,6 +661,38 @@ class TerraformIaCGeneratorTest {
 
         // then
         assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
+    }
+
+    private static MySQLComponent mysqlComponent() {
+        return MySQLComponent.builder()
+            .id("mysql-1")
+            .posX(0f)
+            .posY(0f)
+            .imageVersion("mysql:8.4")
+            .containerName("mysql")
+            .port(3306)
+            .volumeName("mysql_data")
+            .build();
+    }
+
+    private static RedisComponent redisComponent() {
+        return RedisComponent.builder()
+            .id("redis-1")
+            .posX(0f)
+            .posY(100f)
+            .imageVersion("redis:7.4")
+            .containerName("redis")
+            .port(6379)
+            .volumeName("redis_data")
+            .password("redis-password")
+            .build();
+    }
+
+    private static EdgeDTO edgeToApplication(String sourceNodeId) {
+        EdgeDTO edge = new EdgeDTO();
+        edge.setSourceNodeId(sourceNodeId);
+        edge.setTargetNodeId("node-1");
+        return edge;
     }
 
     private static PostgreSQLComponent postgresComponent() {

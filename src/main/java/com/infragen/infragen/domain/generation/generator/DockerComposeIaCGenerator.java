@@ -28,6 +28,11 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 @Slf4j
 public class DockerComposeIaCGenerator implements LocalIaCGenerator {
+    private static final String MULTIPLE_DATABASE_NOTICE = """
+        # 애플리케이션에 데이터베이스가 2개 이상 연결되어 SPRING_DATASOURCE_*를 생성하지 않았습니다.
+        # DataSource를 직접 설정하고 .env의 타입별 접속 변수(MYSQL_*, POSTGRES_*)를 사용하세요.
+        """;
+
     private final Map<ComponentType, ComposeServiceRenderer> rendererMap;
     // LOCAL_DEV — 호스트에서 실행할 애플리케이션용 .env 키와 값을 context에 추가
     private final Map<ComponentType, HostAppEnvContributor> hostAppEnvContributorMap;
@@ -101,7 +106,11 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
         contributeHostAppEnv(sortedComponents, context);
 
         // 렌더링된 결과를 조립하여 Docker Compose 파일을 생성
-        String dockerComposeContent = assembleDockerCompose(serviceBlocks, rootVolumeNames);
+        String dockerComposeContent = assembleDockerCompose(
+            serviceBlocks,
+            rootVolumeNames,
+            hasApplicationWithMultipleDatabases(sortedComponents, context)
+        );
         // .env 파일을 생성
         String envContent = ComposeYamlSupport.formatEnvFile(context.getEnvVars());
 
@@ -152,15 +161,29 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
         }
     }
 
+    // DB가 둘 이상인 앱이 하나라도 있으면 SPRING_DATASOURCE_*가 빠진 이유를 Compose에 안내한다.
+    private boolean hasApplicationWithMultipleDatabases(
+        List<BaseComponent> components,
+        ComposeGenerationContext context
+    ) {
+        return components.stream()
+            .filter(component -> component.getComponentType().getCategory() == ComponentCategory.APPLICATION)
+            .anyMatch(component -> context.hasMultipleDatabaseDependencies(component.getNodeId()));
+    }
+
     private String assembleDockerCompose(
         List<String> serviceBlocks,
-        Set<String> rootVolumeNames
+        Set<String> rootVolumeNames,
+        boolean multipleDatabaseNotice
     ) {
         if (serviceBlocks.isEmpty()) {
             return "# 노드가 할당되지 않았습니다.\n";
         }
 
         StringBuilder content = new StringBuilder();
+        if (multipleDatabaseNotice) {
+            content.append(MULTIPLE_DATABASE_NOTICE);
+        }
         content.append("services:\n");
         for (String block : serviceBlocks) {
             content.append(block);

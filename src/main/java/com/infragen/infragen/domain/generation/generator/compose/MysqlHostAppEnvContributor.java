@@ -39,9 +39,12 @@ public class MysqlHostAppEnvContributor implements HostAppEnvContributor {
             + "/"
             + env.getDatabaseName();
 
-        ctx.getEnvVars().put("SPRING_DATASOURCE_URL", jdbcUrl);
-        ctx.getEnvVars().put("SPRING_DATASOURCE_USERNAME", env.getUsername());
-        ctx.getEnvVars().put("SPRING_DATASOURCE_PASSWORD", env.getUserPassword());
+        // DB가 둘 이상이면 기본 DataSource를 정할 수 없어 Spring 변수는 만들지 않는다.
+        if (ctx.hasSingleDatabaseDependency(application.getNodeId())) {
+            ctx.getEnvVars().put("SPRING_DATASOURCE_URL", jdbcUrl);
+            ctx.getEnvVars().put("SPRING_DATASOURCE_USERNAME", env.getUsername());
+            ctx.getEnvVars().put("SPRING_DATASOURCE_PASSWORD", env.getUserPassword());
+        }
         ctx.getEnvVars().put("MYSQL_HOST", LOCALHOST);
         ctx.getEnvVars().put("MYSQL_PORT", String.valueOf(hostPort));
     }

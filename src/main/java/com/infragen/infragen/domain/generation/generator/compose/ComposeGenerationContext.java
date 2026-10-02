@@ -60,10 +60,17 @@ public class ComposeGenerationContext {
      * 같은 타입 DB 중복은 parsing 단계에서 이미 거부된다는 전제다.
      */
     public boolean hasSingleDatabaseDependency(String applicationNodeId) {
-        long databaseCount = findIncomingDependencies(applicationNodeId).stream()
-                .filter(dependency -> dependency.getComponentType().getCategory() == ComponentCategory.DATABASE)
-                .count();
-        return databaseCount == 1;
+        return countDatabaseDependencies(applicationNodeId) == 1;
+    }
+
+    /**
+     * 애플리케이션에 연결된 DATABASE 의존이 둘 이상인지 확인한다.
+     *
+     * <p>{@code SPRING_DATASOURCE_*}를 만들지 않은 이유를 Compose 안내 주석으로 남길지 판단할 때 쓴다.
+     * 의존이 없는 경우와 구분하기 위해 {@link #hasSingleDatabaseDependency}와 별도로 둔다.
+     */
+    public boolean hasMultipleDatabaseDependencies(String applicationNodeId) {
+        return countDatabaseDependencies(applicationNodeId) > 1;
     }
 
     public BaseComponent getComponent(String nodeId) {
@@ -72,5 +79,11 @@ public class ComposeGenerationContext {
 
     public LinkedHashMap<String, String> getEnvVars() {
         return envVars;
+    }
+
+    private long countDatabaseDependencies(String applicationNodeId) {
+        return findIncomingDependencies(applicationNodeId).stream()
+                .filter(dependency -> dependency.getComponentType().getCategory() == ComponentCategory.DATABASE)
+                .count();
     }
 }

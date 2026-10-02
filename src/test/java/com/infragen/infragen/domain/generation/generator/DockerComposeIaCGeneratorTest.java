@@ -229,8 +229,8 @@ class DockerComposeIaCGeneratorTest {
     }
 
     @Test
-    @DisplayName("MySQL + PostgreSQL — PostgreSQL 접속 변수는 생성, PostgreSQL DataSource URL은 미생성")
-    void generate_LocalDevMysqlAndPostgres_SkipsPostgresDataSource() {
+    @DisplayName("MySQL + PostgreSQL — 타입별 접속 변수만 생성하고 SPRING_DATASOURCE_* 대신 안내 주석 추가")
+    void generate_LocalDevMysqlAndPostgres_SkipsDataSourceAndAddsNotice() {
         // given
         ParsingResultDTO parsingResult = parsingResult(
             List.of(
@@ -248,11 +248,18 @@ class DockerComposeIaCGeneratorTest {
         String compose = fileContent(bundle, "docker-compose.yml");
         String env = fileContent(bundle, ".env");
         assertAll(
+            () -> assertTrue(compose.startsWith("""
+                # 애플리케이션에 데이터베이스가 2개 이상 연결되어 SPRING_DATASOURCE_*를 생성하지 않았습니다.
+                # DataSource를 직접 설정하고 .env의 타입별 접속 변수(MYSQL_*, POSTGRES_*)를 사용하세요.
+                services:
+                """)),
             () -> assertTrue(compose.contains("  mysql:\n")),
             () -> assertTrue(compose.contains("  postgres:\n")),
+            () -> assertTrue(env.contains("MYSQL_HOST=localhost\n")),
+            () -> assertTrue(env.contains("MYSQL_PORT=3306\n")),
             () -> assertTrue(env.contains("POSTGRES_HOST=localhost\n")),
             () -> assertTrue(env.contains("POSTGRES_PORT=5433\n")),
-            () -> assertFalse(env.contains("jdbc:postgresql"))
+            () -> assertFalse(env.contains("SPRING_DATASOURCE_"))
         );
     }
 

@@ -70,7 +70,8 @@ Collaboration
 - `ComponentParser` (`MySQLParser`, `PostgreSQLParser`, `RedisParser`, `SpringBootParser`): component별 node property 검증과 `BaseComponent` 구현체 변환
 - `IaCGenerator` (`LocalIaCGenerator`: `DockerComposeIaCGenerator`, `TargetAwareIaCGenerator`: `TerraformIaCGenerator`): `ParsingResultDTO`를 `OutputFormat`별 file bundle로 변환
 - `ComposeServiceRenderer` (MySQL, PostgreSQL, Redis): LOCAL_DEV dependency의 Compose service block 생성
-- `HostAppEnvContributor` (MySQL, PostgreSQL, Redis): 호스트 실행 앱의 `.env`용 타입별 중립 변수와 JDBC 연결 정보 제공. `DockerComposeIaCGenerator`는 앱별로 이를 모으고 Spring 매핑(단일 DB일 때만 `SPRING_DATASOURCE_*`)만 맡는다.
+- `HostAppEnvContributor` (MySQL, PostgreSQL, Redis): 호스트 실행 앱의 `.env`용 타입별 중립 변수와 JDBC 연결 정보 제공. `DockerComposeIaCGenerator`는 앱별로 이를 모으고, 단일 DB일 때만 앱 타입별 `ApplicationEnvMapper`로 프레임워크 변수를 매핑한다.
+- `ApplicationEnvMapper` (Spring Boot): 앱 타입별로 JDBC 연결 정보를 프레임워크 변수(`SPRING_DATASOURCE_*`)와 다중 DB 안내 주석으로 바꾼다. 현재 LOCAL_DEV만 사용하고 CLOUD_DEPLOY는 미연결이다.
 - `CloudComposeServiceRenderer` (MySQL, PostgreSQL, Redis): CLOUD_DEPLOY Compose bootstrap의 dependency block 생성, 앱 컨테이너용 타입별 중립 변수와 JDBC 연결 정보 제공. `CloudComposeRenderer`는 이를 `ComponentType` 순서로 모으고 Spring 매핑(단일 DB일 때만 `SPRING_DATASOURCE_*`)만 맡는다.
 - `OAuth2UserInfo` (`KakaoUserInfoDTO`): provider별 사용자 응답을 공통 social identity로 제공
 - `BaseErrorCode` / `BaseSuccessCode` (domain·general enum): 공통 HTTP status, code, message 계약

@@ -70,7 +70,7 @@ Collaboration
 - `ComponentParser` (`MySQLParser`, `PostgreSQLParser`, `RedisParser`, `SpringBootParser`): component별 node property 검증과 `BaseComponent` 구현체 변환
 - `IaCGenerator` (`LocalIaCGenerator`: `DockerComposeIaCGenerator`, `TargetAwareIaCGenerator`: `TerraformIaCGenerator`): `ParsingResultDTO`를 `OutputFormat`별 file bundle로 변환
 - `ComposeServiceRenderer` (MySQL, PostgreSQL, Redis): LOCAL_DEV dependency의 Compose service block 생성
-- `HostAppEnvContributor` (MySQL, PostgreSQL, Redis): 호스트 실행 Spring Boot의 dependency 연결 정보 생성
+- `HostAppEnvContributor` (MySQL, PostgreSQL, Redis): 호스트 실행 앱의 `.env`용 타입별 중립 변수와 JDBC 연결 정보 제공. `DockerComposeIaCGenerator`는 앱별로 이를 모으고 Spring 매핑(단일 DB일 때만 `SPRING_DATASOURCE_*`)만 맡는다.
 - `CloudComposeServiceRenderer` (MySQL, PostgreSQL, Redis): CLOUD_DEPLOY Compose bootstrap의 dependency block 생성, 앱 컨테이너용 타입별 중립 변수와 JDBC 연결 정보 제공. `CloudComposeRenderer`는 이를 `ComponentType` 순서로 모으고 Spring 매핑(단일 DB일 때만 `SPRING_DATASOURCE_*`)만 맡는다.
 - `OAuth2UserInfo` (`KakaoUserInfoDTO`): provider별 사용자 응답을 공통 social identity로 제공
 - `BaseErrorCode` / `BaseSuccessCode` (domain·general enum): 공통 HTTP status, code, message 계약
@@ -94,7 +94,7 @@ Parsing은 그래프 정합성을 판단하지만 Compose나 Terraform 문법을
 
 Generator는 parsing 결과를 재검증하지 않고 출력 형식의 renderer와 assembler를 조정한다.
 
-- LOCAL_DEV `DockerComposeIaCGenerator`: application은 Compose에서 제외하고 dependency만 렌더링한다. application 연결 정보는 `HostAppEnvContributor`가 호스트 `.env`에 추가한다.
+- LOCAL_DEV `DockerComposeIaCGenerator`: application은 Compose에서 제외하고 dependency만 렌더링한다. application 연결 정보는 `HostAppEnvContributor`가 제공한 값을 generator가 호스트 `.env`에 추가한다.
 - CLOUD_DEPLOY `TerraformIaCGenerator`: AWS·OCI Terraform, runtime Dockerfile, cloud Compose, plan-only warning을 조립한다.
 - `ComposeGenerationContext`, `CloudDeployContext`: renderer가 공유할 parsing 결과와 생성 session 상태를 제공한다.
 - `CloudDeployFileAssembler`: renderer 결과를 API 응답용 bundle로 감싼다.

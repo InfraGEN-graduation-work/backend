@@ -2,11 +2,11 @@ package com.infragen.infragen.domain.generation.generator.compose;
 
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.global.enums.ComponentType;
-import java.util.LinkedHashMap;
 import java.util.Optional;
 import java.util.SequencedMap;
 
-// LOCAL_DEV — 호스트에서 실행할 애플리케이션용 .env 키와 값을 context에 추가
+// LOCAL_DEV — 호스트에서 실행할 애플리케이션이 의존 인프라에 접속할 .env 값을 제공한다.
+// Spring 매핑은 DockerComposeIaCGenerator가 맡는다.
 public interface HostAppEnvContributor {
 
     ComponentType getDependencyType();
@@ -17,12 +17,12 @@ public interface HostAppEnvContributor {
      * <p>프레임워크와 무관하게 연결된 의존 인프라마다 항상 만드는 변수다. Spring 전용 변수는 만들지 않는다.
      * 값은 {@code .env}에 그대로 쓰는 실제 값이고, map 순서대로 출력된다.
      *
+     * <p>default를 두지 않아 새 의존 인프라 contributor가 중립 변수를 빠뜨리면 컴파일되지 않는다.
+     *
      * @param dependency 이 contributor의 {@link #getDependencyType()}에 해당하는 의존 컴포넌트
-     * @return 변수 이름과 값. 제공할 변수가 없으면 빈 map
+     * @return 변수 이름과 값
      */
-    default SequencedMap<String, String> hostAppEnvironment(BaseComponent dependency) {
-        return new LinkedHashMap<>();
-    }
+    SequencedMap<String, String> hostAppEnvironment(BaseComponent dependency);
 
     /**
      * Spring {@code SPRING_DATASOURCE_*}로 매핑할 JDBC 연결 정보를 만든다.
@@ -34,27 +34,6 @@ public interface HostAppEnvContributor {
      */
     default Optional<JdbcConnection> jdbcConnection(BaseComponent dependency) {
         return Optional.empty();
-    }
-
-    /**
-     * 애플리케이션 하나에 연결된 의존 인프라 하나의 접속 변수를 {@code .env}에 추가한다.
-     *
-     * <p>앱의 DATABASE 의존이 하나일 때만 {@link #jdbcConnection}으로 {@code SPRING_DATASOURCE_*}를 먼저 넣고,
-     * 이어서 {@link #hostAppEnvironment}를 넣는다. DB가 둘 이상이면 기본 DataSource를 정할 수 없기 때문이다.
-     */
-    default void contributeHostAppEnv(
-        BaseComponent dependency,
-        BaseComponent application,
-        ComposeGenerationContext ctx
-    ) {
-        if (ctx.hasSingleDatabaseDependency(application.getNodeId())) {
-            jdbcConnection(dependency).ifPresent(connection -> {
-                ctx.getEnvVars().put("SPRING_DATASOURCE_URL", connection.url());
-                ctx.getEnvVars().put("SPRING_DATASOURCE_USERNAME", connection.username());
-                ctx.getEnvVars().put("SPRING_DATASOURCE_PASSWORD", connection.password());
-            });
-        }
-        ctx.getEnvVars().putAll(hostAppEnvironment(dependency));
     }
 
     /** 호스트 실행 앱이 {@code localhost}와 사용자 입력 호스트 포트로 접속할 JDBC 연결 정보다. */

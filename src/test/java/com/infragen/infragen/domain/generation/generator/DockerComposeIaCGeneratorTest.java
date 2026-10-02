@@ -299,7 +299,7 @@ class DockerComposeIaCGeneratorTest {
         assertAll(
             () -> assertTrue(compose.startsWith("""
                 # 애플리케이션에 데이터베이스가 2개 이상 연결되어 SPRING_DATASOURCE_*를 생성하지 않았습니다.
-                # DataSource를 직접 설정하고 .env의 타입별 접속 변수(MYSQL_*, POSTGRES_*)를 사용하세요.
+                # DataSource를 직접 설정하고 .env의 DB별 접속 변수를 사용하세요.
                 services:
                 """)),
             () -> assertTrue(compose.contains("  mysql:\n")),
@@ -370,7 +370,7 @@ class DockerComposeIaCGeneratorTest {
         assertAll(
             () -> assertEquals("""
                 # 애플리케이션에 데이터베이스가 2개 이상 연결되어 SPRING_DATASOURCE_*를 생성하지 않았습니다.
-                # DataSource를 직접 설정하고 .env의 타입별 접속 변수(MYSQL_*, POSTGRES_*)를 사용하세요.
+                # DataSource를 직접 설정하고 .env의 DB별 접속 변수를 사용하세요.
                 services:
                 """ + MYSQL_SERVICE_BLOCK + POSTGRES_SERVICE_BLOCK + """
 

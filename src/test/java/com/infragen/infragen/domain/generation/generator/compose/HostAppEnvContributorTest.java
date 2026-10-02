@@ -2,6 +2,7 @@ package com.infragen.infragen.domain.generation.generator.compose;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
@@ -10,6 +11,7 @@ import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLEnvComponent;
 import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLEnvComponent;
+import com.infragen.infragen.domain.parsing.dto.response.RedisComponent;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -116,6 +118,68 @@ class HostAppEnvContributorTest {
 
         // then
         assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("Redis — localhost, 사용자 입력 호스트 포트, password로 REDIS_HOST/PORT/PASSWORD를 순서대로 만든다")
+    void hostAppEnvironment_Redis_ReturnsNeutralVariablesInOrder() {
+        // given
+        HostAppEnvContributor contributor = new RedisHostAppEnvContributor();
+
+        // when
+        SequencedMap<String, String> environment = contributor.hostAppEnvironment(redisComponent("redis-password"));
+
+        // then
+        assertEquals(
+            List.of(
+                Map.entry("REDIS_HOST", "localhost"),
+                Map.entry("REDIS_PORT", "6380"),
+                Map.entry("REDIS_PASSWORD", "redis-password")
+            ),
+            List.copyOf(environment.entrySet())
+        );
+    }
+
+    @Test
+    @DisplayName("Redis — DataSource 대상이 아니라 JDBC 연결 정보가 없다")
+    void jdbcConnection_Redis_ReturnsEmpty() {
+        // given
+        HostAppEnvContributor contributor = new RedisHostAppEnvContributor();
+
+        // when
+        Optional<JdbcConnection> connection = contributor.jdbcConnection(redisComponent("redis-password"));
+
+        // then
+        assertTrue(connection.isEmpty());
+    }
+
+    @Test
+    @DisplayName("Redis password 누락 — 중립 변수 생성 시 INVALID_COMPONENT_STATE")
+    void hostAppEnvironment_RedisPasswordMissing_ThrowsGenerationException() {
+        // given
+        HostAppEnvContributor contributor = new RedisHostAppEnvContributor();
+        RedisComponent redis = redisComponent(" ");
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> contributor.hostAppEnvironment(redis)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
+    }
+
+    private static RedisComponent redisComponent(String password) {
+        return RedisComponent.builder()
+            .id("redis-1")
+            .posX(0f)
+            .posY(0f)
+            .imageVersion("redis:7.4")
+            .containerName("redis")
+            .port(6380)
+            .password(password)
+            .build();
     }
 
     private static MySQLEnvComponent mysqlEnv() {

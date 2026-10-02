@@ -22,6 +22,7 @@ import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
 import com.infragen.infragen.domain.generation.enums.OutputFormat;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
+import com.infragen.infragen.domain.generation.generator.application.SpringBootApplicationEnvMapper;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployFileAssembler;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudComposeRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployContext;
@@ -86,7 +87,7 @@ class TerraformIaCGeneratorTest {
             new MysqlCloudComposeServiceRenderer(),
             new PostgresCloudComposeServiceRenderer(),
             new RedisCloudComposeServiceRenderer()
-        )),
+        ), List.of(new SpringBootApplicationEnvMapper())),
         List.of(new AwsTerraformRenderer(), new OciTerraformRenderer())
     );
     private final CloudDeployFileAssembler fileAssembler = new CloudDeployFileAssembler();
@@ -613,7 +614,7 @@ class TerraformIaCGeneratorTest {
             new RedisCloudComposeServiceRenderer(),
             new PostgresCloudComposeServiceRenderer(),
             new MysqlCloudComposeServiceRenderer()
-        ));
+        ), List.of(new SpringBootApplicationEnvMapper()));
         String expected = fileContent(generator.generate(parsingResult, awsTarget()), "docker-compose.cloud.yml");
 
         // when

@@ -24,6 +24,7 @@ import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployFileAssembler;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudComposeRenderer;
+import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployContext;
 import com.infragen.infragen.domain.generation.generator.cloud.AwsTerraformRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.MysqlCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.OciTerraformRenderer;
@@ -419,7 +420,7 @@ class TerraformIaCGeneratorTest {
             () -> assertTrue(compose.startsWith("""
                 # CLOUD_DEPLOY 부트스트랩입니다. 민감한 값은 외부 .env 파일에서 주입해 주세요.
                 # 애플리케이션에 데이터베이스가 2개 이상 연결되어 SPRING_DATASOURCE_*를 생성하지 않았습니다.
-                # DataSource를 직접 설정하고 타입별 접속 변수(MYSQL_*, POSTGRES_*)를 사용하세요.
+                # DataSource를 직접 설정하고 app environment의 DB별 접속 변수를 사용하세요.
                 services:
                 """)),
             () -> assertTrue(compose.contains("\n  mysql:\n")),
@@ -573,7 +574,7 @@ class TerraformIaCGeneratorTest {
         assertEquals("""
             # CLOUD_DEPLOY 부트스트랩입니다. 민감한 값은 외부 .env 파일에서 주입해 주세요.
             # 애플리케이션에 데이터베이스가 2개 이상 연결되어 SPRING_DATASOURCE_*를 생성하지 않았습니다.
-            # DataSource를 직접 설정하고 타입별 접속 변수(MYSQL_*, POSTGRES_*)를 사용하세요.
+            # DataSource를 직접 설정하고 app environment의 DB별 접속 변수를 사용하세요.
             services:
               app:
                 build:
@@ -598,6 +599,28 @@ class TerraformIaCGeneratorTest {
               mysql_data:
               pg_data:
             """, fileContent(bundle, "docker-compose.cloud.yml"));
+    }
+
+    @Test
+    @DisplayName("renderer 주입 순서가 달라도 ComponentType 순서로 같은 Cloud Compose를 만든다")
+    void render_ReversedRendererOrder_RendersSameCloudCompose() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        parsingResult.setComponents(List.of(
+            parsingResult.getComponents().get(0), mysqlComponent(), redisComponent()));
+        parsingResult.setEdges(List.of(edgeToApplication("mysql-1"), edgeToApplication("redis-1")));
+        CloudComposeRenderer reversedRenderer = new CloudComposeRenderer(List.of(
+            new RedisCloudComposeServiceRenderer(),
+            new PostgresCloudComposeServiceRenderer(),
+            new MysqlCloudComposeServiceRenderer()
+        ));
+        String expected = fileContent(generator.generate(parsingResult, awsTarget()), "docker-compose.cloud.yml");
+
+        // when
+        String compose = reversedRenderer.render(CloudDeployContext.from(parsingResult)).content();
+
+        // then
+        assertEquals(expected, compose);
     }
 
     @Test

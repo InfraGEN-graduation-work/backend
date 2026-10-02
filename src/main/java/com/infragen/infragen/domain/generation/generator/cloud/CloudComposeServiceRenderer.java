@@ -1,7 +1,6 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
 import com.infragen.infragen.global.enums.ComponentType;
-import java.util.LinkedHashMap;
 import java.util.Optional;
 import java.util.SequencedMap;
 
@@ -32,11 +31,11 @@ public interface CloudComposeServiceRenderer {
      * 값은 따옴표를 포함한 YAML 스칼라 원문이고, map 순서대로 출력된다.
      * {@link #isEnabled}가 {@code true}일 때만 호출한다.
      *
-     * @return 변수 이름과 YAML 스칼라 원문. 제공할 변수가 없으면 빈 map
+     * <p>default를 두지 않아 새 의존 인프라 renderer가 중립 변수를 빠뜨리면 컴파일되지 않는다.
+     *
+     * @return 변수 이름과 YAML 스칼라 원문
      */
-    default SequencedMap<String, String> applicationEnvironment() {
-        return new LinkedHashMap<>();
-    }
+    SequencedMap<String, String> applicationEnvironment();
 
     /**
      * Spring {@code SPRING_DATASOURCE_*}로 매핑할 JDBC 연결 정보를 만든다.

@@ -1,6 +1,5 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
-import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -88,19 +87,35 @@ class CloudComposeServiceRendererTest {
     }
 
     @Test
-    @DisplayName("Redis — 아직 구현하지 않은 renderer는 기본값으로 빈 변수와 빈 연결 정보를 반환한다")
-    void defaultMethods_Redis_ReturnEmpty() {
+    @DisplayName("Redis — 서비스 DNS 기준 REDIS_HOST/PORT/PASSWORD를 순서대로 만든다")
+    void applicationEnvironment_Redis_ReturnsNeutralVariablesInOrder() {
         // given
         CloudComposeServiceRenderer renderer = new RedisCloudComposeServiceRenderer();
 
         // when
         SequencedMap<String, String> environment = renderer.applicationEnvironment();
+
+        // then
+        assertEquals(
+            List.of(
+                Map.entry("REDIS_HOST", "redis"),
+                Map.entry("REDIS_PORT", "\"6379\""),
+                Map.entry("REDIS_PASSWORD", "\"${REDIS_PASSWORD:?외부 .env에 설정 필요}\"")
+            ),
+            List.copyOf(environment.entrySet())
+        );
+    }
+
+    @Test
+    @DisplayName("Redis — DataSource 대상이 아니라 JDBC 연결 정보가 없다")
+    void jdbcConnection_Redis_ReturnsEmpty() {
+        // given
+        CloudComposeServiceRenderer renderer = new RedisCloudComposeServiceRenderer();
+
+        // when
         Optional<JdbcConnection> connection = renderer.jdbcConnection();
 
         // then
-        assertAll(
-            () -> assertTrue(environment.isEmpty()),
-            () -> assertTrue(connection.isEmpty())
-        );
+        assertTrue(connection.isEmpty());
     }
 }

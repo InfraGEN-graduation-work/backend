@@ -16,6 +16,7 @@ import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
 import com.infragen.infragen.domain.generation.enums.OutputFormat;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
+import com.infragen.infragen.domain.generation.generator.application.SpringBootApplicationEnvMapper;
 import com.infragen.infragen.domain.generation.generator.compose.MysqlComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.compose.MysqlHostAppEnvContributor;
 import com.infragen.infragen.domain.generation.generator.compose.PostgresComposeServiceRenderer;
@@ -134,7 +135,8 @@ class DockerComposeIaCGeneratorTest {
                 new MysqlHostAppEnvContributor(),
                 new RedisHostAppEnvContributor(),
                 new PostgresHostAppEnvContributor()
-            )
+            ),
+            List.of(new SpringBootApplicationEnvMapper())
         );
     }
 

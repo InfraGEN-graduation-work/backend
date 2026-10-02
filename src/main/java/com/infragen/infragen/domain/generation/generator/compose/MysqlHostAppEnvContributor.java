@@ -1,14 +1,21 @@
 package com.infragen.infragen.domain.generation.generator.compose;
 
-import org.springframework.stereotype.Component;
-
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLEnvComponent;
 import com.infragen.infragen.global.enums.ComponentType;
+import java.util.LinkedHashMap;
+import java.util.Optional;
+import java.util.SequencedMap;
+import org.springframework.stereotype.Component;
 
+/**
+ * 호스트에서 실행하는 애플리케이션의 MySQL 접속 정보를 만든다.
+ *
+ * <p>앱은 Compose 밖(호스트)에서 실행되므로 컨테이너 DNS가 아니라 {@code localhost}와 사용자 입력 호스트 포트로 접속한다.
+ */
 @Component
 public class MysqlHostAppEnvContributor implements HostAppEnvContributor {
     private static final String LOCALHOST = "localhost";
@@ -18,34 +25,32 @@ public class MysqlHostAppEnvContributor implements HostAppEnvContributor {
         return ComponentType.MYSQL;
     }
 
-    // 호스트에서 bootRun 시 사용할 JDBC·credential env (compose 컨테이너 DNS 아님)
     @Override
-    public void contributeHostAppEnv(
-        BaseComponent dependency,
-        BaseComponent application,
-        ComposeGenerationContext ctx
-    ) {
+    public SequencedMap<String, String> hostAppEnvironment(BaseComponent dependency) {
+        MySQLComponent mysql = (MySQLComponent) dependency;
+        SequencedMap<String, String> environment = new LinkedHashMap<>();
+        environment.put("MYSQL_HOST", LOCALHOST);
+        environment.put("MYSQL_PORT", String.valueOf(mysql.getPort()));
+        return environment;
+    }
+
+    /**
+     * @throws IaCGenerationException MySQL env 정보가 없는 경우
+     */
+    @Override
+    public Optional<JdbcConnection> jdbcConnection(BaseComponent dependency) {
         MySQLComponent mysql = (MySQLComponent) dependency;
         MySQLEnvComponent env = mysql.getEnv();
         if (env == null) {
             throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
         }
-        int hostPort = mysql.getPort();
 
         String jdbcUrl = "jdbc:mysql://"
             + LOCALHOST
             + ":"
-            + hostPort
+            + mysql.getPort()
             + "/"
             + env.getDatabaseName();
-
-        // DB가 둘 이상이면 기본 DataSource를 정할 수 없어 Spring 변수는 만들지 않는다.
-        if (ctx.hasSingleDatabaseDependency(application.getNodeId())) {
-            ctx.getEnvVars().put("SPRING_DATASOURCE_URL", jdbcUrl);
-            ctx.getEnvVars().put("SPRING_DATASOURCE_USERNAME", env.getUsername());
-            ctx.getEnvVars().put("SPRING_DATASOURCE_PASSWORD", env.getUserPassword());
-        }
-        ctx.getEnvVars().put("MYSQL_HOST", LOCALHOST);
-        ctx.getEnvVars().put("MYSQL_PORT", String.valueOf(hostPort));
+        return Optional.of(new JdbcConnection(jdbcUrl, env.getUsername(), env.getUserPassword()));
     }
 }

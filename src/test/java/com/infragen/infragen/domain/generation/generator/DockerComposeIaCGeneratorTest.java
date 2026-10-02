@@ -264,6 +264,25 @@ class DockerComposeIaCGeneratorTest {
     }
 
     @Test
+    @DisplayName("같은 MySQL→앱 edge 중복 — 단일 DB로 세어 SPRING_DATASOURCE_* 유지, 안내 주석 없음")
+    void generate_DuplicateMysqlEdge_KeepsSingleDatabaseDataSource() {
+        // given
+        ParsingResultDTO parsingResult = parsingResult(
+            List.of(mysqlComponent(), springBootComponent()),
+            List.of(edge("node-1", "node-2"), edge("node-1", "node-2"))
+        );
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult);
+
+        // then
+        assertAll(
+            () -> assertEquals(EXPECTED_COMPOSE, fileContent(bundle, "docker-compose.yml")),
+            () -> assertEquals(EXPECTED_ENV, fileContent(bundle, ".env"))
+        );
+    }
+
+    @Test
     @DisplayName("PostgreSQL이 앱과 연결되지 않으면 서비스만 생성하고 호스트 접속 변수는 미생성")
     void generate_UnconnectedPostgres_RendersServiceWithoutHostEnv() {
         // given

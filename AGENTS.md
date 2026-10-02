@@ -39,7 +39,7 @@ Use the Gradle Wrapper with Java 21.
 - `./gradlew bootRun`: run the API with `application.yaml` and local environment overrides
 - `docker compose up -d mysql redis`: MySQL 8 and Redis, only for explicitly requested infrastructure-dependent tests
 
-Tests connect to the configured database; there is no H2 test profile. Test selection and reporting rules are in `testing_convention.md`.
+Pure unit tests need no external infrastructure. Database-dependent tests (`@SpringBootTest`, `@DataJpaTest`, integration tests) use the local Docker MySQL and Redis or Testcontainers; there is no H2 test profile. Test selection and reporting rules are in `testing_convention.md`.
 
 ## Commits and Pull Requests
 

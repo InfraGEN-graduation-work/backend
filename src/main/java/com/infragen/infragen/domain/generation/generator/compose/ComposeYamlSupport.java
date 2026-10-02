@@ -17,6 +17,22 @@ public final class ComposeYamlSupport {
         return normalized;
     }
 
+    // containerName이 비어 있으면 Compose service 키를 container_name으로 쓴다.
+    public static String resolveContainerName(String containerName, String serviceName) {
+        if (containerName != null && !containerName.isBlank()) {
+            return containerName.trim();
+        }
+        return serviceName;
+    }
+
+    // imageVersion이 비어 있으면 renderer별 기본 이미지를 쓴다.
+    public static String resolveImage(String imageVersion, String defaultImage) {
+        if (imageVersion != null && !imageVersion.isBlank()) {
+            return imageVersion.trim();
+        }
+        return defaultImage;
+    }
+
     // .env 값 이스케이프 — 공백 또는 # 포함 시 따옴표, 내부 " 는 \"
     public static String escapeEnvValue(String value) {
         if (value == null) {

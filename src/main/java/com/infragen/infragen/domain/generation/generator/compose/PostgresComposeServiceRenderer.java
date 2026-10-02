@@ -36,8 +36,8 @@ public class PostgresComposeServiceRenderer implements ComposeServiceRenderer {
 
         String serviceName = ComposeYamlSupport.toServiceName(
                 postgres.getContainerName(), null, TYPE_LABEL);
-        String containerName = resolveContainerName(postgres.getContainerName(), serviceName);
-        String image = resolveImage(postgres.getImageVersion());
+        String containerName = ComposeYamlSupport.resolveContainerName(postgres.getContainerName(), serviceName);
+        String image = ComposeYamlSupport.resolveImage(postgres.getImageVersion(), DEFAULT_IMAGE);
 
         context.getEnvVars().put("POSTGRES_DB", env.getDatabaseName());
         context.getEnvVars().put("POSTGRES_USER", env.getUsername());
@@ -67,19 +67,5 @@ public class PostgresComposeServiceRenderer implements ComposeServiceRenderer {
         yaml.append("      TZ: Asia/Seoul\n");
 
         return yaml.toString();
-    }
-
-    private static String resolveContainerName(String containerName, String serviceName) {
-        if (containerName != null && !containerName.isBlank()) {
-            return containerName.trim();
-        }
-        return serviceName;
-    }
-
-    private static String resolveImage(String imageVersion) {
-        if (imageVersion != null && !imageVersion.isBlank()) {
-            return imageVersion.trim();
-        }
-        return DEFAULT_IMAGE;
     }
 }

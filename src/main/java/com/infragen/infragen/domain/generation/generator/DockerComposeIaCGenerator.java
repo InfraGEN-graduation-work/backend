@@ -30,7 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 public class DockerComposeIaCGenerator implements LocalIaCGenerator {
     private static final String MULTIPLE_DATABASE_NOTICE = """
         # 애플리케이션에 데이터베이스가 2개 이상 연결되어 SPRING_DATASOURCE_*를 생성하지 않았습니다.
-        # DataSource를 직접 설정하고 .env의 타입별 접속 변수(MYSQL_*, POSTGRES_*)를 사용하세요.
+        # DataSource를 직접 설정하고 .env의 DB별 접속 변수를 사용하세요.
         """;
 
     private final Map<ComponentType, ComposeServiceRenderer> rendererMap;
@@ -136,7 +136,7 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
             .build();
     }
 
-    // LOCAL_DEV — 애플리케이션별 incoming dependency에 대해 HostAppEnvContributor 호출
+    // LOCAL_DEV — 애플리케이션별 incoming dependency의 접속 정보를 모아 .env에 Spring 매핑과 함께 넣는다.
     private void contributeHostAppEnv(List<BaseComponent> components, ComposeGenerationContext context) {
         for (BaseComponent component : components) {
             if (component.getComponentType().getCategory() != ComponentCategory.APPLICATION) {
@@ -144,6 +144,8 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
             }
 
             List<BaseComponent> dependencies = context.findIncomingDependencies(component.getNodeId());
+            // DB가 둘 이상이면 기본 DataSource를 정할 수 없어 Spring 변수 없이 타입별 접속 변수만 넣는다.
+            boolean singleDatabase = context.hasSingleDatabaseDependency(component.getNodeId());
 
             for (BaseComponent dependency : dependencies) {
                 HostAppEnvContributor contributor = hostAppEnvContributorMap.get(
@@ -156,7 +158,14 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
                     );
                     continue;
                 }
-                contributor.contributeHostAppEnv(dependency, component, context);
+                if (singleDatabase) {
+                    contributor.jdbcConnection(dependency).ifPresent(connection -> {
+                        context.getEnvVars().put("SPRING_DATASOURCE_URL", connection.url());
+                        context.getEnvVars().put("SPRING_DATASOURCE_USERNAME", connection.username());
+                        context.getEnvVars().put("SPRING_DATASOURCE_PASSWORD", connection.password());
+                    });
+                }
+                context.getEnvVars().putAll(contributor.hostAppEnvironment(dependency));
             }
         }
     }

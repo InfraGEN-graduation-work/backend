@@ -30,8 +30,8 @@ public class MysqlComposeServiceRenderer implements ComposeServiceRenderer {
 
         String serviceName = ComposeYamlSupport.toServiceName(
             mysql.getContainerName(), null, TYPE_LABEL); // nameOrLabel 누락 시 typeFallback 사용
-        String containerName = resolveContainerName(mysql.getContainerName(), serviceName);
-        String image = resolveImage(mysql.getImageVersion());
+        String containerName = ComposeYamlSupport.resolveContainerName(mysql.getContainerName(), serviceName);
+        String image = ComposeYamlSupport.resolveImage(mysql.getImageVersion(), DEFAULT_IMAGE);
 
         context.getEnvVars().put("MYSQL_DATABASE", env.getDatabaseName());
         context.getEnvVars().put("MYSQL_USER", env.getUsername());
@@ -60,19 +60,5 @@ public class MysqlComposeServiceRenderer implements ComposeServiceRenderer {
         yaml.append("      TZ: Asia/Seoul\n");
 
         return yaml.toString();
-    }
-
-    private static String resolveContainerName(String containerName, String serviceName) {
-        if (containerName != null && !containerName.isBlank()) {
-            return containerName.trim();
-        }
-        return serviceName;
-    }
-
-    private static String resolveImage(String imageVersion) {
-        if (imageVersion != null && !imageVersion.isBlank()) {
-            return imageVersion.trim();
-        }
-        return DEFAULT_IMAGE;
     }
 }

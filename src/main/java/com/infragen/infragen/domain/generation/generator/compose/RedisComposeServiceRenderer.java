@@ -23,7 +23,7 @@ public class RedisComposeServiceRenderer implements ComposeServiceRenderer {
         RedisComponent redis = (RedisComponent) component;
         String serviceName = ComposeYamlSupport.toServiceName(
             redis.getContainerName(), null, TYPE_LABEL);
-        String containerName = resolveContainerName(redis.getContainerName(), serviceName);
+        String containerName = ComposeYamlSupport.resolveContainerName(redis.getContainerName(), serviceName);
 
         StringBuilder yaml = new StringBuilder();
         yaml.append("  ").append(serviceName).append(":\n");
@@ -43,12 +43,5 @@ public class RedisComposeServiceRenderer implements ComposeServiceRenderer {
         yaml.append("    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes\n");
 
         return yaml.toString();
-    }
-
-    private static String resolveContainerName(String containerName, String serviceName) {
-        if (containerName != null && !containerName.isBlank()) {
-            return containerName.trim();
-        }
-        return serviceName;
     }
 }

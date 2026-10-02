@@ -71,6 +71,55 @@ class DockerComposeIaCGeneratorTest {
         MYSQL_PORT=3306
         """;
 
+    private static final String MYSQL_SERVICE_BLOCK = """
+          mysql:
+            image: mysql:8.0
+            container_name: mysql
+            ports:
+              - "3306:3306"
+            volumes:
+              - mysql_data:/var/lib/mysql
+            env_file:
+              - .env
+            environment:
+              MYSQL_DATABASE: ${MYSQL_DATABASE}
+              MYSQL_USER: ${MYSQL_USER}
+              MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+              MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+              TZ: Asia/Seoul
+        """;
+
+    private static final String POSTGRES_SERVICE_BLOCK = """
+          postgres:
+            image: postgres:17
+            container_name: postgres
+            ports:
+              - "5433:5432"
+            volumes:
+              - pg_data:/var/lib/postgresql/data
+            env_file:
+              - .env
+            environment:
+              POSTGRES_DB: ${POSTGRES_DB}
+              POSTGRES_USER: ${POSTGRES_USER}
+              POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+              PGDATA: /var/lib/postgresql/data
+              TZ: Asia/Seoul
+        """;
+
+    private static final String REDIS_SERVICE_BLOCK = """
+          redis:
+            image: redis:7.4
+            container_name: redis
+            ports:
+              - "6379:6379"
+            volumes:
+              - redis_data:/data
+            env_file:
+              - .env
+            command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+        """;
+
     private DockerComposeIaCGenerator generator;
 
     @BeforeEach
@@ -250,7 +299,7 @@ class DockerComposeIaCGeneratorTest {
         assertAll(
             () -> assertTrue(compose.startsWith("""
                 # 애플리케이션에 데이터베이스가 2개 이상 연결되어 SPRING_DATASOURCE_*를 생성하지 않았습니다.
-                # DataSource를 직접 설정하고 .env의 타입별 접속 변수(MYSQL_*, POSTGRES_*)를 사용하세요.
+                # DataSource를 직접 설정하고 .env의 DB별 접속 변수를 사용하세요.
                 services:
                 """)),
             () -> assertTrue(compose.contains("  mysql:\n")),
@@ -260,6 +309,91 @@ class DockerComposeIaCGeneratorTest {
             () -> assertTrue(env.contains("POSTGRES_HOST=localhost\n")),
             () -> assertTrue(env.contains("POSTGRES_PORT=5433\n")),
             () -> assertFalse(env.contains("SPRING_DATASOURCE_"))
+        );
+    }
+
+    @Test
+    @DisplayName("LOCAL_DEV golden — MySQL + Redis면 MySQL DataSource와 Redis 접속 변수를 연결 순서대로 생성")
+    void generate_LocalDevMysqlAndRedis_MatchesGolden() {
+        // given
+        ParsingResultDTO parsingResult = parsingResult(
+            List.of(mysqlComponent(), redisComponent(), springBootComponent()),
+            List.of(edge("node-1", "node-2"), edge("redis-1", "node-2"))
+        );
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult);
+
+        // then
+        assertAll(
+            () -> assertEquals("""
+                services:
+                """ + MYSQL_SERVICE_BLOCK + REDIS_SERVICE_BLOCK + """
+
+                volumes:
+                  mysql_data:
+                  redis_data:
+                """, fileContent(bundle, "docker-compose.yml")),
+            () -> assertEquals("""
+                # InfraGEN generated environment variables
+                # 민감한 정보는 이 파일에만 저장하세요. 버전 관리에 커밋하지 마세요.
+
+                MYSQL_DATABASE=appdb
+                MYSQL_USER=user
+                MYSQL_PASSWORD=userpass12
+                MYSQL_ROOT_PASSWORD=rootpass12
+                SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/appdb
+                SPRING_DATASOURCE_USERNAME=user
+                SPRING_DATASOURCE_PASSWORD=userpass12
+                MYSQL_HOST=localhost
+                MYSQL_PORT=3306
+                REDIS_HOST=localhost
+                REDIS_PORT=6379
+                REDIS_PASSWORD=redis-password
+                """, fileContent(bundle, ".env"))
+        );
+    }
+
+    @Test
+    @DisplayName("LOCAL_DEV golden — MySQL + PostgreSQL이면 안내 주석과 타입별 접속 변수만 생성")
+    void generate_LocalDevMysqlAndPostgres_MatchesGolden() {
+        // given
+        ParsingResultDTO parsingResult = parsingResult(
+            List.of(mysqlComponent(), postgresComponent(validPostgresEnv()), springBootComponent()),
+            List.of(edge("node-1", "node-2"), edge("pg-1", "node-2"))
+        );
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult);
+
+        // then
+        assertAll(
+            () -> assertEquals("""
+                # 애플리케이션에 데이터베이스가 2개 이상 연결되어 SPRING_DATASOURCE_*를 생성하지 않았습니다.
+                # DataSource를 직접 설정하고 .env의 DB별 접속 변수를 사용하세요.
+                services:
+                """ + MYSQL_SERVICE_BLOCK + POSTGRES_SERVICE_BLOCK + """
+
+                volumes:
+                  mysql_data:
+                  pg_data:
+                """, fileContent(bundle, "docker-compose.yml")),
+            () -> assertEquals("""
+                # InfraGEN generated environment variables
+                # 민감한 정보는 이 파일에만 저장하세요. 버전 관리에 커밋하지 마세요.
+
+                MYSQL_DATABASE=appdb
+                MYSQL_USER=user
+                MYSQL_PASSWORD=userpass12
+                MYSQL_ROOT_PASSWORD=rootpass12
+                POSTGRES_DB=pgdb
+                POSTGRES_USER=pguser
+                POSTGRES_PASSWORD=pgpass1234
+                MYSQL_HOST=localhost
+                MYSQL_PORT=3306
+                POSTGRES_HOST=localhost
+                POSTGRES_PORT=5433
+                """, fileContent(bundle, ".env"))
         );
     }
 
@@ -339,6 +473,19 @@ class DockerComposeIaCGeneratorTest {
                 .userPassword("userpass12")
                 .rootPassword("rootpass12")
                 .build())
+            .build();
+    }
+
+    private static RedisComponent redisComponent() {
+        return RedisComponent.builder()
+            .id("redis-1")
+            .posX(100f)
+            .posY(400f)
+            .imageVersion("redis:7.4")
+            .containerName("redis")
+            .volumeName("redis_data")
+            .port(6379)
+            .password("redis-password")
             .build();
     }
 

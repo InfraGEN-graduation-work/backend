@@ -1,31 +1,35 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
-
-import org.springframework.stereotype.Component;
-
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.VolumeComponent;
-import com.infragen.infragen.global.enums.ComponentType;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import org.springframework.stereotype.Component;
 
 /** CLOUD_DEPLOY에서 애플리케이션과 선택된 의존 인프라의 Compose bootstrap을 생성한다. */
 @Component
 public class CloudComposeRenderer {
     private static final String MULTIPLE_DATABASE_NOTICE = """
         # 애플리케이션에 데이터베이스가 2개 이상 연결되어 SPRING_DATASOURCE_*를 생성하지 않았습니다.
-        # DataSource를 직접 설정하고 타입별 접속 변수(MYSQL_*, POSTGRES_*)를 사용하세요.
+        # DataSource를 직접 설정하고 app environment의 DB별 접속 변수를 사용하세요.
         """;
 
     private final List<CloudComposeServiceRenderer> serviceRenderers;
 
+    /**
+     * 서비스 블록, {@code depends_on}, 앱 환경변수 출력 순서를 {@code ComponentType} 선언 순서로 고정한다.
+     * Spring 주입 순서에 따라 산출물이 달라지지 않게 하기 위해서다.
+     */
     public CloudComposeRenderer(List<CloudComposeServiceRenderer> serviceRenderers) {
-        this.serviceRenderers = List.copyOf(serviceRenderers);
+        this.serviceRenderers = serviceRenderers.stream()
+            .sorted(Comparator.comparing(CloudComposeServiceRenderer::getSupportedType))
+            .toList();
     }
 
     /**
@@ -136,38 +140,27 @@ public class CloudComposeRenderer {
         StringBuilder content,
         CloudDeployContext context
     ) {
-        boolean hasMysql = context.hasIncomingDependency(ComponentType.MYSQL);
-        boolean hasPostgres = context.hasIncomingDependency(ComponentType.POSTGRESQL);
-        boolean hasRedis = context.hasIncomingDependency(ComponentType.REDIS);
-        if (!hasMysql && !hasPostgres && !hasRedis) {
-            return;
-        }
         // DB가 둘 이상이면 기본 DataSource를 정할 수 없어 Spring 변수 없이 타입별 접속 변수만 넣는다.
         boolean singleDatabase = context.hasSingleDatabaseDependency();
 
-        content.append("    environment:\n");
-        if (hasMysql) {
-            if (singleDatabase) {
-                content.append("      SPRING_DATASOURCE_URL: \"jdbc:mysql://mysql:3306/${MYSQL_DATABASE:?외부 .env에 설정 필요}\"\n")
-                    .append("      SPRING_DATASOURCE_USERNAME: \"${MYSQL_USER:?외부 .env에 설정 필요}\"\n")
-                    .append("      SPRING_DATASOURCE_PASSWORD: \"${MYSQL_PASSWORD:?외부 .env에 설정 필요}\"\n");
+        StringBuilder environment = new StringBuilder();
+        for (CloudComposeServiceRenderer renderer : serviceRenderers) {
+            if (!renderer.isEnabled(context)) {
+                continue;
             }
-            content.append("      MYSQL_HOST: mysql\n")
-                .append("      MYSQL_PORT: \"3306\"\n");
-        }
-        if (hasPostgres) {
             if (singleDatabase) {
-                content.append("      SPRING_DATASOURCE_URL: \"jdbc:postgresql://postgres:5432/${POSTGRES_DB:?외부 .env에 설정 필요}\"\n")
-                    .append("      SPRING_DATASOURCE_USERNAME: \"${POSTGRES_USER:?외부 .env에 설정 필요}\"\n")
-                    .append("      SPRING_DATASOURCE_PASSWORD: \"${POSTGRES_PASSWORD:?외부 .env에 설정 필요}\"\n");
+                renderer.jdbcConnection().ifPresent(connection -> environment
+                    .append("      SPRING_DATASOURCE_URL: ").append(connection.url()).append('\n')
+                    .append("      SPRING_DATASOURCE_USERNAME: ").append(connection.username()).append('\n')
+                    .append("      SPRING_DATASOURCE_PASSWORD: ").append(connection.password()).append('\n'));
             }
-            content.append("      POSTGRES_HOST: postgres\n")
-                .append("      POSTGRES_PORT: \"5432\"\n");
+            renderer.applicationEnvironment().forEach((name, value) -> environment
+                .append("      ").append(name).append(": ").append(value).append('\n'));
         }
-        if (hasRedis) {
-            content.append("      REDIS_HOST: redis\n")
-                .append("      REDIS_PORT: \"6379\"\n")
-                .append("      REDIS_PASSWORD: \"${REDIS_PASSWORD:?외부 .env에 설정 필요}\"\n");
+        if (environment.isEmpty()) {
+            return;
         }
+
+        content.append("    environment:\n").append(environment);
     }
 }

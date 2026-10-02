@@ -1,19 +1,20 @@
 package com.infragen.infragen.domain.generation.generator.compose;
 
-import org.springframework.stereotype.Component;
-
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLEnvComponent;
 import com.infragen.infragen.global.enums.ComponentType;
+import java.util.LinkedHashMap;
+import java.util.Optional;
+import java.util.SequencedMap;
+import org.springframework.stereotype.Component;
 
 /**
- * 호스트에서 실행하는 애플리케이션의 PostgreSQL 접속 환경변수를 생성한다.
+ * 호스트에서 실행하는 애플리케이션의 PostgreSQL 접속 정보를 만든다.
  *
- * <p>{@code POSTGRES_HOST/PORT}는 항상 만든다. {@code SPRING_DATASOURCE_*}는 앱에 연결된 DATABASE가 하나일 때만 만든다.
- * DB가 둘 이상이면 어느 DB가 기본 DataSource인지 정할 수 없기 때문이다.
+ * <p>앱은 Compose 밖(호스트)에서 실행되므로 컨테이너 DNS가 아니라 {@code localhost}와 사용자 입력 호스트 포트로 접속한다.
  */
 @Component
 public class PostgresHostAppEnvContributor implements HostAppEnvContributor {
@@ -26,31 +27,31 @@ public class PostgresHostAppEnvContributor implements HostAppEnvContributor {
     }
 
     @Override
-    public void contributeHostAppEnv(
-        BaseComponent dependency,
-        BaseComponent application,
-        ComposeGenerationContext ctx
-    ) {
+    public SequencedMap<String, String> hostAppEnvironment(BaseComponent dependency) {
+        PostgreSQLComponent postgres = (PostgreSQLComponent) dependency;
+        SequencedMap<String, String> environment = new LinkedHashMap<>();
+        environment.put("POSTGRES_HOST", LOCALHOST);
+        environment.put("POSTGRES_PORT", String.valueOf(postgres.getPort()));
+        return environment;
+    }
+
+    /**
+     * @throws IaCGenerationException PostgreSQL env 정보가 없는 경우
+     */
+    @Override
+    public Optional<JdbcConnection> jdbcConnection(BaseComponent dependency) {
         PostgreSQLComponent postgres = (PostgreSQLComponent) dependency;
         PostgreSQLEnvComponent env = postgres.getEnv();
         if (env == null) {
             throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
         }
-        int hostPort = postgres.getPort();
 
-        if (ctx.hasSingleDatabaseDependency(application.getNodeId())) {
-            String jdbcUrl = "jdbc:postgresql://"
-                + LOCALHOST
-                + ":"
-                + hostPort
-                + "/"
-                + env.getDatabaseName();
-
-            ctx.getEnvVars().put("SPRING_DATASOURCE_URL", jdbcUrl);
-            ctx.getEnvVars().put("SPRING_DATASOURCE_USERNAME", env.getUsername());
-            ctx.getEnvVars().put("SPRING_DATASOURCE_PASSWORD", env.getPassword());
-        }
-        ctx.getEnvVars().put("POSTGRES_HOST", LOCALHOST);
-        ctx.getEnvVars().put("POSTGRES_PORT", String.valueOf(hostPort));
+        String jdbcUrl = "jdbc:postgresql://"
+            + LOCALHOST
+            + ":"
+            + postgres.getPort()
+            + "/"
+            + env.getDatabaseName();
+        return Optional.of(new JdbcConnection(jdbcUrl, env.getUsername(), env.getPassword()));
     }
 }

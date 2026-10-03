@@ -14,9 +14,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import com.infragen.infragen.domain.generation.dto.request.DeploymentTargetReqDTO;
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
+import com.infragen.infragen.domain.generation.generator.application.SpringBootApplicationEnvMapper;
 import com.infragen.infragen.domain.generation.generator.cloud.AwsTerraformRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudComposeRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.OciTerraformRenderer;
+import com.infragen.infragen.domain.generation.generator.cloud.SpringBootRuntimeDockerfileRenderer;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.dto.response.SpringBootComponent;
 
@@ -24,6 +26,8 @@ import com.infragen.infragen.domain.parsing.dto.response.SpringBootComponent;
 @ContextConfiguration(classes = {
     TerraformIaCGenerator.class,
     CloudComposeRenderer.class,
+    SpringBootApplicationEnvMapper.class,
+    SpringBootRuntimeDockerfileRenderer.class,
     AwsTerraformRenderer.class,
     OciTerraformRenderer.class
 })

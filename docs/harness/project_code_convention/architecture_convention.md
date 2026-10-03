@@ -73,14 +73,16 @@ Collaboration
 - `HostAppEnvContributor` (MySQL, PostgreSQL, Redis): 호스트 실행 앱의 `.env`용 타입별 중립 변수와 JDBC 연결 정보 제공. `DockerComposeIaCGenerator`는 앱별로 이를 모으고, 단일 DB일 때만 앱 타입별 `ApplicationEnvMapper`로 프레임워크 변수를 매핑한다.
 - `ApplicationEnvMapper` (Spring Boot): 앱 타입별로 JDBC 연결 정보를 프레임워크 변수(`SPRING_DATASOURCE_*`)와 다중 DB 안내 주석으로 바꾼다. LOCAL_DEV generator와 CLOUD_DEPLOY renderer가 함께 쓴다.
 - `CloudComposeServiceRenderer` (MySQL, PostgreSQL, Redis): CLOUD_DEPLOY Compose bootstrap의 dependency block 생성, 앱 컨테이너용 타입별 중립 변수와 JDBC 연결 정보 제공. `CloudComposeRenderer`는 이를 `ComponentType` 순서로 모으고, 단일 DB일 때만 앱 타입별 `ApplicationEnvMapper`로 프레임워크 변수를 매핑한다.
+- `RuntimeDockerfileRenderer` (`SpringBootRuntimeDockerfileRenderer`): CLOUD_DEPLOY runtime Dockerfile을 앱 타입별로 생성한다. `TerraformIaCGenerator`가 `context.applicationType()`으로 구현을 고르고, 없으면 `INVALID_COMPONENT_STATE`로 거부한다.
 - `OAuth2UserInfo` (`KakaoUserInfoDTO`): provider별 사용자 응답을 공통 social identity로 제공
 - `BaseErrorCode` / `BaseSuccessCode` (domain·general enum): 공통 HTTP status, code, message 계약
 - `VolumeComponent` (`MySQLComponent`, `PostgreSQLComponent`, `RedisComponent`): volume 정보를 제공하는 component marker
+- `ApplicationComponent` (`SpringBootComponent`): 앱 타입 DTO의 공통 상위 클래스. renderer가 앱 타입을 구분하지 않고 쓰는 값(`getPort()`)만 두고 타입 전용 속성은 하위 DTO가 가진다.
 
 사용 규칙:
 
 - 구현체 선택이 필요한 parser·generator·renderer 경계에는 기존 interface를 재사용하고 중복 interface를 만들지 않는다.
-- Spring이 주입한 구현체 목록은 `getSupportedType()`, `getDependencyType()`, `getOutputFormat()`을 map key로 등록하며, 같은 key의 구현체를 중복 등록하지 않는다.
+- Spring이 주입한 구현체 목록은 `getSupportedType()`, `getDependencyType()`, `getApplicationType()`, `getOutputFormat()`을 map key로 등록하며, 같은 key의 구현체를 중복 등록하지 않는다.
 - 구현체는 자신의 출력·변환 책임만 수행하고 Repository 접근이나 HTTP 응답 생성을 맡지 않는다.
 - enum에 component type이 있다는 사실만으로 parser·renderer 지원이 완료된 것으로 판단하지 않는다.
 
@@ -97,7 +99,7 @@ Generator는 parsing 결과를 재검증하지 않고 출력 형식의 renderer�
 
 - LOCAL_DEV `DockerComposeIaCGenerator`: application은 Compose에서 제외하고 dependency만 렌더링한다. application 연결 정보는 `HostAppEnvContributor`가 제공한 값을 generator가 호스트 `.env`에 추가한다.
 - CLOUD_DEPLOY `TerraformIaCGenerator`: AWS·OCI Terraform, runtime Dockerfile, cloud Compose, plan-only warning을 조립한다.
-- `ComposeGenerationContext`, `CloudDeployContext`: renderer가 공유할 parsing 결과와 생성 session 상태를 제공한다.
+- `ComposeGenerationContext`, `CloudDeployContext`: renderer가 공유할 parsing 결과와 생성 session 상태를 제공한다. `CloudDeployContext`는 앱을 `ApplicationComponent`로 들고, 앱 타입 전용 값은 앱 타입별 renderer가 `application()`의 하위 DTO로 읽는다.
 - `CloudDeployFileAssembler`: renderer 결과를 API 응답용 bundle로 감싼다.
 
 ## 공통 횡단 경계

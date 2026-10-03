@@ -70,16 +70,19 @@ Collaboration
 - `ComponentParser` (`MySQLParser`, `PostgreSQLParser`, `RedisParser`, `SpringBootParser`): component별 node property 검증과 `BaseComponent` 구현체 변환
 - `IaCGenerator` (`LocalIaCGenerator`: `DockerComposeIaCGenerator`, `TargetAwareIaCGenerator`: `TerraformIaCGenerator`): `ParsingResultDTO`를 `OutputFormat`별 file bundle로 변환
 - `ComposeServiceRenderer` (MySQL, PostgreSQL, Redis): LOCAL_DEV dependency의 Compose service block 생성
-- `HostAppEnvContributor` (MySQL, PostgreSQL, Redis): 호스트 실행 앱의 `.env`용 타입별 중립 변수와 JDBC 연결 정보 제공. `DockerComposeIaCGenerator`는 앱별로 이를 모으고 Spring 매핑(단일 DB일 때만 `SPRING_DATASOURCE_*`)만 맡는다.
-- `CloudComposeServiceRenderer` (MySQL, PostgreSQL, Redis): CLOUD_DEPLOY Compose bootstrap의 dependency block 생성, 앱 컨테이너용 타입별 중립 변수와 JDBC 연결 정보 제공. `CloudComposeRenderer`는 이를 `ComponentType` 순서로 모으고 Spring 매핑(단일 DB일 때만 `SPRING_DATASOURCE_*`)만 맡는다.
+- `HostAppEnvContributor` (MySQL, PostgreSQL, Redis): 호스트 실행 앱의 `.env`용 타입별 중립 변수와 JDBC 연결 정보 제공. `DockerComposeIaCGenerator`는 앱별로 이를 모으고, 단일 DB일 때만 앱 타입별 `ApplicationEnvMapper`로 프레임워크 변수를 매핑한다.
+- `ApplicationEnvMapper` (Spring Boot): 앱 타입별로 JDBC 연결 정보를 프레임워크 변수(`SPRING_DATASOURCE_*`)와 다중 DB 안내 주석으로 바꾼다. LOCAL_DEV generator와 CLOUD_DEPLOY renderer가 함께 쓴다.
+- `CloudComposeServiceRenderer` (MySQL, PostgreSQL, Redis): CLOUD_DEPLOY Compose bootstrap의 dependency block 생성, 앱 컨테이너용 타입별 중립 변수와 JDBC 연결 정보 제공. `CloudComposeRenderer`는 이를 `ComponentType` 순서로 모으고, 단일 DB일 때만 앱 타입별 `ApplicationEnvMapper`로 프레임워크 변수를 매핑한다.
+- `RuntimeDockerfileRenderer` (`SpringBootRuntimeDockerfileRenderer`): CLOUD_DEPLOY runtime Dockerfile을 앱 타입별로 생성한다. `TerraformIaCGenerator`가 `context.applicationType()`으로 구현을 고르고, 없으면 `INVALID_COMPONENT_STATE`로 거부한다.
 - `OAuth2UserInfo` (`KakaoUserInfoDTO`): provider별 사용자 응답을 공통 social identity로 제공
 - `BaseErrorCode` / `BaseSuccessCode` (domain·general enum): 공통 HTTP status, code, message 계약
 - `VolumeComponent` (`MySQLComponent`, `PostgreSQLComponent`, `RedisComponent`): volume 정보를 제공하는 component marker
+- `ApplicationComponent` (`SpringBootComponent`): 앱 타입 DTO의 공통 상위 클래스. renderer가 앱 타입을 구분하지 않고 쓰는 값(`getPort()`)만 두고 타입 전용 속성은 하위 DTO가 가진다.
 
 사용 규칙:
 
 - 구현체 선택이 필요한 parser·generator·renderer 경계에는 기존 interface를 재사용하고 중복 interface를 만들지 않는다.
-- Spring이 주입한 구현체 목록은 `getSupportedType()`, `getDependencyType()`, `getOutputFormat()`을 map key로 등록하며, 같은 key의 구현체를 중복 등록하지 않는다.
+- Spring이 주입한 구현체 목록은 `getSupportedType()`, `getDependencyType()`, `getApplicationType()`, `getOutputFormat()`을 map key로 등록하며, 같은 key의 구현체를 중복 등록하지 않는다.
 - 구현체는 자신의 출력·변환 책임만 수행하고 Repository 접근이나 HTTP 응답 생성을 맡지 않는다.
 - enum에 component type이 있다는 사실만으로 parser·renderer 지원이 완료된 것으로 판단하지 않는다.
 
@@ -96,7 +99,7 @@ Generator는 parsing 결과를 재검증하지 않고 출력 형식의 renderer�
 
 - LOCAL_DEV `DockerComposeIaCGenerator`: application은 Compose에서 제외하고 dependency만 렌더링한다. application 연결 정보는 `HostAppEnvContributor`가 제공한 값을 generator가 호스트 `.env`에 추가한다.
 - CLOUD_DEPLOY `TerraformIaCGenerator`: AWS·OCI Terraform, runtime Dockerfile, cloud Compose, plan-only warning을 조립한다.
-- `ComposeGenerationContext`, `CloudDeployContext`: renderer가 공유할 parsing 결과와 생성 session 상태를 제공한다.
+- `ComposeGenerationContext`, `CloudDeployContext`: renderer가 공유할 parsing 결과와 생성 session 상태를 제공한다. `CloudDeployContext`는 앱을 `ApplicationComponent`로 들고, 앱 타입 전용 값은 앱 타입별 renderer가 `application()`의 하위 DTO로 읽는다.
 - `CloudDeployFileAssembler`: renderer 결과를 API 응답용 bundle로 감싼다.
 
 ## 공통 횡단 경계
@@ -112,7 +115,7 @@ Generator는 parsing 결과를 재검증하지 않고 출력 형식의 renderer�
 다음은 현재 코드의 사실이며, 목표 계약으로 추정해 바꾸지 않는다.
 
 1. Parsing component DTO, Project 저장 request, `ProjectNode` Entity는 문자열 `nodeId`를 쓰고 `nodeName`은 표시용이다. Project node response는 canvas `nodeId`와 내부 DB `Long id`를 함께 제공하고, edge response endpoint는 문자열 nodeId다.
-2. `ComponentType`에는 MongoDB, NGINX, Apache도 있지만 parser·generator는 MySQL, PostgreSQL, Redis, Spring Boot만 구현돼 있다. 애플리케이션의 DATABASE 의존이 둘 이상이면 LOCAL_DEV와 CLOUD_DEPLOY 모두 `SPRING_DATASOURCE_*` 대신 Compose 안내 주석을 만든다.
+2. `ComponentType`에는 MongoDB, NGINX, Apache도 있지만 parser·generator는 MySQL, PostgreSQL, Redis, Spring Boot만 구현돼 있다. 애플리케이션의 DATABASE 의존이 둘 이상이면 LOCAL_DEV와 CLOUD_DEPLOY 모두 앱 타입별 DataSource 변수 대신 Compose 안내 주석을 만든다.
 3. Parsing component DTO(`BaseComponent` 상속)는 HTTP 응답으로 노출되지 않는 내부 전달 객체라 `dto_convention.md`의 `ResDTO` 내부 record 구조를 따르지 않는다.
 4. Project graph 수정은 patch merge가 아니라 기존 edge·node를 삭제한 뒤 전체 graph를 교체한다.
 5. LOCAL_DEV는 Spring Boot를 호스트에서 실행하고 의존 인프라만 Compose service로 생성한다.

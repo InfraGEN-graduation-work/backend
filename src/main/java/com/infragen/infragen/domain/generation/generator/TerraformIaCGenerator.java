@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
 
@@ -21,6 +22,7 @@ import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployWarnin
 import com.infragen.infragen.domain.generation.generator.cloud.CloudTerraformRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.RuntimeDockerfileRenderer;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
+import com.infragen.infragen.global.enums.ComponentType;
 
 /**
  * 파싱된 그래프를 CLOUD_DEPLOY 산출물 묶음으로 조립한다.
@@ -30,8 +32,7 @@ import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 public class TerraformIaCGenerator implements TargetAwareIaCGenerator {
     private final Map<DeploymentOption, CloudTerraformRenderer>
         terraformRendererMap;
-    private final RuntimeDockerfileRenderer runtimeDockerfileRenderer =
-        new RuntimeDockerfileRenderer();
+    private final Map<ComponentType, RuntimeDockerfileRenderer> runtimeDockerfileRendererMap;
     private final CloudComposeRenderer cloudComposeRenderer;
     private final CloudDeployWarningRenderer cloudDeployWarningRenderer =
         new CloudDeployWarningRenderer();
@@ -42,14 +43,22 @@ public class TerraformIaCGenerator implements TargetAwareIaCGenerator {
      * provider key를 기준으로 Terraform renderer registry를 구성한다.
      *
      * @param cloudComposeRenderer Cloud runtime Compose renderer
+     * @param runtimeDockerfileRenderers 앱 타입별 runtime Dockerfile renderer 목록
      * @param terraformRenderers provider별 Terraform renderer 목록
      * @throws IllegalStateException 같은 provider renderer가 중복 등록된 경우
      */
     public TerraformIaCGenerator(
         CloudComposeRenderer cloudComposeRenderer,
+        List<RuntimeDockerfileRenderer> runtimeDockerfileRenderers,
         List<CloudTerraformRenderer> terraformRenderers
     ) {
         this.cloudComposeRenderer = cloudComposeRenderer;
+        this.runtimeDockerfileRendererMap = runtimeDockerfileRenderers.stream()
+            .collect(Collectors.toMap(
+                RuntimeDockerfileRenderer::getApplicationType,
+                renderer -> renderer,
+                (existing, replacement) -> existing
+            ));
         this.terraformRendererMap = new EnumMap<>(DeploymentOption.class);
         for (CloudTerraformRenderer renderer : terraformRenderers) {
             CloudTerraformRenderer previous = terraformRendererMap.put(
@@ -97,12 +106,21 @@ public class TerraformIaCGenerator implements TargetAwareIaCGenerator {
         }
 
         files.addAll(List.of(
-            runtimeDockerfileRenderer.render(context.javaVersion(), context.applicationPort()),
+            runtimeDockerfileRenderer(context).render(context),
             cloudComposeRenderer.render(context),
             cloudDeployWarningRenderer.render()
         ));
 
         return cloudDeployFileAssembler.assemble(files);
+    }
+
+    // 앱 타입의 Dockerfile renderer가 없으면 Dockerfile 없는 산출물이 나가므로 내부 계약 위반으로 거부한다.
+    private RuntimeDockerfileRenderer runtimeDockerfileRenderer(CloudDeployContext context) {
+        RuntimeDockerfileRenderer renderer = runtimeDockerfileRendererMap.get(context.applicationType());
+        if (renderer == null) {
+            throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
+        }
+        return renderer;
     }
 
     private Collection<CloudTerraformRenderer> renderersFor(

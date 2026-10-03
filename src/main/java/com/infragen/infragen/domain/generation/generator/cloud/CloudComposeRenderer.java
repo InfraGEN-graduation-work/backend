@@ -1,35 +1,46 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
+import com.infragen.infragen.domain.generation.generator.application.ApplicationEnvMapper;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.VolumeComponent;
+import com.infragen.infragen.global.enums.ComponentType;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
 /** CLOUD_DEPLOY에서 애플리케이션과 선택된 의존 인프라의 Compose bootstrap을 생성한다. */
 @Component
 public class CloudComposeRenderer {
-    private static final String MULTIPLE_DATABASE_NOTICE = """
-        # 애플리케이션에 데이터베이스가 2개 이상 연결되어 SPRING_DATASOURCE_*를 생성하지 않았습니다.
-        # DataSource를 직접 설정하고 app environment의 DB별 접속 변수를 사용하세요.
-        """;
+    private static final String ENV_SOURCE = "app environment";
 
     private final List<CloudComposeServiceRenderer> serviceRenderers;
+    private final Map<ComponentType, ApplicationEnvMapper> applicationEnvMapperMap;
 
     /**
      * 서비스 블록, {@code depends_on}, 앱 환경변수 출력 순서를 {@code ComponentType} 선언 순서로 고정한다.
      * Spring 주입 순서에 따라 산출물이 달라지지 않게 하기 위해서다.
      */
-    public CloudComposeRenderer(List<CloudComposeServiceRenderer> serviceRenderers) {
+    public CloudComposeRenderer(
+        List<CloudComposeServiceRenderer> serviceRenderers,
+        List<ApplicationEnvMapper> applicationEnvMappers
+    ) {
         this.serviceRenderers = serviceRenderers.stream()
             .sorted(Comparator.comparing(CloudComposeServiceRenderer::getSupportedType))
             .toList();
+        this.applicationEnvMapperMap = applicationEnvMappers.stream()
+            .collect(Collectors.toMap(
+                ApplicationEnvMapper::getApplicationType,
+                mapper -> mapper,
+                (existing, replacement) -> existing
+            ));
     }
 
     /**
@@ -40,12 +51,13 @@ public class CloudComposeRenderer {
      */
     public IaCFileDTO.FileContentResDTO render(CloudDeployContext context) {
         validateDependencyConfiguration(context);
+        ApplicationEnvMapper mapper = applicationEnvMapper(context);
 
         StringBuilder content = new StringBuilder("""
             # CLOUD_DEPLOY 부트스트랩입니다. 민감한 값은 외부 .env 파일에서 주입해 주세요.
             """);
         if (context.hasMultipleDatabaseDependencies()) {
-            content.append(MULTIPLE_DATABASE_NOTICE);
+            content.append(mapper.multipleDatabaseNotice(ENV_SOURCE));
         }
         content.append("""
             services:
@@ -61,7 +73,7 @@ public class CloudComposeRenderer {
             context.applicationPort(),
             context.applicationPort()
         ));
-        appendApplicationEnvironment(content, context);
+        appendApplicationEnvironment(content, context, mapper);
         content.append("    env_file:\n");
         content.append("      - .env\n");
 
@@ -136,11 +148,21 @@ public class CloudComposeRenderer {
         }
     }
 
+    // 앱 타입의 매퍼가 없으면 DB 접속 변수가 조용히 빠지므로 내부 계약 위반으로 거부한다.
+    private ApplicationEnvMapper applicationEnvMapper(CloudDeployContext context) {
+        ApplicationEnvMapper mapper = applicationEnvMapperMap.get(context.applicationType());
+        if (mapper == null) {
+            throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
+        }
+        return mapper;
+    }
+
     private void appendApplicationEnvironment(
         StringBuilder content,
-        CloudDeployContext context
+        CloudDeployContext context,
+        ApplicationEnvMapper mapper
     ) {
-        // DB가 둘 이상이면 기본 DataSource를 정할 수 없어 Spring 변수 없이 타입별 접속 변수만 넣는다.
+        // DB가 둘 이상이면 기본 DataSource를 정할 수 없어 앱 프레임워크 변수 없이 타입별 접속 변수만 넣는다.
         boolean singleDatabase = context.hasSingleDatabaseDependency();
 
         StringBuilder environment = new StringBuilder();
@@ -149,10 +171,10 @@ public class CloudComposeRenderer {
                 continue;
             }
             if (singleDatabase) {
-                renderer.jdbcConnection().ifPresent(connection -> environment
-                    .append("      SPRING_DATASOURCE_URL: ").append(connection.url()).append('\n')
-                    .append("      SPRING_DATASOURCE_USERNAME: ").append(connection.username()).append('\n')
-                    .append("      SPRING_DATASOURCE_PASSWORD: ").append(connection.password()).append('\n'));
+                renderer.jdbcConnection().ifPresent(connection -> mapper
+                    .datasourceEnvironment(connection.url(), connection.username(), connection.password())
+                    .forEach((name, value) -> environment
+                        .append("      ").append(name).append(": ").append(value).append('\n')));
             }
             renderer.applicationEnvironment().forEach((name, value) -> environment
                 .append("      ").append(name).append(": ").append(value).append('\n'));

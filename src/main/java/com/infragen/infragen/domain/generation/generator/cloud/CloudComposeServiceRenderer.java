@@ -38,9 +38,9 @@ public interface CloudComposeServiceRenderer {
     SequencedMap<String, String> applicationEnvironment();
 
     /**
-     * Spring {@code SPRING_DATASOURCE_*}로 매핑할 JDBC 연결 정보를 만든다.
+     * 앱 타입별 {@code ApplicationEnvMapper}가 DataSource 변수로 매핑할 JDBC 연결 정보를 만든다.
      *
-     * <p>단일 DB 여부 판단과 Spring 변수 생성은 호출하는 쪽이 맡는다.
+     * <p>단일 DB 여부 판단과 프레임워크 변수 생성은 호출하는 쪽이 맡는다.
      * {@link #isEnabled}가 {@code true}일 때만 호출한다.
      *
      * @return JDBC 연결 정보. JDBC DataSource 대상이 아니면 빈 값

@@ -5,6 +5,8 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -12,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
 import com.infragen.infragen.domain.generation.enums.OutputFormat;
+import com.infragen.infragen.domain.generation.generator.application.ApplicationEnvMapper;
 import com.infragen.infragen.domain.generation.generator.compose.ComposeGenerationContext;
 import com.infragen.infragen.domain.generation.generator.compose.ComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.compose.ComposeYamlSupport;
@@ -28,19 +31,17 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 @Slf4j
 public class DockerComposeIaCGenerator implements LocalIaCGenerator {
-    private static final String MULTIPLE_DATABASE_NOTICE = """
-        # 애플리케이션에 데이터베이스가 2개 이상 연결되어 SPRING_DATASOURCE_*를 생성하지 않았습니다.
-        # DataSource를 직접 설정하고 .env의 DB별 접속 변수를 사용하세요.
-        """;
-
     private final Map<ComponentType, ComposeServiceRenderer> rendererMap;
     // LOCAL_DEV — 호스트에서 실행할 애플리케이션용 .env 키와 값을 context에 추가
     private final Map<ComponentType, HostAppEnvContributor> hostAppEnvContributorMap;
+    // 앱 타입별 프레임워크 변수 규칙
+    private final Map<ComponentType, ApplicationEnvMapper> applicationEnvMapperMap;
 
-    // Compose renderer와 호스트 앱 env contributor를 주입받아 Map으로 보관
+    // Compose renderer, 호스트 앱 env contributor, 앱 env mapper를 주입받아 Map으로 보관
     public DockerComposeIaCGenerator(
         @NonNull List<ComposeServiceRenderer> renderers,
-        @NonNull List<HostAppEnvContributor> hostAppEnvContributors
+        @NonNull List<HostAppEnvContributor> hostAppEnvContributors,
+        @NonNull List<ApplicationEnvMapper> applicationEnvMappers
     ) {
         this.rendererMap = renderers.stream()
             .collect(Collectors.toMap(
@@ -52,6 +53,12 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
             .collect(Collectors.toMap(
                 HostAppEnvContributor::getDependencyType,
                 contributor -> contributor,
+                (existing, replacement) -> existing
+            ));
+        this.applicationEnvMapperMap = applicationEnvMappers.stream()
+            .collect(Collectors.toMap(
+                ApplicationEnvMapper::getApplicationType,
+                mapper -> mapper,
                 (existing, replacement) -> existing
             ));
     }
@@ -109,7 +116,7 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
         String dockerComposeContent = assembleDockerCompose(
             serviceBlocks,
             rootVolumeNames,
-            hasApplicationWithMultipleDatabases(sortedComponents, context)
+            findMultipleDatabaseNotice(sortedComponents, context)
         );
         // .env 파일을 생성
         String envContent = ComposeYamlSupport.formatEnvFile(context.getEnvVars());
@@ -136,7 +143,7 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
             .build();
     }
 
-    // LOCAL_DEV — 애플리케이션별 incoming dependency의 접속 정보를 모아 .env에 Spring 매핑과 함께 넣는다.
+    // LOCAL_DEV — 애플리케이션별 incoming dependency의 접속 정보를 모아 .env에 앱 타입별 매핑과 함께 넣는다.
     private void contributeHostAppEnv(List<BaseComponent> components, ComposeGenerationContext context) {
         for (BaseComponent component : components) {
             if (component.getComponentType().getCategory() != ComponentCategory.APPLICATION) {
@@ -144,7 +151,15 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
             }
 
             List<BaseComponent> dependencies = context.findIncomingDependencies(component.getNodeId());
-            // DB가 둘 이상이면 기본 DataSource를 정할 수 없어 Spring 변수 없이 타입별 접속 변수만 넣는다.
+            ApplicationEnvMapper mapper = applicationEnvMapperMap.get(component.getComponentType());
+            if (mapper == null) {
+                log.warn(
+                    "ApplicationEnvMapper 없음: type={}, nodeId={}",
+                    component.getComponentType(),
+                    component.getNodeId()
+                );
+            }
+            // DB가 둘 이상이면 기본 DataSource를 정할 수 없어 앱 프레임워크 변수 없이 타입별 접속 변수만 넣는다.
             boolean singleDatabase = context.hasSingleDatabaseDependency(component.getNodeId());
 
             for (BaseComponent dependency : dependencies) {
@@ -158,41 +173,41 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
                     );
                     continue;
                 }
-                if (singleDatabase) {
-                    contributor.jdbcConnection(dependency).ifPresent(connection -> {
-                        context.getEnvVars().put("SPRING_DATASOURCE_URL", connection.url());
-                        context.getEnvVars().put("SPRING_DATASOURCE_USERNAME", connection.username());
-                        context.getEnvVars().put("SPRING_DATASOURCE_PASSWORD", connection.password());
-                    });
+                if (singleDatabase && mapper != null) {
+                    contributor.jdbcConnection(dependency).ifPresent(connection ->
+                        context.getEnvVars().putAll(mapper.datasourceEnvironment(
+                            connection.url(), connection.username(), connection.password())));
                 }
                 context.getEnvVars().putAll(contributor.hostAppEnvironment(dependency));
             }
         }
     }
 
-    // DB가 둘 이상인 앱이 하나라도 있으면 SPRING_DATASOURCE_*가 빠진 이유를 Compose에 안내한다.
-    private boolean hasApplicationWithMultipleDatabases(
+    // DB가 둘 이상인 앱이 하나라도 있으면 DataSource 변수가 빠진 이유를 Compose에 안내한다.
+    private Optional<String> findMultipleDatabaseNotice(
         List<BaseComponent> components,
         ComposeGenerationContext context
     ) {
         return components.stream()
             .filter(component -> component.getComponentType().getCategory() == ComponentCategory.APPLICATION)
-            .anyMatch(component -> context.hasMultipleDatabaseDependencies(component.getNodeId()));
+            .filter(component -> context.hasMultipleDatabaseDependencies(component.getNodeId()))
+            .map(component -> applicationEnvMapperMap.get(component.getComponentType()))
+            .filter(Objects::nonNull)
+            .map(mapper -> mapper.multipleDatabaseNotice(".env"))
+            .findFirst();
     }
 
     private String assembleDockerCompose(
         List<String> serviceBlocks,
         Set<String> rootVolumeNames,
-        boolean multipleDatabaseNotice
+        Optional<String> multipleDatabaseNotice
     ) {
         if (serviceBlocks.isEmpty()) {
             return "# 노드가 할당되지 않았습니다.\n";
         }
 
         StringBuilder content = new StringBuilder();
-        if (multipleDatabaseNotice) {
-            content.append(MULTIPLE_DATABASE_NOTICE);
-        }
+        multipleDatabaseNotice.ifPresent(content::append);
         content.append("services:\n");
         for (String block : serviceBlocks) {
             content.append(block);

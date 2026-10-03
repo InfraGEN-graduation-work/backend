@@ -24,6 +24,7 @@ import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.generation.generator.application.SpringBootApplicationEnvMapper;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployFileAssembler;
+import com.infragen.infragen.domain.generation.generator.cloud.SpringBootRuntimeDockerfileRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudComposeRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployContext;
 import com.infragen.infragen.domain.generation.generator.cloud.AwsTerraformRenderer;
@@ -88,6 +89,7 @@ class TerraformIaCGeneratorTest {
             new PostgresCloudComposeServiceRenderer(),
             new RedisCloudComposeServiceRenderer()
         ), List.of(new SpringBootApplicationEnvMapper())),
+        List.of(new SpringBootRuntimeDockerfileRenderer()),
         List.of(new AwsTerraformRenderer(), new OciTerraformRenderer())
     );
     private final CloudDeployFileAssembler fileAssembler = new CloudDeployFileAssembler();

@@ -10,7 +10,6 @@ import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
 import com.infragen.infragen.domain.parsing.dto.response.ApplicationComponent;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
-import com.infragen.infragen.domain.parsing.dto.response.SpringBootComponent;
 import com.infragen.infragen.global.enums.ComponentType;
 import com.infragen.infragen.global.enums.ComponentType.ComponentCategory;
 
@@ -63,9 +62,9 @@ public final class CloudDeployContext {
         return application.getComponentType();
     }
 
-    /** @return runtime Dockerfile에 사용할 Java major version */
-    public String javaVersion() {
-        return ((SpringBootComponent) application).getJavaVersion();
+    /** @return 선택된 애플리케이션. 앱 타입 전용 속성은 호출하는 앱 타입별 renderer가 하위 DTO로 읽는다. */
+    public ApplicationComponent application() {
+        return application;
     }
 
     /** @return Cloud runtime에 노출할 애플리케이션 포트 */

@@ -7,6 +7,7 @@ import java.util.Set;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
+import com.infragen.infragen.domain.parsing.dto.response.ApplicationComponent;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.dto.response.SpringBootComponent;
@@ -15,12 +16,12 @@ import com.infragen.infragen.global.enums.ComponentType.ComponentCategory;
 
 /** CLOUD_DEPLOY renderer가 공유하는 파싱 결과의 실행 정보를 제공한다. */
 public final class CloudDeployContext {
-    private final SpringBootComponent application;
+    private final ApplicationComponent application;
     private final List<BaseComponent> components;
     private final List<EdgeDTO> edges;
 
     private CloudDeployContext(
-        SpringBootComponent application,
+        ApplicationComponent application,
         List<BaseComponent> components,
         List<EdgeDTO> edges
     ) {
@@ -43,9 +44,9 @@ public final class CloudDeployContext {
             throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
         }
 
-        SpringBootComponent application = parsingResult.getComponents().stream()
-            .filter(SpringBootComponent.class::isInstance)
-            .map(SpringBootComponent.class::cast)
+        ApplicationComponent application = parsingResult.getComponents().stream()
+            .filter(ApplicationComponent.class::isInstance)
+            .map(ApplicationComponent.class::cast)
             .findFirst()
             .orElseThrow(() -> new IaCGenerationException(
                 IaCGenerationErrorCode.INVALID_COMPONENT_STATE));
@@ -64,10 +65,10 @@ public final class CloudDeployContext {
 
     /** @return runtime Dockerfile에 사용할 Java major version */
     public String javaVersion() {
-        return application.getJavaVersion();
+        return ((SpringBootComponent) application).getJavaVersion();
     }
 
-    /** @return Cloud runtime에 노출할 Spring Boot 애플리케이션 포트 */
+    /** @return Cloud runtime에 노출할 애플리케이션 포트 */
     public int applicationPort() {
         return application.getPort();
     }

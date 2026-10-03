@@ -6,7 +6,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 @Getter
-public class SpringBootComponent extends BaseComponent {
+public class SpringBootComponent extends ApplicationComponent {
     private String name;
     private int port;
     private String javaVersion;

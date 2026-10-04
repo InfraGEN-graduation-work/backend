@@ -95,6 +95,47 @@ class CloudComposeServiceRendererTest {
     }
 
     @Test
+    @DisplayName("MongoDB — 서비스 DNS 기준 MONGO_HOST/PORT를 순서대로 만든다")
+    void applicationEnvironment_Mongo_ReturnsNeutralVariablesInOrder() {
+        // given
+        CloudComposeServiceRenderer renderer = new MongoCloudComposeServiceRenderer();
+
+        // when
+        SequencedMap<String, String> environment = renderer.applicationEnvironment();
+
+        // then
+        assertEquals(
+            List.of(Map.entry("MONGO_HOST", "mongodb"), Map.entry("MONGO_PORT", "\"27017\"")),
+            List.copyOf(environment.entrySet())
+        );
+    }
+
+    @Test
+    @DisplayName("MongoDB — 외부 .env 참조식을 평문 그대로 담고 admin 인증 DB를 가진 비관계형 접속 정보를 만든다")
+    void databaseConnection_Mongo_ReturnsNonRelationalServiceDnsConnection() {
+        // given
+        CloudComposeServiceRenderer renderer = new MongoCloudComposeServiceRenderer();
+
+        // when
+        Optional<DatabaseConnection> connection = renderer.databaseConnection();
+
+        // then
+        assertEquals(
+            Optional.of(new DatabaseConnection(
+                "mongodb",
+                false,
+                "mongodb",
+                "27017",
+                "${MONGO_DATABASE:?외부 .env에 설정 필요}",
+                "${MONGO_USER:?외부 .env에 설정 필요}",
+                "${MONGO_PASSWORD:?외부 .env에 설정 필요}",
+                Optional.of("admin")
+            )),
+            connection
+        );
+    }
+
+    @Test
     @DisplayName("Redis — 서비스 DNS 기준 REDIS_HOST/PORT/PASSWORD를 순서대로 만든다")
     void applicationEnvironment_Redis_ReturnsNeutralVariablesInOrder() {
         // given

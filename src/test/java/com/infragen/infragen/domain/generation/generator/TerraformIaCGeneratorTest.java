@@ -28,11 +28,13 @@ import com.infragen.infragen.domain.generation.generator.cloud.SpringBootRuntime
 import com.infragen.infragen.domain.generation.generator.cloud.CloudComposeRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployContext;
 import com.infragen.infragen.domain.generation.generator.cloud.AwsTerraformRenderer;
+import com.infragen.infragen.domain.generation.generator.cloud.MongoCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.MysqlCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.OciTerraformRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.PostgresCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.RedisCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
+import com.infragen.infragen.domain.parsing.dto.response.MongoDBComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLComponent;
@@ -87,7 +89,8 @@ class TerraformIaCGeneratorTest {
         new CloudComposeRenderer(List.of(
             new MysqlCloudComposeServiceRenderer(),
             new PostgresCloudComposeServiceRenderer(),
-            new RedisCloudComposeServiceRenderer()
+            new RedisCloudComposeServiceRenderer(),
+            new MongoCloudComposeServiceRenderer()
         ), List.of(new SpringBootApplicationEnvMapper())),
         List.of(new SpringBootRuntimeDockerfileRenderer()),
         List.of(new AwsTerraformRenderer(), new OciTerraformRenderer())
@@ -387,6 +390,71 @@ class TerraformIaCGeneratorTest {
             () -> assertTrue(compose.contains("SPRING_DATASOURCE_USERNAME: \"${POSTGRES_USER:?외부 .env에 설정 필요}\"")),
             () -> assertTrue(compose.contains("POSTGRES_HOST: postgres\n")),
             () -> assertTrue(compose.contains("POSTGRES_PORT: \"5432\"\n")),
+            () -> assertFalse(compose.contains("데이터베이스가 2개 이상"))
+        );
+    }
+
+    @Test
+    @DisplayName("MongoDB 하나 — SPRING_MONGODB_* 생성, 외부 .env 참조식과 admin 인증 DB 포함")
+    void generate_MongoAndSpringBoot_BuildsMongoEnvironment() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        parsingResult.setComponents(List.of(parsingResult.getComponents().get(0), mongoComponent()));
+        parsingResult.setEdges(List.of(edgeToApplication("mongo-1")));
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
+        String compose = fileContent(bundle, "docker-compose.cloud.yml");
+
+        // then
+        assertAll(
+            () -> assertTrue(compose.contains("""
+
+                  mongodb:
+                    image: mongo:8.0
+                    env_file:
+                      - .env
+                    environment:
+                      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:?외부 .env에 설정 필요}
+                      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?외부 .env에 설정 필요}
+                      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:?외부 .env에 설정 필요}
+                    volumes:
+                      - mongo_data:/data/db
+                """)),
+            () -> assertTrue(compose.contains("\nvolumes:\n  mongo_data:\n")),
+            () -> assertTrue(compose.contains("depends_on:\n      - mongodb\n")),
+            () -> assertTrue(compose.contains("SPRING_MONGODB_HOST: \"mongodb\"\n")),
+            () -> assertTrue(compose.contains("SPRING_MONGODB_PORT: \"27017\"\n")),
+            () -> assertTrue(compose.contains("SPRING_MONGODB_DATABASE: \"${MONGO_DATABASE:?외부 .env에 설정 필요}\"\n")),
+            () -> assertTrue(compose.contains("SPRING_MONGODB_USERNAME: \"${MONGO_USER:?외부 .env에 설정 필요}\"\n")),
+            () -> assertTrue(compose.contains("SPRING_MONGODB_PASSWORD: \"${MONGO_PASSWORD:?외부 .env에 설정 필요}\"\n")),
+            () -> assertTrue(compose.contains("SPRING_MONGODB_AUTHENTICATION_DATABASE: \"admin\"\n")),
+            () -> assertTrue(compose.contains("MONGO_HOST: mongodb\n")),
+            () -> assertTrue(compose.contains("MONGO_PORT: \"27017\"\n")),
+            () -> assertFalse(compose.contains("SPRING_DATASOURCE_")),
+            () -> assertFalse(compose.contains("데이터베이스가 2개 이상"))
+        );
+    }
+
+    @Test
+    @DisplayName("MySQL + MongoDB — SPRING_DATASOURCE_*와 SPRING_MONGODB_*를 함께 만들고 안내 주석은 없다")
+    void generate_MysqlAndMongo_BuildsBothWithoutNotice() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        parsingResult.setComponents(List.of(
+            parsingResult.getComponents().get(0), mysqlComponent(), mongoComponent()));
+        parsingResult.setEdges(List.of(edgeToApplication("mysql-1"), edgeToApplication("mongo-1")));
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
+        String compose = fileContent(bundle, "docker-compose.cloud.yml");
+
+        // then
+        assertAll(
+            () -> assertTrue(compose.contains("SPRING_DATASOURCE_URL: \"jdbc:mysql://mysql:3306/")),
+            () -> assertTrue(compose.contains("SPRING_MONGODB_HOST: \"mongodb\"\n")),
+            () -> assertTrue(compose.contains("MYSQL_HOST: mysql\n")),
+            () -> assertTrue(compose.contains("MONGO_HOST: mongodb\n")),
             () -> assertFalse(compose.contains("데이터베이스가 2개 이상"))
         );
     }
@@ -698,6 +766,18 @@ class TerraformIaCGeneratorTest {
             .containerName("mysql")
             .port(3306)
             .volumeName("mysql_data")
+            .build();
+    }
+
+    private static MongoDBComponent mongoComponent() {
+        return MongoDBComponent.builder()
+            .id("mongo-1")
+            .posX(0f)
+            .posY(300f)
+            .imageVersion("mongo:8.0")
+            .containerName("mongo")
+            .port(27017)
+            .volumeName("mongo_data")
             .build();
     }
 

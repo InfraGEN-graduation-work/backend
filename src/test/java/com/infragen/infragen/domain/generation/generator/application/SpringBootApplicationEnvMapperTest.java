@@ -1,9 +1,11 @@
 package com.infragen.infragen.domain.generation.generator.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -45,8 +47,8 @@ class SpringBootApplicationEnvMapperTest {
     }
 
     @Test
-    @DisplayName("JDBC DB가 하나면 구성요소로 JDBC URL을 조립해 DataSource 변수를 만든다")
-    void databaseEnvironment_singleJdbc_buildsDatasourceVariables() {
+    @DisplayName("관계형 DB가 하나면 구성요소로 JDBC URL을 조립해 DataSource 변수를 만든다")
+    void databaseEnvironment_singleRelational_buildsDatasourceVariables() {
         // given
         var connections = List.of(connection("postgresql", true));
 
@@ -61,8 +63,8 @@ class SpringBootApplicationEnvMapperTest {
     }
 
     @Test
-    @DisplayName("JDBC DB가 둘 이상이면 DataSource 변수를 만들지 않는다")
-    void databaseEnvironment_multipleJdbc_returnsEmpty() {
+    @DisplayName("관계형 DB가 둘 이상이면 DataSource 변수를 만들지 않는다")
+    void databaseEnvironment_multipleRelational_returnsEmpty() {
         // given
         var connections = List.of(connection("mysql", true), connection("postgresql", true));
 
@@ -74,8 +76,8 @@ class SpringBootApplicationEnvMapperTest {
     }
 
     @Test
-    @DisplayName("비JDBC DB는 JDBC DB 개수에 세지 않는다")
-    void databaseEnvironment_jdbcWithMongo_ignoresMongo() {
+    @DisplayName("비관계형 DB는 관계형 DB 개수에 세지 않는다")
+    void databaseEnvironment_relationalWithMongo_ignoresMongo() {
         // given
         var connections = List.of(connection("mysql", true), connection("mongodb", false));
 
@@ -89,8 +91,8 @@ class SpringBootApplicationEnvMapperTest {
     }
 
     @Test
-    @DisplayName("JDBC DB가 둘 이상일 때만 안내 주석을 만든다")
-    void multipleDatabaseNotice_multipleJdbc_returnsNotice() {
+    @DisplayName("관계형 DB가 둘 이상일 때만 안내 주석을 만든다")
+    void multipleDatabaseNotice_multipleRelational_returnsNotice() {
         // given
         var connections = List.of(connection("mysql", true), connection("postgresql", true));
 
@@ -102,8 +104,8 @@ class SpringBootApplicationEnvMapperTest {
     }
 
     @Test
-    @DisplayName("JDBC DB가 없으면 변수도 안내도 만들지 않는다")
-    void databaseEnvironment_noJdbc_returnsEmpty() {
+    @DisplayName("관계형 DB가 없으면 변수도 안내도 만들지 않는다")
+    void databaseEnvironment_noRelational_returnsEmpty() {
         // given
         List<DatabaseConnection> connections = List.of();
 
@@ -116,7 +118,65 @@ class SpringBootApplicationEnvMapperTest {
         assertTrue(notice.isEmpty());
     }
 
-    private DatabaseConnection connection(String scheme, boolean jdbc) {
-        return new DatabaseConnection(scheme, jdbc, "localhost", "5432", "db", "user", "pw");
+    @Test
+    @DisplayName("MongoDB 하나면 SPRING_MONGODB 변수를 호스트, 포트, DB, 계정, 비밀번호, 인증 DB 순서로 만든다")
+    void databaseEnvironment_singleMongo_buildsMongoVariablesInOrder() {
+        // given
+        var connections = List.of(mongoConnection(Optional.of("admin")));
+
+        // when
+        var environment = mapper.databaseEnvironment(connections);
+
+        // then
+        assertEquals(
+            List.of(
+                "SPRING_MONGODB_HOST",
+                "SPRING_MONGODB_PORT",
+                "SPRING_MONGODB_DATABASE",
+                "SPRING_MONGODB_USERNAME",
+                "SPRING_MONGODB_PASSWORD",
+                "SPRING_MONGODB_AUTHENTICATION_DATABASE"
+            ),
+            List.copyOf(environment.keySet())
+        );
+        assertEquals(
+            List.of("localhost", "27017", "db", "user", "pw", "admin"),
+            List.copyOf(environment.values())
+        );
+    }
+
+    @Test
+    @DisplayName("인증 DB가 없으면 SPRING_MONGODB_AUTHENTICATION_DATABASE를 만들지 않는다")
+    void databaseEnvironment_mongoWithoutAuthenticationDatabase_omitsIt() {
+        // given
+        var connections = List.of(mongoConnection(Optional.empty()));
+
+        // when
+        var environment = mapper.databaseEnvironment(connections);
+
+        // then
+        assertFalse(environment.containsKey("SPRING_MONGODB_AUTHENTICATION_DATABASE"));
+    }
+
+    @Test
+    @DisplayName("관계형 DB와 MongoDB가 함께 있으면 SPRING_DATASOURCE 다음에 SPRING_MONGODB 변수를 만든다")
+    void databaseEnvironment_relationalAndMongo_buildsBoth() {
+        // given
+        var connections = List.of(connection("mysql", true), mongoConnection(Optional.of("admin")));
+
+        // when
+        var environment = mapper.databaseEnvironment(connections);
+
+        // then
+        assertEquals("SPRING_DATASOURCE_URL", environment.firstEntry().getKey());
+        assertEquals("admin", environment.get("SPRING_MONGODB_AUTHENTICATION_DATABASE"));
+    }
+
+    private DatabaseConnection connection(String scheme, boolean relational) {
+        return new DatabaseConnection(scheme, relational, "localhost", "5432", "db", "user", "pw");
+    }
+    private DatabaseConnection mongoConnection(Optional<String> authenticationDatabase) {
+        return new DatabaseConnection(
+            "mongodb", false, "localhost", "27017", "db", "user", "pw", authenticationDatabase);
     }
 }

@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
  * 파싱된 PostgreSQL 컴포넌트를 CLOUD_DEPLOY Compose service로 렌더링한다.
  *
  * <p>비밀값은 서버의 외부 {@code .env}에서 읽고, 값이 없으면 Compose가 기동 전에 실패하도록 {@code :?}로 참조한다.
- * 앱 컨테이너용 중립 변수와 JDBC 연결 정보도 제공한다.
+ * 앱 컨테이너용 중립 변수와 DB 접속 정보도 제공한다.
  */
 @Component
 public class PostgresCloudComposeServiceRenderer implements CloudComposeServiceRenderer {

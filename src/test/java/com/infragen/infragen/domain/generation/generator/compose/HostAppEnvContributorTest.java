@@ -39,7 +39,7 @@ class HostAppEnvContributorTest {
     }
 
     @Test
-    @DisplayName("MySQL — 호스트 포트와 env 값으로 JDBC 구성요소 접속 정보를 만든다")
+    @DisplayName("MySQL — 호스트 포트와 env 값으로 관계형 DB 구성요소 접속 정보를 만든다")
     void databaseConnection_Mysql_ReturnsLocalhostConnection() {
         // given
         HostAppEnvContributor contributor = new MysqlHostAppEnvContributor();
@@ -88,7 +88,7 @@ class HostAppEnvContributorTest {
     }
 
     @Test
-    @DisplayName("PostgreSQL — 호스트 포트와 env 값으로 JDBC 구성요소 접속 정보를 만든다")
+    @DisplayName("PostgreSQL — 호스트 포트와 env 값으로 관계형 DB 구성요소 접속 정보를 만든다")
     void databaseConnection_Postgres_ReturnsLocalhostConnection() {
         // given
         HostAppEnvContributor contributor = new PostgresHostAppEnvContributor();

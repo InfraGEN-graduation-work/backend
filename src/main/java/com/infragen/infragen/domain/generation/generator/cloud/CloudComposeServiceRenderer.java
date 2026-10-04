@@ -41,7 +41,7 @@ public interface CloudComposeServiceRenderer {
     /**
      * 앱 타입별 {@code ApplicationEnvMapper}가 프레임워크 변수로 매핑할 DB 접속 정보를 구성요소로 만든다.
      *
-     * <p>단일 DB 여부 판단과 프레임워크 변수 생성은 앱 매퍼가 맡고, DB 부품은 JDBC 여부만 선언한다.
+     * <p>단일 DB 여부 판단과 프레임워크 변수 생성은 앱 매퍼가 맡고, DB 부품은 관계형 여부만 선언한다.
      * 값은 따옴표 없는 평문이다. DB 이름, 계정, 비밀번호는 외부 {@code .env} 참조식({@code ${...}}) 그대로 담고,
      * YAML 따옴표는 출력하는 쪽이 감싼다. {@link #isEnabled}가 {@code true}일 때만 호출한다.
      *

@@ -28,7 +28,7 @@ public interface HostAppEnvContributor {
     /**
      * 앱 타입별 {@code ApplicationEnvMapper}가 프레임워크 변수로 매핑할 DB 접속 정보를 구성요소로 만든다.
      *
-     * <p>단일 DB 여부 판단과 프레임워크 변수 생성은 앱 매퍼가 맡는다. DB 부품은 JDBC 여부만 선언한다.
+     * <p>단일 DB 여부 판단과 프레임워크 변수 생성은 앱 매퍼가 맡는다. DB 부품은 관계형 여부만 선언한다.
      *
      * @param dependency 이 contributor의 {@link #getDependencyType()}에 해당하는 의존 컴포넌트
      * @return 호스트 실행 앱이 {@code localhost}와 사용자 입력 호스트 포트로 접속할 정보. DB가 아니면 빈 값

@@ -70,7 +70,7 @@ Collaboration
 - `ComponentParser` (`MySQLParser`, `PostgreSQLParser`, `RedisParser`, `SpringBootParser`): component별 node property 검증과 `BaseComponent` 구현체 변환
 - `IaCGenerator` (`LocalIaCGenerator`: `DockerComposeIaCGenerator`, `TargetAwareIaCGenerator`: `TerraformIaCGenerator`): `ParsingResultDTO`를 `OutputFormat`별 file bundle로 변환
 - `ComposeServiceRenderer` (MySQL, PostgreSQL, Redis): LOCAL_DEV dependency의 Compose service block 생성
-- `HostAppEnvContributor` (MySQL, PostgreSQL, Redis): 호스트 실행 앱의 `.env`용 타입별 중립 변수와 DB 접속 정보(`DatabaseConnection`, `jdbc` 여부 포함) 제공. `DockerComposeIaCGenerator`는 앱별로 접속 정보를 모아 앱 타입별 `ApplicationEnvMapper`에 넘기고, 단일 DB 판단은 매퍼가 한다.
+- `HostAppEnvContributor` (MySQL, PostgreSQL, Redis): 호스트 실행 앱의 `.env`용 타입별 중립 변수와 DB 접속 정보(`DatabaseConnection`, 관계형 여부 포함) 제공. `DockerComposeIaCGenerator`는 앱별로 접속 정보를 모아 앱 타입별 `ApplicationEnvMapper`에 넘기고, 단일 DB 판단은 매퍼가 한다.
 - `ApplicationEnvMapper` (Spring Boot): 앱 타입별로 `DatabaseConnection` 목록을 프레임워크 변수(`SPRING_DATASOURCE_*`)와 다중 DB 안내 주석으로 바꾼다. DataSource로 쓸 DB의 개수 판단도 매퍼가 맡는다. LOCAL_DEV generator와 CLOUD_DEPLOY renderer가 함께 쓴다.
 - `CloudComposeServiceRenderer` (MySQL, PostgreSQL, Redis): CLOUD_DEPLOY Compose bootstrap의 dependency block 생성, 앱 컨테이너용 타입별 중립 변수와 DB 접속 정보(`DatabaseConnection`, 평문 값) 제공. `CloudComposeRenderer`는 이를 `ComponentType` 순서로 모아 앱 타입별 `ApplicationEnvMapper`에 넘기고, 매퍼가 돌려준 값은 YAML 출력 시 따옴표로 감싼다.
 - `RuntimeDockerfileRenderer` (`SpringBootRuntimeDockerfileRenderer`): CLOUD_DEPLOY runtime Dockerfile을 앱 타입별로 생성한다. `TerraformIaCGenerator`가 `context.applicationType()`으로 구현을 고르고, 없으면 `INVALID_COMPONENT_STATE`로 거부한다.
@@ -115,7 +115,7 @@ Generator는 parsing 결과를 재검증하지 않고 출력 형식의 renderer�
 다음은 현재 코드의 사실이며, 목표 계약으로 추정해 바꾸지 않는다.
 
 1. Parsing component DTO, Project 저장 request, `ProjectNode` Entity는 문자열 `nodeId`를 쓰고 `nodeName`은 표시용이다. Project node response는 canvas `nodeId`와 내부 DB `Long id`를 함께 제공하고, edge response endpoint는 문자열 nodeId다.
-2. `ComponentType`에는 MongoDB, NGINX, Apache도 있지만 parser·generator는 MySQL, PostgreSQL, Redis, Spring Boot만 구현돼 있다. 애플리케이션의 JDBC DB 의존이 둘 이상이면 LOCAL_DEV와 CLOUD_DEPLOY 모두 앱 타입별 DataSource 변수 대신 Compose 안내 주석을 만든다.
+2. `ComponentType`에는 MongoDB, NGINX, Apache도 있지만 parser·generator는 MySQL, PostgreSQL, Redis, Spring Boot만 구현돼 있다. 애플리케이션의 관계형 DB 의존이 둘 이상이면 LOCAL_DEV와 CLOUD_DEPLOY 모두 앱 타입별 DataSource 변수 대신 Compose 안내 주석을 만든다.
 3. Parsing component DTO(`BaseComponent` 상속)는 HTTP 응답으로 노출되지 않는 내부 전달 객체라 `dto_convention.md`의 `ResDTO` 내부 record 구조를 따르지 않는다.
 4. Project graph 수정은 patch merge가 아니라 기존 edge·node를 삭제한 뒤 전체 graph를 교체한다.
 5. LOCAL_DEV는 Spring Boot를 호스트에서 실행하고 의존 인프라만 Compose service로 생성한다.

@@ -25,23 +25,6 @@ public class SpringBootApplicationEnvMapper implements ApplicationEnvMapper {
     }
 
     @Override
-    public SequencedMap<String, String> datasourceEnvironment(String url, String username, String password) {
-        SequencedMap<String, String> environment = new LinkedHashMap<>();
-        environment.put("SPRING_DATASOURCE_URL", url);
-        environment.put("SPRING_DATASOURCE_USERNAME", username);
-        environment.put("SPRING_DATASOURCE_PASSWORD", password);
-        return environment;
-    }
-
-    @Override
-    public String multipleDatabaseNotice(String envSource) {
-        return """
-            # 애플리케이션에 데이터베이스가 2개 이상 연결되어 SPRING_DATASOURCE_*를 생성하지 않았습니다.
-            # DataSource를 직접 설정하고 %s의 DB별 접속 변수를 사용하세요.
-            """.formatted(envSource);
-    }
-
-    @Override
     public SequencedMap<String, String> databaseEnvironment(List<DatabaseConnection> connections) {
         SequencedMap<String, String> environment = new LinkedHashMap<>();
         environment.putAll(jdbcEnvironment(connections));
@@ -54,7 +37,14 @@ public class SpringBootApplicationEnvMapper implements ApplicationEnvMapper {
         if (relationalConnections(connections).size() < 2) {
             return Optional.empty();
         }
-        return Optional.of(multipleDatabaseNotice(envSource));
+        return Optional.of(multipleDatabaseNoticeText(envSource));
+    }
+
+    private String multipleDatabaseNoticeText(String envSource) {
+        return """
+            # 애플리케이션에 데이터베이스가 2개 이상 연결되어 SPRING_DATASOURCE_*를 생성하지 않았습니다.
+            # DataSource를 직접 설정하고 %s의 DB별 접속 변수를 사용하세요.
+            """.formatted(envSource);
     }
 
     private SequencedMap<String, String> jdbcEnvironment(List<DatabaseConnection> connections) {
@@ -66,6 +56,14 @@ public class SpringBootApplicationEnvMapper implements ApplicationEnvMapper {
         String url = "jdbc:" + connection.scheme() + "://" + connection.host() + ":" + connection.port()
             + "/" + connection.database();
         return datasourceEnvironment(url, connection.username(), connection.password());
+    }
+
+    private SequencedMap<String, String> datasourceEnvironment(String url, String username, String password) {
+        SequencedMap<String, String> environment = new LinkedHashMap<>();
+        environment.put("SPRING_DATASOURCE_URL", url);
+        environment.put("SPRING_DATASOURCE_USERNAME", username);
+        environment.put("SPRING_DATASOURCE_PASSWORD", password);
+        return environment;
     }
 
     // 같은 타입 DB 중복은 parsing에서 거부되므로 MongoDB가 정확히 하나일 때만 매핑한다.

@@ -1,5 +1,6 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
+import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
 import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLComponent;
 import com.infragen.infragen.global.enums.ComponentType;
 import java.util.LinkedHashMap;
@@ -81,12 +82,15 @@ public class PostgresCloudComposeServiceRenderer implements CloudComposeServiceR
 
     /** DB 이름, 계정, 비밀번호는 서버의 외부 {@code .env} 값을 참조한다. */
     @Override
-    public Optional<JdbcConnection> jdbcConnection() {
-        return Optional.of(new JdbcConnection(
-                "\"jdbc:postgresql://" + getServiceName() + ":" + CONTAINER_PORT
-                        + "/${POSTGRES_DB:?외부 .env에 설정 필요}\"",
-                "\"${POSTGRES_USER:?외부 .env에 설정 필요}\"",
-                "\"${POSTGRES_PASSWORD:?외부 .env에 설정 필요}\""
+    public Optional<DatabaseConnection> databaseConnection() {
+        return Optional.of(new DatabaseConnection(
+            "postgresql",
+            true,
+            getServiceName(),
+            String.valueOf(CONTAINER_PORT),
+            "${POSTGRES_DB:?외부 .env에 설정 필요}",
+            "${POSTGRES_USER:?외부 .env에 설정 필요}",
+            "${POSTGRES_PASSWORD:?외부 .env에 설정 필요}"
         ));
     }
 }

@@ -3,6 +3,7 @@ package com.infragen.infragen.domain.generation.generator.cloud;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudComposeServiceRenderer.JdbcConnection;
 import java.util.List;
 import java.util.Map;
@@ -51,6 +52,30 @@ class CloudComposeServiceRendererTest {
     }
 
     @Test
+    @DisplayName("MySQL — 외부 .env 참조식을 평문 그대로 담은 접속 정보를 만든다")
+    void databaseConnection_Mysql_ReturnsServiceDnsConnection() {
+        // given
+        CloudComposeServiceRenderer renderer = new MysqlCloudComposeServiceRenderer();
+
+        // when
+        Optional<DatabaseConnection> connection = renderer.databaseConnection();
+
+        // then
+        assertEquals(
+            Optional.of(new DatabaseConnection(
+                "mysql",
+                true,
+                "mysql",
+                "3306",
+                "${MYSQL_DATABASE:?외부 .env에 설정 필요}",
+                "${MYSQL_USER:?외부 .env에 설정 필요}",
+                "${MYSQL_PASSWORD:?외부 .env에 설정 필요}"
+            )),
+            connection
+        );
+    }
+
+    @Test
     @DisplayName("PostgreSQL — 서비스 DNS 기준 POSTGRES_HOST/PORT를 순서대로 만든다")
     void applicationEnvironment_Postgres_ReturnsNeutralVariablesInOrder() {
         // given
@@ -87,6 +112,30 @@ class CloudComposeServiceRendererTest {
     }
 
     @Test
+    @DisplayName("PostgreSQL — 외부 .env 참조식을 평문 그대로 담은 접속 정보를 만든다")
+    void databaseConnection_Postgres_ReturnsServiceDnsConnection() {
+        // given
+        CloudComposeServiceRenderer renderer = new PostgresCloudComposeServiceRenderer();
+
+        // when
+        Optional<DatabaseConnection> connection = renderer.databaseConnection();
+
+        // then
+        assertEquals(
+            Optional.of(new DatabaseConnection(
+                "postgresql",
+                true,
+                "postgres",
+                "5432",
+                "${POSTGRES_DB:?외부 .env에 설정 필요}",
+                "${POSTGRES_USER:?외부 .env에 설정 필요}",
+                "${POSTGRES_PASSWORD:?외부 .env에 설정 필요}"
+            )),
+            connection
+        );
+    }
+
+    @Test
     @DisplayName("Redis — 서비스 DNS 기준 REDIS_HOST/PORT/PASSWORD를 순서대로 만든다")
     void applicationEnvironment_Redis_ReturnsNeutralVariablesInOrder() {
         // given
@@ -114,6 +163,19 @@ class CloudComposeServiceRendererTest {
 
         // when
         Optional<JdbcConnection> connection = renderer.jdbcConnection();
+
+        // then
+        assertTrue(connection.isEmpty());
+    }
+
+    @Test
+    @DisplayName("Redis — DB 접속 정보가 없다")
+    void databaseConnection_Redis_ReturnsEmpty() {
+        // given
+        CloudComposeServiceRenderer renderer = new RedisCloudComposeServiceRenderer();
+
+        // when
+        Optional<DatabaseConnection> connection = renderer.databaseConnection();
 
         // then
         assertTrue(connection.isEmpty());

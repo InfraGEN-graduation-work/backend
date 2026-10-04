@@ -1,5 +1,6 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
+import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
 import com.infragen.infragen.global.enums.ComponentType;
 import java.util.Optional;
 import java.util.SequencedMap;
@@ -38,15 +39,35 @@ public interface CloudComposeServiceRenderer {
     SequencedMap<String, String> applicationEnvironment();
 
     /**
-     * 앱 타입별 {@code ApplicationEnvMapper}가 DataSource 변수로 매핑할 JDBC 연결 정보를 만든다.
+     * 앱 타입별 {@code ApplicationEnvMapper}가 프레임워크 변수로 매핑할 DB 접속 정보를 구성요소로 만든다.
      *
-     * <p>단일 DB 여부 판단과 프레임워크 변수 생성은 호출하는 쪽이 맡는다.
+     * <p>단일 DB 여부 판단과 프레임워크 변수 생성은 앱 매퍼가 맡고, DB 부품은 JDBC 여부만 선언한다.
+     * 값은 따옴표 없는 평문이다. DB 이름, 계정, 비밀번호는 외부 {@code .env} 참조식({@code ${...}}) 그대로 담고,
+     * YAML 따옴표는 출력하는 쪽이 감싼다. {@link #isEnabled}가 {@code true}일 때만 호출한다.
+     *
+     * @return 앱 컨테이너가 Compose 서비스 DNS로 접속할 정보. DB가 아니면 빈 값
+     */
+    default Optional<DatabaseConnection> databaseConnection() {
+        return Optional.empty();
+    }
+
+    /**
+     * {@link #databaseConnection}에서 만든 JDBC 연결 정보다.
+     *
+     * <p>호출자가 새 매핑으로 옮겨가기 전까지만 두는 임시 bridge다. 각 값은 따옴표를 포함한 YAML 스칼라 원문이다.
      * {@link #isEnabled}가 {@code true}일 때만 호출한다.
      *
      * @return JDBC 연결 정보. JDBC DataSource 대상이 아니면 빈 값
      */
     default Optional<JdbcConnection> jdbcConnection() {
-        return Optional.empty();
+        return databaseConnection()
+            .filter(DatabaseConnection::jdbc)
+            .map(connection -> new JdbcConnection(
+                "\"jdbc:" + connection.scheme() + "://" + connection.host() + ":" + connection.port()
+                    + "/" + connection.database() + "\"",
+                "\"" + connection.username() + "\"",
+                "\"" + connection.password() + "\""
+            ));
     }
 
     /**

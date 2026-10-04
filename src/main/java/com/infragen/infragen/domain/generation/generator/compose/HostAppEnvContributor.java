@@ -36,27 +36,4 @@ public interface HostAppEnvContributor {
     default Optional<DatabaseConnection> databaseConnection(BaseComponent dependency) {
         return Optional.empty();
     }
-
-    /**
-     * {@link #databaseConnection}에서 만든 JDBC 연결 정보다.
-     *
-     * <p>호출자가 새 매핑으로 옮겨가기 전까지만 두는 임시 bridge다.
-     *
-     * @param dependency 이 contributor의 {@link #getDependencyType()}에 해당하는 의존 컴포넌트
-     * @return JDBC 연결 정보. JDBC DataSource 대상이 아니면 빈 값
-     */
-    default Optional<JdbcConnection> jdbcConnection(BaseComponent dependency) {
-        return databaseConnection(dependency)
-            .filter(DatabaseConnection::jdbc)
-            .map(connection -> new JdbcConnection(
-                "jdbc:" + connection.scheme() + "://" + connection.host() + ":" + connection.port()
-                    + "/" + connection.database(),
-                connection.username(),
-                connection.password()
-            ));
-    }
-
-    /** 호스트 실행 앱이 {@code localhost}와 사용자 입력 호스트 포트로 접속할 JDBC 연결 정보다. */
-    record JdbcConnection(String url, String username, String password) {
-    }
 }

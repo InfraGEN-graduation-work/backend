@@ -3,7 +3,6 @@ package com.infragen.infragen.domain.generation.generator.compose;
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
-import com.infragen.infragen.global.enums.ComponentType.ComponentCategory;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -57,37 +56,11 @@ public class ComposeGenerationContext {
         return Collections.unmodifiableList(dependencies);
     }
 
-    /**
-     * 애플리케이션에 연결된 DATABASE 의존이 정확히 하나인지 확인한다.
-     *
-     * <p>앱 타입별 DataSource 변수 생성 여부를 호출하는 generator가 같은 기준으로 판단하도록 한곳에 둔다.
-     * 같은 타입 DB 중복은 parsing 단계에서 이미 거부된다는 전제다.
-     */
-    public boolean hasSingleDatabaseDependency(String applicationNodeId) {
-        return countDatabaseDependencies(applicationNodeId) == 1;
-    }
-
-    /**
-     * 애플리케이션에 연결된 DATABASE 의존이 둘 이상인지 확인한다.
-     *
-     * <p>DataSource 변수를 만들지 않은 이유를 Compose 안내 주석으로 남길지 판단할 때 쓴다.
-     * 의존이 없는 경우와 구분하기 위해 {@link #hasSingleDatabaseDependency}와 별도로 둔다.
-     */
-    public boolean hasMultipleDatabaseDependencies(String applicationNodeId) {
-        return countDatabaseDependencies(applicationNodeId) > 1;
-    }
-
     public BaseComponent getComponent(String nodeId) {
         return componentsByNodeId.get(nodeId);
     }
 
     public LinkedHashMap<String, String> getEnvVars() {
         return envVars;
-    }
-
-    private long countDatabaseDependencies(String applicationNodeId) {
-        return findIncomingDependencies(applicationNodeId).stream()
-                .filter(dependency -> dependency.getComponentType().getCategory() == ComponentCategory.DATABASE)
-                .count();
     }
 }

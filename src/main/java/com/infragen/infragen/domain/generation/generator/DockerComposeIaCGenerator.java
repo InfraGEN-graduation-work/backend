@@ -5,7 +5,6 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -15,6 +14,7 @@ import org.springframework.stereotype.Component;
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
 import com.infragen.infragen.domain.generation.enums.OutputFormat;
 import com.infragen.infragen.domain.generation.generator.application.ApplicationEnvMapper;
+import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
 import com.infragen.infragen.domain.generation.generator.compose.ComposeGenerationContext;
 import com.infragen.infragen.domain.generation.generator.compose.ComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.compose.ComposeYamlSupport;
@@ -159,8 +159,11 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
                     component.getNodeId()
                 );
             }
-            // DB가 둘 이상이면 기본 DataSource를 정할 수 없어 앱 프레임워크 변수 없이 타입별 접속 변수만 넣는다.
-            boolean singleDatabase = context.hasSingleDatabaseDependency(component.getNodeId());
+            // 단일 DB 여부는 앱 매퍼가 판단하므로 연결된 모든 DB의 접속 정보를 한 번에 넘긴다.
+            Map<String, String> databaseEnvironment = mapper == null
+                ? Map.of()
+                : mapper.databaseEnvironment(findDatabaseConnections(dependencies));
+            boolean databaseEnvironmentPut = false;
 
             for (BaseComponent dependency : dependencies) {
                 HostAppEnvContributor contributor = hostAppEnvContributorMap.get(
@@ -173,10 +176,10 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
                     );
                     continue;
                 }
-                if (singleDatabase && mapper != null) {
-                    contributor.jdbcConnection(dependency).ifPresent(connection ->
-                        context.getEnvVars().putAll(mapper.datasourceEnvironment(
-                            connection.url(), connection.username(), connection.password())));
+                // 이전 산출물과 .env 순서를 같게 하려고 프레임워크 변수는 첫 DB 의존의 중립 변수 바로 앞에 넣는다.
+                if (!databaseEnvironmentPut && contributor.databaseConnection(dependency).isPresent()) {
+                    context.getEnvVars().putAll(databaseEnvironment);
+                    databaseEnvironmentPut = true;
                 }
                 context.getEnvVars().putAll(contributor.hostAppEnvironment(dependency));
             }
@@ -190,11 +193,28 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
     ) {
         return components.stream()
             .filter(component -> component.getComponentType().getCategory() == ComponentCategory.APPLICATION)
-            .filter(component -> context.hasMultipleDatabaseDependencies(component.getNodeId()))
-            .map(component -> applicationEnvMapperMap.get(component.getComponentType()))
-            .filter(Objects::nonNull)
-            .map(mapper -> mapper.multipleDatabaseNotice(".env"))
+            .flatMap(component -> {
+                ApplicationEnvMapper mapper = applicationEnvMapperMap.get(component.getComponentType());
+                if (mapper == null) {
+                    return Optional.<String>empty().stream();
+                }
+                List<DatabaseConnection> connections =
+                    findDatabaseConnections(context.findIncomingDependencies(component.getNodeId()));
+                return mapper.multipleDatabaseNotice(connections, ".env").stream();
+            })
             .findFirst();
+    }
+
+    private List<DatabaseConnection> findDatabaseConnections(List<BaseComponent> dependencies) {
+        return dependencies.stream()
+            .flatMap(dependency -> {
+                HostAppEnvContributor contributor = hostAppEnvContributorMap.get(dependency.getComponentType());
+                if (contributor == null) {
+                    return Optional.<DatabaseConnection>empty().stream();
+                }
+                return contributor.databaseConnection(dependency).stream();
+            })
+            .toList();
     }
 
     private String assembleDockerCompose(

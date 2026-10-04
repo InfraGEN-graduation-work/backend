@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
-import com.infragen.infragen.domain.generation.generator.compose.HostAppEnvContributor.JdbcConnection;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLEnvComponent;
 import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLComponent;
@@ -37,39 +36,6 @@ class HostAppEnvContributorTest {
             List.of(Map.entry("MYSQL_HOST", "localhost"), Map.entry("MYSQL_PORT", "3307")),
             List.copyOf(environment.entrySet())
         );
-    }
-
-    @Test
-    @DisplayName("MySQL — 호스트 포트와 env 값으로 JDBC 연결 정보를 만든다")
-    void jdbcConnection_Mysql_ReturnsLocalhostJdbcConnection() {
-        // given
-        HostAppEnvContributor contributor = new MysqlHostAppEnvContributor();
-
-        // when
-        Optional<JdbcConnection> connection = contributor.jdbcConnection(mysqlComponent(mysqlEnv()));
-
-        // then
-        assertEquals(
-            Optional.of(new JdbcConnection("jdbc:mysql://localhost:3307/appdb", "user", "userpass12")),
-            connection
-        );
-    }
-
-    @Test
-    @DisplayName("MySQL env 누락 — JDBC 연결 정보 생성 시 INVALID_COMPONENT_STATE")
-    void jdbcConnection_MysqlEnvMissing_ThrowsGenerationException() {
-        // given
-        HostAppEnvContributor contributor = new MysqlHostAppEnvContributor();
-        MySQLComponent mysql = mysqlComponent(null);
-
-        // when
-        IaCGenerationException exception = assertThrows(
-            IaCGenerationException.class,
-            () -> contributor.jdbcConnection(mysql)
-        );
-
-        // then
-        assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
     }
 
     @Test
@@ -119,39 +85,6 @@ class HostAppEnvContributorTest {
             List.of(Map.entry("POSTGRES_HOST", "localhost"), Map.entry("POSTGRES_PORT", "5433")),
             List.copyOf(environment.entrySet())
         );
-    }
-
-    @Test
-    @DisplayName("PostgreSQL — 호스트 포트와 env 값으로 JDBC 연결 정보를 만든다")
-    void jdbcConnection_Postgres_ReturnsLocalhostJdbcConnection() {
-        // given
-        HostAppEnvContributor contributor = new PostgresHostAppEnvContributor();
-
-        // when
-        Optional<JdbcConnection> connection = contributor.jdbcConnection(postgresComponent(postgresEnv()));
-
-        // then
-        assertEquals(
-            Optional.of(new JdbcConnection("jdbc:postgresql://localhost:5433/pgdb", "pguser", "pgpass1234")),
-            connection
-        );
-    }
-
-    @Test
-    @DisplayName("PostgreSQL env 누락 — JDBC 연결 정보 생성 시 INVALID_COMPONENT_STATE")
-    void jdbcConnection_PostgresEnvMissing_ThrowsGenerationException() {
-        // given
-        HostAppEnvContributor contributor = new PostgresHostAppEnvContributor();
-        PostgreSQLComponent postgres = postgresComponent(null);
-
-        // when
-        IaCGenerationException exception = assertThrows(
-            IaCGenerationException.class,
-            () -> contributor.jdbcConnection(postgres)
-        );
-
-        // then
-        assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
     }
 
     @Test
@@ -205,19 +138,6 @@ class HostAppEnvContributorTest {
             ),
             List.copyOf(environment.entrySet())
         );
-    }
-
-    @Test
-    @DisplayName("Redis — DataSource 대상이 아니라 JDBC 연결 정보가 없다")
-    void jdbcConnection_Redis_ReturnsEmpty() {
-        // given
-        HostAppEnvContributor contributor = new RedisHostAppEnvContributor();
-
-        // when
-        Optional<JdbcConnection> connection = contributor.jdbcConnection(redisComponent("redis-password"));
-
-        // then
-        assertTrue(connection.isEmpty());
     }
 
     @Test

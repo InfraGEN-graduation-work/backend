@@ -71,7 +71,7 @@ Collaboration
 - `IaCGenerator` (`LocalIaCGenerator`: `DockerComposeIaCGenerator`, `TargetAwareIaCGenerator`: `TerraformIaCGenerator`): `ParsingResultDTO`를 `OutputFormat`별 file bundle로 변환
 - `ComposeServiceRenderer` (MySQL, PostgreSQL, Redis): LOCAL_DEV dependency의 Compose service block 생성
 - `HostAppEnvContributor` (MySQL, PostgreSQL, Redis): 호스트 실행 앱의 `.env`용 타입별 중립 변수와 DB 접속 정보(`DatabaseConnection`, 관계형 여부 포함) 제공. `DockerComposeIaCGenerator`는 앱별로 접속 정보를 모아 앱 타입별 `ApplicationEnvMapper`에 넘기고, 단일 DB 판단은 매퍼가 한다.
-- `ApplicationEnvMapper` (Spring Boot): 앱 타입별로 `DatabaseConnection` 목록을 프레임워크 변수(`SPRING_DATASOURCE_*`)와 다중 DB 안내 주석으로 바꾼다. DataSource로 쓸 DB의 개수 판단도 매퍼가 맡는다. LOCAL_DEV generator와 CLOUD_DEPLOY renderer가 함께 쓴다.
+- `ApplicationEnvMapper` (Spring Boot): 앱 타입별로 DB 접속 정보를 프레임워크 변수로 바꾼다. 입력은 `SequencedMap<ComponentType, DatabaseConnection>`이고 키는 그 연결을 낸 노드의 종류다(같은 타입 DB 중복은 parsing이 거부하므로 앱마다 종류당 하나). 관계형 DB는 하나일 때만 `SPRING_DATASOURCE_*`로, 비관계형 DB는 앱 매퍼 안의 종류별 규칙표(Spring은 `MONGODB` → `SPRING_MONGODB_*`)로 매핑한다. 규칙표에 없는 비관계형 종류는 `INVALID_COMPONENT_STATE`로 거부하고, 관계형 DB가 둘 이상이면 안내 주석을 만든다. LOCAL_DEV generator와 CLOUD_DEPLOY renderer가 함께 쓴다.
 - `CloudComposeServiceRenderer` (MySQL, PostgreSQL, Redis): CLOUD_DEPLOY Compose bootstrap의 dependency block 생성, 앱 컨테이너용 타입별 중립 변수와 DB 접속 정보(`DatabaseConnection`, 평문 값) 제공. `CloudComposeRenderer`는 이를 `ComponentType` 순서로 모아 앱 타입별 `ApplicationEnvMapper`에 넘기고, 매퍼가 돌려준 값은 YAML 출력 시 따옴표로 감싼다.
 - `RuntimeDockerfileRenderer` (`SpringBootRuntimeDockerfileRenderer`): CLOUD_DEPLOY runtime Dockerfile을 앱 타입별로 생성한다. `TerraformIaCGenerator`가 `context.applicationType()`으로 구현을 고르고, 없으면 `INVALID_COMPONENT_STATE`로 거부한다.
 - `OAuth2UserInfo` (`KakaoUserInfoDTO`): provider별 사용자 응답을 공통 social identity로 제공
@@ -85,6 +85,7 @@ Collaboration
 - Spring이 주입한 구현체 목록은 `getSupportedType()`, `getDependencyType()`, `getApplicationType()`, `getOutputFormat()`을 map key로 등록하며, 같은 key의 구현체를 중복 등록하지 않는다.
 - 구현체는 자신의 출력·변환 책임만 수행하고 Repository 접근이나 HTTP 응답 생성을 맡지 않는다.
 - enum에 component type이 있다는 사실만으로 parser·renderer 지원이 완료된 것으로 판단하지 않는다.
+- 새 비관계형 DB는 그 DB를 지원할 앱 매퍼마다 규칙표 항목과 규칙 메서드를 더한다. 앱 × 비관계형 DB 조합마다 출력 형식이 달라 규칙이 필요한 비용은 구조상 남으므로, 규칙을 조합별 클래스로 쪼개지 않고 앱 매퍼 안의 메서드로 둔다(파일이 앱 수에 비례하게 유지). 새 앱 타입은 새 매퍼 클래스만 추가하고, 새 관계형 DB는 DB 부품만 추가한다.
 
 ## Parsing과 Generation의 경계
 

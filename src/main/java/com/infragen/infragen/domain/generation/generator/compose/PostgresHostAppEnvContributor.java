@@ -2,6 +2,7 @@ package com.infragen.infragen.domain.generation.generator.compose;
 
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
+import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLEnvComponent;
@@ -39,19 +40,21 @@ public class PostgresHostAppEnvContributor implements HostAppEnvContributor {
      * @throws IaCGenerationException PostgreSQL env 정보가 없는 경우
      */
     @Override
-    public Optional<JdbcConnection> jdbcConnection(BaseComponent dependency) {
+    public Optional<DatabaseConnection> databaseConnection(BaseComponent dependency) {
         PostgreSQLComponent postgres = (PostgreSQLComponent) dependency;
         PostgreSQLEnvComponent env = postgres.getEnv();
         if (env == null) {
             throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
         }
 
-        String jdbcUrl = "jdbc:postgresql://"
-            + LOCALHOST
-            + ":"
-            + postgres.getPort()
-            + "/"
-            + env.getDatabaseName();
-        return Optional.of(new JdbcConnection(jdbcUrl, env.getUsername(), env.getPassword()));
+        return Optional.of(new DatabaseConnection(
+            "postgresql",
+            true,
+            LOCALHOST,
+            String.valueOf(postgres.getPort()),
+            env.getDatabaseName(),
+            env.getUsername(),
+            env.getPassword()
+        ));
     }
 }

@@ -2,6 +2,7 @@ package com.infragen.infragen.domain.generation.generator.compose;
 
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
+import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLEnvComponent;
@@ -38,19 +39,21 @@ public class MysqlHostAppEnvContributor implements HostAppEnvContributor {
      * @throws IaCGenerationException MySQL env 정보가 없는 경우
      */
     @Override
-    public Optional<JdbcConnection> jdbcConnection(BaseComponent dependency) {
+    public Optional<DatabaseConnection> databaseConnection(BaseComponent dependency) {
         MySQLComponent mysql = (MySQLComponent) dependency;
         MySQLEnvComponent env = mysql.getEnv();
         if (env == null) {
             throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
         }
 
-        String jdbcUrl = "jdbc:mysql://"
-            + LOCALHOST
-            + ":"
-            + mysql.getPort()
-            + "/"
-            + env.getDatabaseName();
-        return Optional.of(new JdbcConnection(jdbcUrl, env.getUsername(), env.getUserPassword()));
+        return Optional.of(new DatabaseConnection(
+            "mysql",
+            true,
+            LOCALHOST,
+            String.valueOf(mysql.getPort()),
+            env.getDatabaseName(),
+            env.getUsername(),
+            env.getUserPassword()
+        ));
     }
 }

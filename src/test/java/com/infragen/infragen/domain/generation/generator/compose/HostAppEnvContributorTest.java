@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
+import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
 import com.infragen.infragen.domain.generation.generator.compose.HostAppEnvContributor.JdbcConnection;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLEnvComponent;
@@ -72,6 +73,39 @@ class HostAppEnvContributorTest {
     }
 
     @Test
+    @DisplayName("MySQL — 호스트 포트와 env 값으로 JDBC 구성요소 접속 정보를 만든다")
+    void databaseConnection_Mysql_ReturnsLocalhostConnection() {
+        // given
+        HostAppEnvContributor contributor = new MysqlHostAppEnvContributor();
+
+        // when
+        Optional<DatabaseConnection> connection = contributor.databaseConnection(mysqlComponent(mysqlEnv()));
+
+        // then
+        assertEquals(
+            Optional.of(new DatabaseConnection("mysql", true, "localhost", "3307", "appdb", "user", "userpass12")),
+            connection
+        );
+    }
+
+    @Test
+    @DisplayName("MySQL env 누락 — 접속 정보 생성 시 INVALID_COMPONENT_STATE")
+    void databaseConnection_MysqlEnvMissing_ThrowsGenerationException() {
+        // given
+        HostAppEnvContributor contributor = new MysqlHostAppEnvContributor();
+        MySQLComponent component = mysqlComponent(null);
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> contributor.databaseConnection(component)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
+    }
+
+    @Test
     @DisplayName("PostgreSQL — localhost와 사용자 입력 호스트 포트로 POSTGRES_HOST/PORT를 순서대로 만든다")
     void hostAppEnvironment_Postgres_ReturnsNeutralVariablesInOrder() {
         // given
@@ -121,6 +155,39 @@ class HostAppEnvContributorTest {
     }
 
     @Test
+    @DisplayName("PostgreSQL — 호스트 포트와 env 값으로 JDBC 구성요소 접속 정보를 만든다")
+    void databaseConnection_Postgres_ReturnsLocalhostConnection() {
+        // given
+        HostAppEnvContributor contributor = new PostgresHostAppEnvContributor();
+
+        // when
+        Optional<DatabaseConnection> connection = contributor.databaseConnection(postgresComponent(postgresEnv()));
+
+        // then
+        assertEquals(
+            Optional.of(new DatabaseConnection("postgresql", true, "localhost", "5433", "pgdb", "pguser", "pgpass1234")),
+            connection
+        );
+    }
+
+    @Test
+    @DisplayName("PostgreSQL env 누락 — 접속 정보 생성 시 INVALID_COMPONENT_STATE")
+    void databaseConnection_PostgresEnvMissing_ThrowsGenerationException() {
+        // given
+        HostAppEnvContributor contributor = new PostgresHostAppEnvContributor();
+        PostgreSQLComponent component = postgresComponent(null);
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> contributor.databaseConnection(component)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
+    }
+
+    @Test
     @DisplayName("Redis — localhost, 사용자 입력 호스트 포트, password로 REDIS_HOST/PORT/PASSWORD를 순서대로 만든다")
     void hostAppEnvironment_Redis_ReturnsNeutralVariablesInOrder() {
         // given
@@ -148,6 +215,19 @@ class HostAppEnvContributorTest {
 
         // when
         Optional<JdbcConnection> connection = contributor.jdbcConnection(redisComponent("redis-password"));
+
+        // then
+        assertTrue(connection.isEmpty());
+    }
+
+    @Test
+    @DisplayName("Redis — DB 접속 정보가 없다")
+    void databaseConnection_Redis_ReturnsEmpty() {
+        // given
+        HostAppEnvContributor contributor = new RedisHostAppEnvContributor();
+
+        // when
+        Optional<DatabaseConnection> connection = contributor.databaseConnection(redisComponent("redis-password"));
 
         // then
         assertTrue(connection.isEmpty());

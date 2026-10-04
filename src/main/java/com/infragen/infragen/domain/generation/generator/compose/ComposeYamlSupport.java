@@ -9,7 +9,9 @@ public final class ComposeYamlSupport {
     private ComposeYamlSupport() {
     }
 
-    // containerName -> name(또는 라벨) -> 타입 표시명 순으로 compose service 키 생성
+    /**
+     * containerName -> name(또는 라벨) -> 타입 표시명 순으로 compose service 키 생성
+     */
     public static String toServiceName(String containerName, String nameOrLabel, String typeFallback) {
         String raw = firstNonBlank(containerName, nameOrLabel, typeFallback);
         String lower = raw.toLowerCase(Locale.ROOT);
@@ -17,7 +19,9 @@ public final class ComposeYamlSupport {
         return normalized;
     }
 
-    // containerName이 비어 있으면 Compose service 키를 container_name으로 쓴다.
+    /**
+     * containerName이 비어 있으면 Compose service 키를 container_name으로 쓴다.
+     */
     public static String resolveContainerName(String containerName, String serviceName) {
         if (containerName != null && !containerName.isBlank()) {
             return containerName.trim();
@@ -25,7 +29,9 @@ public final class ComposeYamlSupport {
         return serviceName;
     }
 
-    // imageVersion이 비어 있으면 renderer별 기본 이미지를 쓴다.
+    /**
+     * imageVersion이 비어 있으면 renderer별 기본 이미지를 쓴다.
+     */
     public static String resolveImage(String imageVersion, String defaultImage) {
         if (imageVersion != null && !imageVersion.isBlank()) {
             return imageVersion.trim();
@@ -57,9 +63,9 @@ public final class ComposeYamlSupport {
 
         for (Map.Entry<String, String> entry : envVars.entrySet()) {
             content.append(entry.getKey())
-                .append('=')
-                .append(escapeEnvValue(entry.getValue()))
-                .append('\n');
+                    .append('=')
+                    .append(escapeEnvValue(entry.getValue()))
+                    .append('\n');
         }
 
         if (content.charAt(content.length() - 1) == '\n') {

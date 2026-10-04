@@ -17,6 +17,8 @@ import com.infragen.infragen.domain.generation.enums.OutputFormat;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.generation.generator.application.SpringBootApplicationEnvMapper;
+import com.infragen.infragen.domain.generation.generator.compose.MongoComposeServiceRenderer;
+import com.infragen.infragen.domain.generation.generator.compose.MongoHostAppEnvContributor;
 import com.infragen.infragen.domain.generation.generator.compose.MysqlComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.compose.MysqlHostAppEnvContributor;
 import com.infragen.infragen.domain.generation.generator.compose.PostgresComposeServiceRenderer;
@@ -25,6 +27,8 @@ import com.infragen.infragen.domain.generation.generator.compose.RedisComposeSer
 import com.infragen.infragen.domain.generation.generator.compose.RedisHostAppEnvContributor;
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
+import com.infragen.infragen.domain.parsing.dto.response.MongoDBComponent;
+import com.infragen.infragen.domain.parsing.dto.response.MongoDBEnvComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLEnvComponent;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
@@ -129,12 +133,14 @@ class DockerComposeIaCGeneratorTest {
             List.of(
                 new MysqlComposeServiceRenderer(),
                 new RedisComposeServiceRenderer(),
-                new PostgresComposeServiceRenderer()
+                new PostgresComposeServiceRenderer(),
+                new MongoComposeServiceRenderer()
             ),
             List.of(
                 new MysqlHostAppEnvContributor(),
                 new RedisHostAppEnvContributor(),
-                new PostgresHostAppEnvContributor()
+                new PostgresHostAppEnvContributor(),
+                new MongoHostAppEnvContributor()
             ),
             List.of(new SpringBootApplicationEnvMapper())
         );
@@ -258,6 +264,101 @@ class DockerComposeIaCGeneratorTest {
                 POSTGRES_PORT=5433
                 """, fileContent(bundle, ".env"))
         );
+    }
+
+    @Test
+    @DisplayName("LOCAL_DEV golden — MongoDB 단일 DB면 SPRING_MONGODB_* 생성, admin 인증 DB 포함")
+    void generate_LocalDevMongoAndSpringBoot_MatchesGolden() {
+        // given
+        ParsingResultDTO parsingResult = parsingResult(
+            List.of(mongoComponent(validMongoEnv()), springBootComponent()),
+            List.of(edge("mongo-1", "node-2"))
+        );
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult);
+
+        // then
+        assertAll(
+            () -> assertEquals("""
+                services:
+                  mongo:
+                    image: mongo:8.0
+                    container_name: mongo
+                    ports:
+                      - "27018:27017"
+                    volumes:
+                      - mongo_data:/data/db
+                    env_file:
+                      - .env
+                    environment:
+                      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+                      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+                      MONGO_INITDB_DATABASE: ${MONGO_DATABASE}
+                      TZ: Asia/Seoul
+
+                volumes:
+                  mongo_data:
+                """, fileContent(bundle, "docker-compose.yml")),
+            () -> assertEquals("""
+                # InfraGEN generated environment variables
+                # 민감한 정보는 이 파일에만 저장하세요. 버전 관리에 커밋하지 마세요.
+
+                MONGO_DATABASE=mongodb_app
+                MONGO_USER=mongouser
+                MONGO_PASSWORD=mongopass12
+                SPRING_MONGODB_HOST=localhost
+                SPRING_MONGODB_PORT=27018
+                SPRING_MONGODB_DATABASE=mongodb_app
+                SPRING_MONGODB_USERNAME=mongouser
+                SPRING_MONGODB_PASSWORD=mongopass12
+                SPRING_MONGODB_AUTHENTICATION_DATABASE=admin
+                MONGO_HOST=localhost
+                MONGO_PORT=27018
+                """, fileContent(bundle, ".env"))
+        );
+    }
+
+    @Test
+    @DisplayName("MySQL + MongoDB — SPRING_DATASOURCE_*와 SPRING_MONGODB_*를 함께 만들고 안내 주석은 없다")
+    void generate_LocalDevMysqlAndMongo_BuildsBothWithoutNotice() {
+        // given
+        ParsingResultDTO parsingResult = parsingResult(
+            List.of(mysqlComponent(), mongoComponent(validMongoEnv()), springBootComponent()),
+            List.of(edge("node-1", "node-2"), edge("mongo-1", "node-2"))
+        );
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult);
+
+        // then
+        String env = fileContent(bundle, ".env");
+        assertAll(
+            () -> assertTrue(env.contains("SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/appdb\n")),
+            () -> assertTrue(env.contains("SPRING_MONGODB_HOST=localhost\n")),
+            () -> assertTrue(env.contains("MYSQL_HOST=localhost\n")),
+            () -> assertTrue(env.contains("MONGO_HOST=localhost\n")),
+            () -> assertFalse(fileContent(bundle, "docker-compose.yml").startsWith("#"))
+        );
+    }
+
+    @Test
+    @DisplayName("MongoDB env 누락 — GENERATION400_2")
+    void generate_MongoEnvMissing_ThrowsGenerationException() {
+        // given
+        ParsingResultDTO parsingResult = parsingResult(
+            List.of(mongoComponent(null), springBootComponent()),
+            List.of(edge("mongo-1", "node-2"))
+        );
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> generator.generate(parsingResult)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
     }
 
     @Test
@@ -437,6 +538,27 @@ class DockerComposeIaCGeneratorTest {
             () -> assertFalse(env.contains("POSTGRES_HOST")),
             () -> assertFalse(env.contains("SPRING_DATASOURCE_URL"))
         );
+    }
+
+    private static MongoDBEnvComponent validMongoEnv() {
+        return MongoDBEnvComponent.builder()
+            .databaseName("mongodb_app")
+            .username("mongouser")
+            .password("mongopass12")
+            .build();
+    }
+
+    private static MongoDBComponent mongoComponent(MongoDBEnvComponent env) {
+        return MongoDBComponent.builder()
+            .id("mongo-1")
+            .posX(100f)
+            .posY(300f)
+            .imageVersion("mongo:8.0")
+            .containerName("mongo")
+            .volumeName("mongo_data")
+            .port(27018)
+            .env(env)
+            .build();
     }
 
     private static PostgreSQLEnvComponent validPostgresEnv() {

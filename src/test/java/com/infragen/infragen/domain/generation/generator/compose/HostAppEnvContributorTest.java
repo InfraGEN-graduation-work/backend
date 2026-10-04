@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
+import com.infragen.infragen.domain.parsing.dto.response.MongoDBComponent;
+import com.infragen.infragen.domain.parsing.dto.response.MongoDBEnvComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLEnvComponent;
 import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLComponent;
@@ -121,6 +123,57 @@ class HostAppEnvContributorTest {
     }
 
     @Test
+    @DisplayName("MongoDB — localhost와 사용자 입력 호스트 포트로 MONGO_HOST/PORT를 순서대로 만든다")
+    void hostAppEnvironment_Mongo_ReturnsNeutralVariablesInOrder() {
+        // given
+        HostAppEnvContributor contributor = new MongoHostAppEnvContributor();
+
+        // when
+        SequencedMap<String, String> environment = contributor.hostAppEnvironment(mongoComponent(mongoEnv()));
+
+        // then
+        assertEquals(
+            List.of(Map.entry("MONGO_HOST", "localhost"), Map.entry("MONGO_PORT", "27018")),
+            List.copyOf(environment.entrySet())
+        );
+    }
+
+    @Test
+    @DisplayName("MongoDB — 관계형이 아닌 접속 정보에 admin 인증 DB를 담는다")
+    void databaseConnection_Mongo_ReturnsNonRelationalConnectionWithAdminAuthenticationDatabase() {
+        // given
+        HostAppEnvContributor contributor = new MongoHostAppEnvContributor();
+
+        // when
+        Optional<DatabaseConnection> connection = contributor.databaseConnection(mongoComponent(mongoEnv()));
+
+        // then
+        assertEquals(
+            Optional.of(new DatabaseConnection(
+                "mongodb", false, "localhost", "27018", "mongodb_app", "mongouser", "mongopass12",
+                Optional.of("admin"))),
+            connection
+        );
+    }
+
+    @Test
+    @DisplayName("MongoDB env 누락 — 접속 정보 생성 시 INVALID_COMPONENT_STATE")
+    void databaseConnection_MongoEnvMissing_ThrowsGenerationException() {
+        // given
+        HostAppEnvContributor contributor = new MongoHostAppEnvContributor();
+        MongoDBComponent component = mongoComponent(null);
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> contributor.databaseConnection(component)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
+    }
+
+    @Test
     @DisplayName("Redis — localhost, 사용자 입력 호스트 포트, password로 REDIS_HOST/PORT/PASSWORD를 순서대로 만든다")
     void hostAppEnvironment_Redis_ReturnsNeutralVariablesInOrder() {
         // given
@@ -168,6 +221,26 @@ class HostAppEnvContributorTest {
 
         // then
         assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
+    }
+
+    private static MongoDBEnvComponent mongoEnv() {
+        return MongoDBEnvComponent.builder()
+            .databaseName("mongodb_app")
+            .username("mongouser")
+            .password("mongopass12")
+            .build();
+    }
+
+    private static MongoDBComponent mongoComponent(MongoDBEnvComponent env) {
+        return MongoDBComponent.builder()
+            .id("mongo-1")
+            .posX(0f)
+            .posY(0f)
+            .imageVersion("mongo:8.0")
+            .containerName("mongo")
+            .port(27018)
+            .env(env)
+            .build();
     }
 
     private static RedisComponent redisComponent(String password) {

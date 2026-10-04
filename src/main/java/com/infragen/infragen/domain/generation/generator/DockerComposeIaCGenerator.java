@@ -2,10 +2,12 @@ package com.infragen.infragen.domain.generation.generator;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.SequencedMap;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -198,23 +200,23 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
                 if (mapper == null) {
                     return Optional.<String>empty().stream();
                 }
-                List<DatabaseConnection> connections =
+                SequencedMap<ComponentType, DatabaseConnection> connections =
                     findDatabaseConnections(context.findIncomingDependencies(component.getNodeId()));
                 return mapper.multipleDatabaseNotice(connections, ".env").stream();
             })
             .findFirst();
     }
 
-    private List<DatabaseConnection> findDatabaseConnections(List<BaseComponent> dependencies) {
-        return dependencies.stream()
-            .flatMap(dependency -> {
-                HostAppEnvContributor contributor = hostAppEnvContributorMap.get(dependency.getComponentType());
-                if (contributor == null) {
-                    return Optional.<DatabaseConnection>empty().stream();
-                }
-                return contributor.databaseConnection(dependency).stream();
-            })
-            .toList();
+    private SequencedMap<ComponentType, DatabaseConnection> findDatabaseConnections(List<BaseComponent> dependencies) {
+        SequencedMap<ComponentType, DatabaseConnection> connections = new LinkedHashMap<>();
+        for (BaseComponent dependency : dependencies) {
+            HostAppEnvContributor contributor = hostAppEnvContributorMap.get(dependency.getComponentType());
+            if (contributor != null) {
+                contributor.databaseConnection(dependency)
+                    .ifPresent(connection -> connections.put(dependency.getComponentType(), connection));
+            }
+        }
+        return connections;
     }
 
     private String assembleDockerCompose(

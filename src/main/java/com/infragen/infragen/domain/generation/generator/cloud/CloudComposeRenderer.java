@@ -10,9 +10,11 @@ import com.infragen.infragen.domain.parsing.dto.response.VolumeComponent;
 import com.infragen.infragen.global.enums.ComponentType;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.SequencedMap;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
@@ -58,7 +60,7 @@ public class CloudComposeRenderer {
             # CLOUD_DEPLOY 부트스트랩입니다. 민감한 값은 외부 .env 파일에서 주입해 주세요.
             """);
         // 단일 DB 여부는 앱 매퍼가 판단하므로 연결된 모든 DB의 접속 정보를 한 번에 넘긴다.
-        List<DatabaseConnection> connections = databaseConnections(context);
+        SequencedMap<ComponentType, DatabaseConnection> connections = databaseConnections(context);
         mapper.multipleDatabaseNotice(connections, ENV_SOURCE).ifPresent(content::append);
         content.append("""
             services:
@@ -158,18 +160,22 @@ public class CloudComposeRenderer {
         return mapper;
     }
 
-    private List<DatabaseConnection> databaseConnections(CloudDeployContext context) {
-        return serviceRenderers.stream()
-            .filter(renderer -> renderer.isEnabled(context))
-            .flatMap(renderer -> renderer.databaseConnection().stream())
-            .toList();
+    private SequencedMap<ComponentType, DatabaseConnection> databaseConnections(CloudDeployContext context) {
+        SequencedMap<ComponentType, DatabaseConnection> connections = new LinkedHashMap<>();
+        for (CloudComposeServiceRenderer renderer : serviceRenderers) {
+            if (renderer.isEnabled(context)) {
+                renderer.databaseConnection()
+                    .ifPresent(connection -> connections.put(renderer.getSupportedType(), connection));
+            }
+        }
+        return connections;
     }
 
     private void appendApplicationEnvironment(
         StringBuilder content,
         CloudDeployContext context,
         ApplicationEnvMapper mapper,
-        List<DatabaseConnection> connections
+        SequencedMap<ComponentType, DatabaseConnection> connections
     ) {
         Map<String, String> databaseEnvironment = mapper.databaseEnvironment(connections);
         boolean databaseEnvironmentPut = false;

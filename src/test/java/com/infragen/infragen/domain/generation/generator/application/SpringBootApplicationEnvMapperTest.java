@@ -2,14 +2,19 @@ package com.infragen.infragen.domain.generation.generator.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.SequencedMap;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
+import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.global.enums.ComponentType;
 
 class SpringBootApplicationEnvMapperTest {
@@ -23,10 +28,10 @@ class SpringBootApplicationEnvMapperTest {
     }
 
     @Test
-    @DisplayName("관계형 DB가 하나면 구성요소로 JDBC URL을 조립해 DataSource 변수를 만든다")
+    @DisplayName("관계형 DB가 하나면 구성요소로 JDBC URL을 조립해 DataSource 변수를 URL, USERNAME, PASSWORD 순서로 만든다")
     void databaseEnvironment_singleRelational_buildsDatasourceVariables() {
         // given
-        var connections = List.of(connection("postgresql", true));
+        var connections = connections(ComponentType.POSTGRESQL, relational("postgresql"));
 
         // when
         var environment = mapper.databaseEnvironment(connections);
@@ -46,7 +51,10 @@ class SpringBootApplicationEnvMapperTest {
     @DisplayName("관계형 DB가 둘 이상이면 DataSource 변수를 만들지 않는다")
     void databaseEnvironment_multipleRelational_returnsEmpty() {
         // given
-        var connections = List.of(connection("mysql", true), connection("postgresql", true));
+        var connections = connections(
+            ComponentType.MYSQL, relational("mysql"),
+            ComponentType.POSTGRESQL, relational("postgresql")
+        );
 
         // when
         var environment = mapper.databaseEnvironment(connections);
@@ -57,9 +65,12 @@ class SpringBootApplicationEnvMapperTest {
 
     @Test
     @DisplayName("비관계형 DB는 관계형 DB 개수에 세지 않는다")
-    void databaseEnvironment_relationalWithMongo_ignoresMongo() {
+    void databaseEnvironment_relationalWithMongo_ignoresMongoInCount() {
         // given
-        var connections = List.of(connection("mysql", true), connection("mongodb", false));
+        var connections = connections(
+            ComponentType.MYSQL, relational("mysql"),
+            ComponentType.MONGODB, mongo(Optional.of("admin"))
+        );
 
         // when
         var environment = mapper.databaseEnvironment(connections);
@@ -74,7 +85,10 @@ class SpringBootApplicationEnvMapperTest {
     @DisplayName("관계형 DB가 둘 이상일 때만 안내 주석을 만든다")
     void multipleDatabaseNotice_multipleRelational_returnsNotice() {
         // given
-        var connections = List.of(connection("mysql", true), connection("postgresql", true));
+        var connections = connections(
+            ComponentType.MYSQL, relational("mysql"),
+            ComponentType.POSTGRESQL, relational("postgresql")
+        );
 
         // when
         var notice = mapper.multipleDatabaseNotice(connections, ".env");
@@ -90,7 +104,10 @@ class SpringBootApplicationEnvMapperTest {
     @DisplayName("안내 주석에 접속 변수 위치 이름을 넣는다")
     void multipleDatabaseNotice_envSource_isIncludedInNotice() {
         // given
-        var connections = List.of(connection("mysql", true), connection("postgresql", true));
+        var connections = connections(
+            ComponentType.MYSQL, relational("mysql"),
+            ComponentType.POSTGRESQL, relational("postgresql")
+        );
 
         // when
         var notice = mapper.multipleDatabaseNotice(connections, "app environment");
@@ -100,10 +117,10 @@ class SpringBootApplicationEnvMapperTest {
     }
 
     @Test
-    @DisplayName("관계형 DB가 없으면 변수도 안내도 만들지 않는다")
-    void databaseEnvironment_noRelational_returnsEmpty() {
+    @DisplayName("DB가 없으면 변수도 안내도 만들지 않는다")
+    void databaseEnvironment_noConnections_returnsEmpty() {
         // given
-        List<DatabaseConnection> connections = List.of();
+        SequencedMap<ComponentType, DatabaseConnection> connections = new LinkedHashMap<>();
 
         // when
         var environment = mapper.databaseEnvironment(connections);
@@ -118,7 +135,7 @@ class SpringBootApplicationEnvMapperTest {
     @DisplayName("MongoDB 하나면 SPRING_MONGODB 변수를 호스트, 포트, DB, 계정, 비밀번호, 인증 DB 순서로 만든다")
     void databaseEnvironment_singleMongo_buildsMongoVariablesInOrder() {
         // given
-        var connections = List.of(mongoConnection(Optional.of("admin")));
+        var connections = connections(ComponentType.MONGODB, mongo(Optional.of("admin")));
 
         // when
         var environment = mapper.databaseEnvironment(connections);
@@ -145,7 +162,7 @@ class SpringBootApplicationEnvMapperTest {
     @DisplayName("인증 DB가 없으면 SPRING_MONGODB_AUTHENTICATION_DATABASE를 만들지 않는다")
     void databaseEnvironment_mongoWithoutAuthenticationDatabase_omitsIt() {
         // given
-        var connections = List.of(mongoConnection(Optional.empty()));
+        var connections = connections(ComponentType.MONGODB, mongo(Optional.empty()));
 
         // when
         var environment = mapper.databaseEnvironment(connections);
@@ -158,7 +175,10 @@ class SpringBootApplicationEnvMapperTest {
     @DisplayName("관계형 DB와 MongoDB가 함께 있으면 SPRING_DATASOURCE 다음에 SPRING_MONGODB 변수를 만든다")
     void databaseEnvironment_relationalAndMongo_buildsBoth() {
         // given
-        var connections = List.of(connection("mysql", true), mongoConnection(Optional.of("admin")));
+        var connections = connections(
+            ComponentType.MYSQL, relational("mysql"),
+            ComponentType.MONGODB, mongo(Optional.of("admin"))
+        );
 
         // when
         var environment = mapper.databaseEnvironment(connections);
@@ -168,10 +188,45 @@ class SpringBootApplicationEnvMapperTest {
         assertEquals("admin", environment.get("SPRING_MONGODB_AUTHENTICATION_DATABASE"));
     }
 
-    private DatabaseConnection connection(String scheme, boolean relational) {
-        return new DatabaseConnection(scheme, relational, "localhost", "5432", "db", "user", "pw");
+    @Test
+    @DisplayName("규칙이 없는 비관계형 DB 종류는 조용히 무시하지 않고 INVALID_COMPONENT_STATE로 거부한다")
+    void databaseEnvironment_unmappedNonRelationalType_throwsGenerationException() {
+        // given
+        var connections = connections(ComponentType.REDIS, new DatabaseConnection(
+            "redis", false, "localhost", "6379", "0", "user", "pw"));
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> mapper.databaseEnvironment(connections)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
     }
-    private DatabaseConnection mongoConnection(Optional<String> authenticationDatabase) {
+
+    private SequencedMap<ComponentType, DatabaseConnection> connections(
+        ComponentType type, DatabaseConnection connection
+    ) {
+        SequencedMap<ComponentType, DatabaseConnection> connections = new LinkedHashMap<>();
+        connections.put(type, connection);
+        return connections;
+    }
+
+    private SequencedMap<ComponentType, DatabaseConnection> connections(
+        ComponentType firstType, DatabaseConnection first,
+        ComponentType secondType, DatabaseConnection second
+    ) {
+        SequencedMap<ComponentType, DatabaseConnection> connections = connections(firstType, first);
+        connections.put(secondType, second);
+        return connections;
+    }
+
+    private DatabaseConnection relational(String scheme) {
+        return new DatabaseConnection(scheme, true, "localhost", "5432", "db", "user", "pw");
+    }
+
+    private DatabaseConnection mongo(Optional<String> authenticationDatabase) {
         return new DatabaseConnection(
             "mongodb", false, "localhost", "27017", "db", "user", "pw", authenticationDatabase);
     }

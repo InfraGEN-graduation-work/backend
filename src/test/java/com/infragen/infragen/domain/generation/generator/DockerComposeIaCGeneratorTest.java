@@ -458,6 +458,24 @@ class DockerComposeIaCGeneratorTest {
     }
 
     @Test
+    @DisplayName("LOCAL_DEV — Redis가 먼저 연결돼도 DataSource 변수는 MySQL 중립 변수 바로 앞에 놓인다")
+    void generate_LocalDevRedisBeforeMysql_PlacesDataSourceBeforeMysqlVariables() {
+        // given
+        ParsingResultDTO parsingResult = parsingResult(
+            List.of(mysqlComponent(), redisComponent(), springBootComponent()),
+            List.of(edge("redis-1", "node-2"), edge("node-1", "node-2"))
+        );
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult);
+
+        // then
+        String env = fileContent(bundle, ".env");
+        assertTrue(env.indexOf("REDIS_PASSWORD=") < env.indexOf("SPRING_DATASOURCE_URL="));
+        assertTrue(env.indexOf("SPRING_DATASOURCE_PASSWORD=") < env.indexOf("MYSQL_HOST="));
+    }
+
+    @Test
     @DisplayName("LOCAL_DEV golden — MySQL + PostgreSQL이면 안내 주석과 타입별 접속 변수만 생성")
     void generate_LocalDevMysqlAndPostgres_MatchesGolden() {
         // given

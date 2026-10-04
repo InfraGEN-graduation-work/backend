@@ -50,31 +50,4 @@ public interface CloudComposeServiceRenderer {
     default Optional<DatabaseConnection> databaseConnection() {
         return Optional.empty();
     }
-
-    /**
-     * {@link #databaseConnection}에서 만든 JDBC 연결 정보다.
-     *
-     * <p>호출자가 새 매핑으로 옮겨가기 전까지만 두는 임시 bridge다. 각 값은 따옴표를 포함한 YAML 스칼라 원문이다.
-     * {@link #isEnabled}가 {@code true}일 때만 호출한다.
-     *
-     * @return JDBC 연결 정보. JDBC DataSource 대상이 아니면 빈 값
-     */
-    default Optional<JdbcConnection> jdbcConnection() {
-        return databaseConnection()
-            .filter(DatabaseConnection::jdbc)
-            .map(connection -> new JdbcConnection(
-                "\"jdbc:" + connection.scheme() + "://" + connection.host() + ":" + connection.port()
-                    + "/" + connection.database() + "\"",
-                "\"" + connection.username() + "\"",
-                "\"" + connection.password() + "\""
-            ));
-    }
-
-    /**
-     * 앱 컨테이너가 Compose 서비스 DNS로 접속할 JDBC 연결 정보다.
-     *
-     * <p>각 값은 따옴표를 포함한 YAML 스칼라 원문이며, 비밀값은 외부 {@code .env} 참조식으로 둔다.
-     */
-    record JdbcConnection(String url, String username, String password) {
-    }
 }

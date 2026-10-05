@@ -47,6 +47,9 @@ public class ValidateGraphStructure {
             indegree.put(nodeId, 0);
         }
 
+        validateNginxConnection(nodeTypeMap, edges);
+        validateNginxNames(nodes, nodeTypeMap);
+
         if (edges == null || edges.isEmpty()) {
             return;
         }
@@ -135,5 +138,69 @@ public class ValidateGraphStructure {
         } catch (IllegalArgumentException e) {
             throw new ParsingException(ParsingErrorCode.UNSUPPORTED_COMPONENT_TYPE);
         }
+    }
+
+    private void validateNginxConnection(Map<String, ComponentType> types, List<EdgeDTO> edges) {
+        List<String> proxies = types.entrySet().stream()
+            .filter(entry -> entry.getValue() == ComponentType.NGINX)
+            .map(Map.Entry::getKey).toList();
+        if (proxies.isEmpty()) {
+            return;
+        }
+        long apps = types.values().stream()
+            .filter(type -> type.getCategory() == ComponentCategory.APPLICATION).count();
+        if (proxies.size() != 1 || apps != 1 || edges == null) {
+            throw new ParsingException(ParsingErrorCode.INVALID_NGINX_CONNECTION);
+        }
+        String proxy = proxies.getFirst();
+        boolean connected = false;
+        for (EdgeDTO edge : edges) {
+            if (edge == null) {
+                continue;
+            }
+            if (proxy.equals(edge.getSourceNodeId())) {
+                throw new ParsingException(ParsingErrorCode.INVALID_COMPONENT_DEPENDENCY);
+            }
+            if (proxy.equals(edge.getTargetNodeId())) {
+                ComponentType source = types.get(edge.getSourceNodeId());
+                if (source == null || source.getCategory() != ComponentCategory.APPLICATION) {
+                    throw new ParsingException(ParsingErrorCode.INVALID_NGINX_CONNECTION);
+                }
+                connected = true;
+            }
+        }
+        if (!connected) {
+            throw new ParsingException(ParsingErrorCode.INVALID_NGINX_CONNECTION);
+        }
+    }
+
+    private void validateNginxNames(List<NodeDTO> nodes, Map<String, ComponentType> types) {
+        NodeDTO nginx = nodes.stream().filter(node -> node != null
+            && types.get(node.getNodeId()) == ComponentType.NGINX).findFirst().orElse(null);
+        if (nginx == null) {
+            return;
+        }
+        String proxyName = containerName(nginx, ComponentType.NGINX);
+        for (NodeDTO node : nodes) {
+            if (node == null || node == nginx) {
+                continue;
+            }
+            ComponentType type = types.get(node.getNodeId());
+            if (type.getCategory() == ComponentCategory.APPLICATION) {
+                continue;
+            }
+            String name = containerName(node, type);
+            if (name.equals(proxyName) || name.equalsIgnoreCase("nginx")) {
+                throw new ParsingException(ParsingErrorCode.INVALID_NGINX_PROPERTIES);
+            }
+        }
+    }
+
+    private String containerName(NodeDTO node, ComponentType type) {
+        Object name = node.getProperties() == null ? null : node.getProperties().get("containerName");
+        if (name instanceof String value && !value.isBlank()) {
+            return value.trim();
+        }
+        return type == ComponentType.POSTGRESQL ? "postgres" : type.name().toLowerCase(java.util.Locale.ROOT);
     }
 }

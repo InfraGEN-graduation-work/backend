@@ -27,9 +27,11 @@ public class AwsTerraformRenderer implements CloudTerraformRenderer {
         DeploymentTargetReqDTO.AwsDeploymentTarget target = requireTarget(deploymentTarget);
         return List.of(
             file("aws/terraform/main.tf", mainTerraform()),
-            file("aws/terraform/variables.tf", variablesTerraform(context.applicationPort())),
+            file("aws/terraform/variables.tf", variablesTerraform(context.publicPort())
+                .replace("파싱된 그래프의 Spring Boot 애플리케이션 포트", context.nginx().isPresent()
+                    ? "NGINX 외부 공개 포트" : "파싱된 그래프의 Spring Boot 애플리케이션 포트")),
             file("aws/terraform/terraform.tfvars.example", tfvarsExample(
-                context.applicationPort(), target))
+                context.publicPort(), target))
         );
     }
 

@@ -110,6 +110,7 @@ public class TerraformIaCGenerator implements TargetAwareIaCGenerator {
             cloudComposeRenderer.render(context),
             cloudDeployWarningRenderer.render()
         ));
+        files.addAll(cloudComposeRenderer.additionalFiles(context));
 
         return cloudDeployFileAssembler.assemble(files);
     }

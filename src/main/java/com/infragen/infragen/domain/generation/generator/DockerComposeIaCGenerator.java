@@ -77,6 +77,7 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
         // 렌더러 Map에서 지원하는 컴포넌트 타입을 찾음
         ComposeGenerationContext context = new ComposeGenerationContext(parsingResult);
         List<String> serviceBlocks = new ArrayList<>();
+        List<IaCFileDTO.FileContentResDTO> additionalFiles = new ArrayList<>();
         Set<String> rootVolumeNames = new LinkedHashSet<>();
         /**
          * 컴포넌트를 시작 우선순위 순으로 정렬
@@ -102,6 +103,7 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
                 continue;
             }
             serviceBlocks.add(renderer.render(component, context));
+            additionalFiles.addAll(renderer.additionalFiles(component, context));
             if (component instanceof VolumeComponent volumeComponent
                 && volumeComponent.getVolumeName() != null
                 && !volumeComponent.getVolumeName().isBlank()) {
@@ -129,8 +131,7 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
         );
 
 
-        return IaCFileDTO.BundleResDTO.builder()
-            .files(List.of(
+        List<IaCFileDTO.FileContentResDTO> files = new ArrayList<>(List.of(
                 IaCFileDTO.FileContentResDTO.builder()
                     .fileName("local/docker-compose.yml")
                     .content(dockerComposeContent)
@@ -139,8 +140,10 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
                     .fileName("local/.env")
                     .content(envContent)
                     .build()
-            ))
-            .build();
+            ));
+        additionalFiles.forEach(file -> files.add(IaCFileDTO.FileContentResDTO.builder()
+            .fileName("local/" + file.fileName()).content(file.content()).build()));
+        return IaCFileDTO.BundleResDTO.builder().files(List.copyOf(files)).build();
     }
 
     // LOCAL_DEV — 애플리케이션별 incoming dependency의 접속 정보를 모아 .env에 앱 타입별 매핑과 함께 넣는다.

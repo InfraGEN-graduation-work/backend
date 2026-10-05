@@ -3,6 +3,9 @@ package com.infragen.infragen.domain.generation.generator.cloud;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import com.infragen.infragen.domain.parsing.dto.response.NginxComponent;
 
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
@@ -70,6 +73,21 @@ public final class CloudDeployContext {
     /** @return Cloud runtime에 노출할 애플리케이션 포트 */
     public int applicationPort() {
         return application.getPort();
+    }
+
+    public Optional<NginxComponent> nginx() {
+        Set<String> outgoing = edges.stream()
+            .filter(edge -> edge != null && application.getNodeId().equals(edge.getSourceNodeId()))
+            .map(EdgeDTO::getTargetNodeId).collect(Collectors.toSet());
+        return components.stream()
+            .filter(NginxComponent.class::isInstance)
+            .map(NginxComponent.class::cast)
+            .filter(component -> outgoing.contains(component.getNodeId())).findFirst();
+    }
+
+    public int publicPort() {
+        return nginx().map(NginxComponent::getPort)
+            .orElseGet(this::applicationPort);
     }
 
     /** @return 선택된 애플리케이션으로 연결된 non-application component 목록 */

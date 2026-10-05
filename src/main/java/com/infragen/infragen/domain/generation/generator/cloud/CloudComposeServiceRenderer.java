@@ -1,6 +1,8 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
 import com.infragen.infragen.global.enums.ComponentType;
+import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
+import java.util.List;
 import java.util.Optional;
 import java.util.SequencedMap;
 
@@ -23,6 +25,10 @@ public interface CloudComposeServiceRenderer {
      * @return Compose service block
      */
     String render(CloudDeployContext context);
+
+    default List<IaCFileDTO.FileContentResDTO> additionalFiles(CloudDeployContext context) {
+        return List.of();
+    }
 
     /**
      * 앱 컨테이너 {@code environment}에 넣을 이 의존 인프라의 타입별 중립 변수를 만든다.

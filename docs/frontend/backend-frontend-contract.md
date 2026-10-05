@@ -450,11 +450,11 @@ nodeId는 캔버스가 생성하고 유지하는 문자열 식별자다. nodeNam
 - MYSQL
 - POSTGRESQL
 - REDIS
+- NGINX (단일 앱 리버스 프록시)
 
 enum에는 있지만 parser가 없는 컴포넌트:
 
 - MONGODB
-- NGINX
 - APACHE
 
 지원되지 않는 컴포넌트는 캔버스 palette에서 비활성화한다.
@@ -545,6 +545,26 @@ enum에는 있지만 parser가 없는 컴포넌트:
 Redis password는 LOCAL_DEV Compose command와 호스트 .env에 사용된다.
 
 ### 5.6 edge 정책
+
+#### NGINX properties와 생성 계약
+
+```json
+{"imageVersion":"nginx:stable","port":80,"containerName":"nginx"}
+```
+
+- `imageVersion`: 필수 문자열, 전체 Docker 이미지 참조. 영숫자로 시작하고 영숫자·`.`·`_`·`/`·`:`·`@`·`-`만 허용한다.
+- `containerName`: 선택 문자열, 누락/null/빈 문자열이면 `nginx`. 영숫자로 시작하고 영숫자·`_`·`.`·`-`만 허용한다.
+- NGINX가 있으면 다른 인프라의 컨테이너 이름과 중복될 수 없다. `nginx` 서비스 이름도 예약하므로 다른 인프라의 `containerName`으로 사용할 수 없다(대소문자 구분 없이 검사).
+- `port`: 필수 JSON 정수 1~65535. 호스트 공개 포트이며 컨테이너 내부 listen 포트는 80이다. 전체 graph의 port 중복 금지는 유지한다.
+- 속성 오류는 `PARSING400_26`, 연결 오류는 `PARSING400_27`, NGINX 포트 오류는 `PARSING400_28`이다.
+- NGINX가 있는 graph는 APPLICATION 1개, NGINX 1개만 허용하고 `APPLICATION → NGINX` 연결이 필수다. 역방향은 `PARSING400_10`, 미연결·DB/캐시 → NGINX·다중 앱·다중 NGINX는 거부한다. 같은 edge의 중복은 허용한다.
+- 모든 경로를 하나의 앱에 전달한다. `routes`, `path`, `upstream`은 받지 않는다. TLS, HTTPS, 로드 밸런싱은 지원하지 않는다.
+- LOCAL_DEV: `local/nginx/default.conf`에서 `host.docker.internal:{appPort}`로 프록시한다. Compose에 `extra_hosts: ["host.docker.internal:host-gateway"]`를 넣는다. 앱은 호스트에서 실행하고 컨테이너에서 접근 가능한 인터페이스에 바인딩해야 한다(`127.0.0.1` 전용 바인딩은 피한다).
+- CLOUD_DEPLOY: `cloud/nginx/default.conf`에서 `app:{appPort}`로 프록시한다. NGINX만 호스트에 포트를 공개하고 앱의 `ports`는 생략한다. NGINX의 `depends_on: [app]`은 시작 순서를 지정하며 앱 readiness를 보장하지 않는다. 앱 준비 전에는 502가 발생할 수 있다.
+- 각 Compose는 `./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro`로 설정을 마운트한다. 파일의 상대 디렉터리 구조를 유지한다.
+- AWS·OCI Terraform의 기존 `app_port`는 외부 진입 포트로 사용한다. NGINX가 있으면 NGINX 포트, 없으면 기존 앱 포트다. `appCidr`도 이 진입 포트에 적용된다. 변경 시 Compose 공개 포트와 함께 맞춰야 한다.
+- 설정 파일은 기존 `files` 배열에 포함되어 같은 생성 history에 파일명·본문이 저장된다. `includeLocalSpec=true`이면 local/cloud 설정이 각각 포함된다. DB 스키마 변경은 없다.
+- 다중 앱 구조 리팩터링과 프론트 palette·속성 UI 활성화는 별도 작업이다. NGINX 없는 graph의 생성 정책은 유지한다.
 
 Generate graph edge 구조:
 

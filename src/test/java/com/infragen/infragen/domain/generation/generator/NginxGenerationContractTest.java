@@ -257,6 +257,106 @@ class NginxGenerationContractTest {
         );
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15})
+    @DisplayName("모든 DB·캐시 조합에서 Local과 AWS·OCI의 NGINX 및 의존 서비스를 생성한다")
+    void generate_allInfrastructureCombinations_preservesDependencies(int mask) {
+        // given
+        var base = request(9090, 80);
+        var dependencies = List.of(
+            new NodeDTO("mysql", "MYSQL", 0f, 0f, Map.of(
+                "imageVersion", "mysql:8", "port", 3306, "containerName", "mysql-db",
+                "env", Map.of("databaseName", "appdb", "username", "testuser",
+                    "rootPassword", "test-only-password", "userPassword", "test-only-password"))),
+            new NodeDTO("postgres", "POSTGRESQL", 0f, 0f, Map.of(
+                "imageVersion", "postgres:16", "port", 5432, "containerName", "postgres-db",
+                "env", Map.of("databaseName", "appdb", "username", "testuser",
+                    "password", "test-only-password"))),
+            new NodeDTO("mongodb", "MONGODB", 0f, 0f, Map.of(
+                "imageVersion", "mongo:8", "port", 27017, "containerName", "mongo-db",
+                "env", Map.of("databaseName", "appdb", "username", "testuser",
+                    "password", "test-only-password"))),
+            new NodeDTO("redis", "REDIS", 0f, 0f, Map.of(
+                "imageVersion", "redis:7", "port", 6379, "containerName", "redis-cache",
+                "password", "test-only-password")));
+        var nodes = new ArrayList<>(base.getNodes());
+        var edges = new ArrayList<>(base.getEdges());
+        for (int index = 0; index < dependencies.size(); index++) {
+            if ((mask & (1 << index)) != 0) {
+                var dependency = dependencies.get(index);
+                nodes.add(dependency);
+                edges.add(edge(dependency.getNodeId(), "application"));
+            }
+        }
+
+        // when
+        var parsed = parsingService.parsing(new ParsingReqDTO(nodes, edges), 1L);
+        var local = localGenerator.generate(parsed);
+        var clouds = cloudTargets().map(target -> cloudGenerator.generate(parsed, target)).toList();
+
+        // then
+        assertEquals(nodes.size(), parsed.getComponents().size());
+        assertTrue(file(local, "local/nginx/default.conf")
+            .contains("proxy_pass http://host.docker.internal:9090;"));
+        for (int index = 0; index < dependencies.size(); index++) {
+            if ((mask & (1 << index)) == 0) {
+                continue;
+            }
+            var dependency = dependencies.get(index);
+            assertTrue(file(local, "local/docker-compose.yml")
+                .contains("image: " + dependency.getProperties().get("imageVersion")));
+            for (var cloud : clouds) {
+                String compose = file(cloud, "cloud/docker-compose.cloud.yml");
+                assertTrue(compose.contains("image: " + dependency.getProperties().get("imageVersion")));
+                assertTrue(compose.contains("      - " + dependency.getNodeId() + "\n"));
+            }
+        }
+        for (var cloud : clouds) {
+            String compose = file(cloud, "cloud/docker-compose.cloud.yml");
+            assertTrue(compose.contains("\"80:80\""));
+            assertFalse(compose.contains("${APP_PORT"));
+            assertTrue(file(cloud, "cloud/nginx/default.conf").contains("proxy_pass http://app:9090;"));
+            if ((mask & 3) == 3) {
+                assertFalse(compose.contains("SPRING_DATASOURCE_URL:"));
+            }
+            if ((mask & 4) != 0) {
+                assertTrue(compose.contains("SPRING_MONGODB_HOST: \"mongodb\""));
+            }
+            if ((mask & 8) != 0) {
+                assertTrue(compose.contains("REDIS_HOST:"));
+            }
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"true", "false", "null", "123", "1e3", "edge-proxy"})
+    @DisplayName("NGINX 컨테이너 이름은 Local과 Cloud YAML에서 문자열로 유지한다")
+    void generate_scalarLikeContainerName_preservesString(String containerName) {
+        // given
+        var request = request(9090, 80);
+        request.getNodes().get(1).getProperties().put("containerName", containerName);
+
+        // when
+        var parsed = parsingService.parsing(request, 1L);
+        var bundles = new ArrayList<IaCFileDTO.BundleResDTO>();
+        bundles.add(localGenerator.generate(parsed));
+        cloudTargets().forEach(target -> bundles.add(cloudGenerator.generate(parsed, target)));
+
+        // then
+        for (var bundle : bundles) {
+            String compose = bundle.files().stream()
+                .filter(file -> file.fileName().endsWith(".yml"))
+                .findFirst().orElseThrow().content();
+            Map<?, ?> document = new org.yaml.snakeyaml.Yaml().load(compose);
+            Map<?, ?> services = (Map<?, ?>) document.get("services");
+            Map<?, ?> nginx = (Map<?, ?>) services.get("nginx");
+            assertAll(
+                () -> assertEquals(containerName, nginx.get("container_name")),
+                () -> assertEquals("nginx:stable", nginx.get("image"))
+            );
+        }
+    }
+
     static Stream<DeploymentTargetReqDTO.Target> cloudTargets() {
         return Stream.of(
             new DeploymentTargetReqDTO.AwsDeploymentTarget("ap-northeast-2", "vpc", "subnet", "igw",
@@ -349,8 +449,8 @@ class NginxGenerationContractTest {
         String compose = file(bundle, "local/docker-compose.yml");
         IaCFileDTO.FileContentResDTO config = proxyConfig(bundle, "local/");
         assertAll(
-            () -> assertTrue(compose.contains("image: nginx:stable")),
-            () -> assertTrue(compose.contains("container_name: edge-proxy")),
+            () -> assertTrue(compose.contains("image: \"nginx:stable\"")),
+            () -> assertTrue(compose.contains("container_name: \"edge-proxy\"")),
             () -> assertTrue(compose.contains("extra_hosts:")),
             () -> assertTrue(compose.contains("host.docker.internal:host-gateway")),
             () -> assertTrue(compose.contains(config.fileName().substring("local/".length()))),
@@ -379,8 +479,8 @@ class NginxGenerationContractTest {
         String compose = file(bundle, "cloud/docker-compose.cloud.yml");
         IaCFileDTO.FileContentResDTO config = proxyConfig(bundle, "cloud/");
         assertAll(
-            () -> assertTrue(compose.contains("image: nginx:stable")),
-            () -> assertTrue(compose.contains("container_name: edge-proxy")),
+            () -> assertTrue(compose.contains("image: \"nginx:stable\"")),
+            () -> assertTrue(compose.contains("container_name: \"edge-proxy\"")),
             () -> assertTrue(compose.contains("  app:\n")),
             () -> assertTrue(compose.contains(config.fileName().substring("cloud/".length()))),
             () -> assertFalse(config.content().contains("host.docker.internal")),

@@ -42,8 +42,8 @@ public class NginxCloudComposeServiceRenderer implements CloudComposeServiceRend
         return """
 
               nginx:
-                image: %s
-                container_name: %s
+                image: "%s"
+                container_name: "%s"
                 ports:
                   - "%d:80"
                 depends_on:

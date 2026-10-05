@@ -21,8 +21,8 @@ public class NginxComposeServiceRenderer implements ComposeServiceRenderer {
         NginxComponent nginx = (NginxComponent) component;
         return """
               nginx:
-                image: %s
-                container_name: %s
+                image: "%s"
+                container_name: "%s"
                 ports:
                   - "%d:80"
                 extra_hosts:

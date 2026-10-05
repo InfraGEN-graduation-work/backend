@@ -39,4 +39,4 @@ InfraGEN은 사용자가 웹 캔버스에서 인프라 노드와 연결 관계�
 - 생성 이력: 프로젝트에서 생성된 결과의 버전과 메타데이터
 - 생성 파일: 생성 결과를 구성하는 파일과 내용
 
-지원 입력 노드는 `SPRING_BOOT`, `MYSQL`, `POSTGRESQL`, `REDIS`다. 의존 인프라는 캔버스에 있을 때만 Compose service와 접속 정보에 반영한다. MongoDB, NGINX, Apache는 계획 단계다(`docs/handoff/plan/backend-future-plan.md` Gate 6).
+지원 입력 노드는 `SPRING_BOOT`, `MYSQL`, `POSTGRESQL`, `MONGODB`, `REDIS`다. 의존 인프라는 캔버스에 있을 때만 Compose service와 접속 정보에 반영한다. NGINX, Apache는 계획 단계다(`docs/handoff/plan/backend-future-plan.md` Gate 6).

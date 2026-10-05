@@ -1,5 +1,6 @@
 package com.infragen.infragen.domain.generation.generator.compose;
 
+import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.global.enums.ComponentType;
 import java.util.Optional;
@@ -25,18 +26,14 @@ public interface HostAppEnvContributor {
     SequencedMap<String, String> hostAppEnvironment(BaseComponent dependency);
 
     /**
-     * 앱 타입별 {@code ApplicationEnvMapper}가 DataSource 변수로 매핑할 JDBC 연결 정보를 만든다.
+     * 앱 타입별 {@code ApplicationEnvMapper}가 프레임워크 변수로 매핑할 DB 접속 정보를 구성요소로 만든다.
      *
-     * <p>단일 DB 여부 판단과 프레임워크 변수 생성은 호출하는 쪽이 맡는다.
+     * <p>단일 DB 여부 판단과 프레임워크 변수 생성은 앱 매퍼가 맡는다. DB 부품은 관계형 여부만 선언한다.
      *
      * @param dependency 이 contributor의 {@link #getDependencyType()}에 해당하는 의존 컴포넌트
-     * @return JDBC 연결 정보. JDBC DataSource 대상이 아니면 빈 값
+     * @return 호스트 실행 앱이 {@code localhost}와 사용자 입력 호스트 포트로 접속할 정보. DB가 아니면 빈 값
      */
-    default Optional<JdbcConnection> jdbcConnection(BaseComponent dependency) {
+    default Optional<DatabaseConnection> databaseConnection(BaseComponent dependency) {
         return Optional.empty();
-    }
-
-    /** 호스트 실행 앱이 {@code localhost}와 사용자 입력 호스트 포트로 접속할 JDBC 연결 정보다. */
-    record JdbcConnection(String url, String username, String password) {
     }
 }

@@ -2,7 +2,7 @@
 
 > 프론트엔드가 사용자 흐름에 따라 API를 연동할 때 사용하는 기준 문서다.
 >
-> 최종 갱신일: 2026-10-02 (#80 PostgreSQL 컴포넌트와 다중 DB 접속 정보 규칙 추가)
+> 최종 갱신일: 2026-10-05 (#82 MongoDB 컴포넌트와 비관계형 DB 접속 정보 규칙 추가)
 >
 > 상태: 현재는 현재 코드에 구현된 계약, 예정은 설계만 있고 아직 구현되지 않은 계약, 진행 중은 Issue #31 등에서 변경 중인 계약이다.
 
@@ -449,11 +449,11 @@ nodeId는 캔버스가 생성하고 유지하는 문자열 식별자다. nodeNam
 - SPRING_BOOT
 - MYSQL
 - POSTGRESQL
+- MONGODB
 - REDIS
 
 enum에는 있지만 parser가 없는 컴포넌트:
 
-- MONGODB
 - NGINX
 - APACHE
 
@@ -525,6 +525,32 @@ enum에는 있지만 parser가 없는 컴포넌트:
 
 생성되는 Compose는 데이터 경로를 `/var/lib/postgresql/data`로 고정한다(`PGDATA` 명시). PostgreSQL 18 이상 이미지도 같은 볼륨 경로를 사용한다.
 
+### 5.4.2 MongoDB properties
+
+    {
+      "imageVersion": "mongo:8.0",
+      "containerName": "mongodb",
+      "volumeName": "mongodb_data",
+      "port": 27017,
+      "env": {
+        "databaseName": "appdb",
+        "username": "appuser",
+        "password": "password12"
+      }
+    }
+
+검증:
+
+- imageVersion 필수 (`PARSING400_26`)
+- databaseName은 영문·숫자·언더바만 허용 (`PARSING400_6`)
+- username 필수 (`PARSING400_27`)
+- password 8자 이상 (`PARSING400_7`)
+- port 1024~65535, 전체 graph에서 중복 불가
+- volumeName 선택
+- rootPassword나 앱 전용 계정은 받지 않는다. 앱이 입력한 username과 password의 root 계정을 그대로 사용한다.
+
+생성되는 Compose는 컨테이너 포트 27017, 데이터 경로 `/data/db`를 사용한다. root 계정은 MongoDB의 `admin` 인증 DB에 만들어지므로 생성되는 앱 접속 변수에 `admin` 인증 DB가 함께 들어간다. 초기화 스크립트는 생성하지 않는다.
+
 ### 5.5 Redis properties
 
     {
@@ -558,9 +584,9 @@ Generate graph edge 구조:
 
 - source → target 방향이다.
 - source가 먼저 준비되고 target이 나중에 실행된다.
-- MySQL·PostgreSQL·Redis → Spring Boot 연결을 사용한다.
+- MySQL·PostgreSQL·MongoDB·Redis → Spring Boot 연결을 사용한다.
 - 하나의 Spring Boot에 같은 타입의 dependency를 둘 이상 연결할 수 없다(`PARSING400_25`). 예: MySQL 둘, Redis 둘
-- 서로 다른 타입의 DB는 함께 연결할 수 있다. 예: MySQL 하나 + PostgreSQL 하나
+- 서로 다른 타입의 DB는 함께 연결할 수 있다. 예: MySQL 하나 + PostgreSQL 하나, MySQL 하나 + MongoDB 하나
 - 존재하지 않는 node를 edge가 참조할 수 없다.
 - 순환 참조를 허용하지 않는다.
 - 중복 edge는 무시된다.
@@ -610,14 +636,15 @@ query parameter는 사용하지 않는다. 배포 범위와 target은 request bo
 실행 방식:
 
 - Spring Boot는 호스트에서 실행
-- MySQL·PostgreSQL·Redis는 Docker Compose에서 실행
+- MySQL·PostgreSQL·MongoDB·Redis는 Docker Compose에서 실행
 - .env에는 DB와 Redis password가 포함될 수 있음
 
 DB 접속 정보 규칙 (LOCAL_DEV, CLOUD_DEPLOY 공통):
 
-- 연결된 DB마다 타입별 접속 변수(`MYSQL_HOST/PORT`, `POSTGRES_HOST/PORT` 등)를 항상 생성한다.
-- Spring Boot에 연결된 DB가 하나일 때만 `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`를 생성한다.
-- DB가 둘 이상이면 `SPRING_DATASOURCE_*`를 생성하지 않고, Compose 파일 맨 위에 DataSource를 직접 설정하라는 안내 주석을 넣는다. 파일 미리보기에서 이 주석이 보여야 한다.
+- 연결된 DB마다 타입별 접속 변수(`MYSQL_HOST/PORT`, `POSTGRES_HOST/PORT`, `MONGO_HOST/PORT` 등)를 항상 생성한다.
+- 관계형 DB(MySQL, PostgreSQL)가 Spring Boot에 하나만 연결됐을 때만 `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`를 생성한다.
+- 관계형 DB가 둘 이상이면 `SPRING_DATASOURCE_*`를 생성하지 않고, Compose 파일 맨 위에 DataSource를 직접 설정하라는 안내 주석을 넣는다. 파일 미리보기에서 이 주석이 보여야 한다.
+- MongoDB는 DataSource가 아니므로 위 개수에 세지 않는다. MongoDB가 연결되면 `SPRING_MONGODB_HOST`, `SPRING_MONGODB_PORT`, `SPRING_MONGODB_DATABASE`, `SPRING_MONGODB_USERNAME`, `SPRING_MONGODB_PASSWORD`, `SPRING_MONGODB_AUTHENTICATION_DATABASE`(값은 `admin`)를 생성한다. 관계형 DB와 함께 연결해도 둘 다 생성되고 안내 주석은 붙지 않는다.
 
 UX:
 
@@ -648,7 +675,7 @@ UX:
 
 선택한 provider의 Terraform만 생성한다. AWS·OCI는 runtime graph node가 아니라 `deploymentTarget` metadata다.
 
-Cloud Compose에는 graph에 연결된 MySQL·PostgreSQL·Redis dependency만 포함하며, 애플리케이션 container는 `mysql`·`postgres`·`redis` service DNS로 연결한다. DB 접속 정보 규칙은 6.2와 같고, 비밀값은 서버의 외부 `.env`에서 읽는다.
+Cloud Compose에는 graph에 연결된 MySQL·PostgreSQL·MongoDB·Redis dependency만 포함하며, 애플리케이션 container는 `mysql`·`postgres`·`mongodb`·`redis` service DNS로 연결한다. DB 접속 정보 규칙은 6.2와 같고, 비밀값은 서버의 외부 `.env`에서 읽는다.
 
 CLOUD_DEPLOY는 plan-only scaffold이며 자동 terraform apply를 제공하지 않는다.
 
@@ -778,10 +805,12 @@ UX:
 - PARSING400_20: Redis imageVersion 누락
 - PARSING400_22: Redis password 누락
 - PARSING400_6: DB 이름 형식 오류(영문·숫자·언더바만)
-- PARSING400_7: DB 비밀번호 8자 미만(MySQL rootPassword, PostgreSQL password)
+- PARSING400_7: DB 비밀번호 8자 미만(MySQL rootPassword, PostgreSQL·MongoDB password)
 - PARSING400_23: PostgreSQL imageVersion 누락
 - PARSING400_24: PostgreSQL username 누락
 - PARSING400_25: 하나의 애플리케이션에 같은 타입 dependency를 둘 이상 연결
+- PARSING400_26: MongoDB imageVersion 누락
+- PARSING400_27: MongoDB username 누락
 - COMMON400_1: 잘못된 JSON·enum·deployment target 또는 validation 오류
 - GENERATION400_2: 생성에 필요한 component 상태 오류
 
@@ -789,7 +818,7 @@ UX:
 
 - access token은 localStorage보다 메모리 보관을 우선한다.
 - refresh token은 HttpOnly cookie로만 관리한다.
-- MySQL·PostgreSQL·Redis password가 포함된 .env는 기본 마스킹한다.
+- MySQL·PostgreSQL·MongoDB·Redis password가 포함된 .env는 기본 마스킹한다.
 - password를 일반 로그, analytics, URL query parameter에 넣지 않는다.
 - CLOUD_DEPLOY Terraform에 DB password, JWT secret, runtime credential을 넣지 않는다.
 - .env 다운로드 전 민감 정보 포함 안내를 표시한다.

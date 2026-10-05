@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
-import com.infragen.infragen.domain.generation.generator.compose.HostAppEnvContributor.JdbcConnection;
+import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
+import com.infragen.infragen.domain.parsing.dto.response.MongoDBComponent;
+import com.infragen.infragen.domain.parsing.dto.response.MongoDBEnvComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLEnvComponent;
 import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLComponent;
@@ -39,32 +41,32 @@ class HostAppEnvContributorTest {
     }
 
     @Test
-    @DisplayName("MySQL — 호스트 포트와 env 값으로 JDBC 연결 정보를 만든다")
-    void jdbcConnection_Mysql_ReturnsLocalhostJdbcConnection() {
+    @DisplayName("MySQL — 호스트 포트와 env 값으로 관계형 DB 구성요소 접속 정보를 만든다")
+    void databaseConnection_Mysql_ReturnsLocalhostConnection() {
         // given
         HostAppEnvContributor contributor = new MysqlHostAppEnvContributor();
 
         // when
-        Optional<JdbcConnection> connection = contributor.jdbcConnection(mysqlComponent(mysqlEnv()));
+        Optional<DatabaseConnection> connection = contributor.databaseConnection(mysqlComponent(mysqlEnv()));
 
         // then
         assertEquals(
-            Optional.of(new JdbcConnection("jdbc:mysql://localhost:3307/appdb", "user", "userpass12")),
+            Optional.of(new DatabaseConnection("mysql", true, "localhost", "3307", "appdb", "user", "userpass12")),
             connection
         );
     }
 
     @Test
-    @DisplayName("MySQL env 누락 — JDBC 연결 정보 생성 시 INVALID_COMPONENT_STATE")
-    void jdbcConnection_MysqlEnvMissing_ThrowsGenerationException() {
+    @DisplayName("MySQL env 누락 — 접속 정보 생성 시 INVALID_COMPONENT_STATE")
+    void databaseConnection_MysqlEnvMissing_ThrowsGenerationException() {
         // given
         HostAppEnvContributor contributor = new MysqlHostAppEnvContributor();
-        MySQLComponent mysql = mysqlComponent(null);
+        MySQLComponent component = mysqlComponent(null);
 
         // when
         IaCGenerationException exception = assertThrows(
             IaCGenerationException.class,
-            () -> contributor.jdbcConnection(mysql)
+            () -> contributor.databaseConnection(component)
         );
 
         // then
@@ -88,32 +90,83 @@ class HostAppEnvContributorTest {
     }
 
     @Test
-    @DisplayName("PostgreSQL — 호스트 포트와 env 값으로 JDBC 연결 정보를 만든다")
-    void jdbcConnection_Postgres_ReturnsLocalhostJdbcConnection() {
+    @DisplayName("PostgreSQL — 호스트 포트와 env 값으로 관계형 DB 구성요소 접속 정보를 만든다")
+    void databaseConnection_Postgres_ReturnsLocalhostConnection() {
         // given
         HostAppEnvContributor contributor = new PostgresHostAppEnvContributor();
 
         // when
-        Optional<JdbcConnection> connection = contributor.jdbcConnection(postgresComponent(postgresEnv()));
+        Optional<DatabaseConnection> connection = contributor.databaseConnection(postgresComponent(postgresEnv()));
 
         // then
         assertEquals(
-            Optional.of(new JdbcConnection("jdbc:postgresql://localhost:5433/pgdb", "pguser", "pgpass1234")),
+            Optional.of(new DatabaseConnection("postgresql", true, "localhost", "5433", "pgdb", "pguser", "pgpass1234")),
             connection
         );
     }
 
     @Test
-    @DisplayName("PostgreSQL env 누락 — JDBC 연결 정보 생성 시 INVALID_COMPONENT_STATE")
-    void jdbcConnection_PostgresEnvMissing_ThrowsGenerationException() {
+    @DisplayName("PostgreSQL env 누락 — 접속 정보 생성 시 INVALID_COMPONENT_STATE")
+    void databaseConnection_PostgresEnvMissing_ThrowsGenerationException() {
         // given
         HostAppEnvContributor contributor = new PostgresHostAppEnvContributor();
-        PostgreSQLComponent postgres = postgresComponent(null);
+        PostgreSQLComponent component = postgresComponent(null);
 
         // when
         IaCGenerationException exception = assertThrows(
             IaCGenerationException.class,
-            () -> contributor.jdbcConnection(postgres)
+            () -> contributor.databaseConnection(component)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("MongoDB — localhost와 사용자 입력 호스트 포트로 MONGO_HOST/PORT를 순서대로 만든다")
+    void hostAppEnvironment_Mongo_ReturnsNeutralVariablesInOrder() {
+        // given
+        HostAppEnvContributor contributor = new MongoHostAppEnvContributor();
+
+        // when
+        SequencedMap<String, String> environment = contributor.hostAppEnvironment(mongoComponent(mongoEnv()));
+
+        // then
+        assertEquals(
+            List.of(Map.entry("MONGO_HOST", "localhost"), Map.entry("MONGO_PORT", "27018")),
+            List.copyOf(environment.entrySet())
+        );
+    }
+
+    @Test
+    @DisplayName("MongoDB — 관계형이 아닌 접속 정보에 admin 인증 DB를 담는다")
+    void databaseConnection_Mongo_ReturnsNonRelationalConnectionWithAdminAuthenticationDatabase() {
+        // given
+        HostAppEnvContributor contributor = new MongoHostAppEnvContributor();
+
+        // when
+        Optional<DatabaseConnection> connection = contributor.databaseConnection(mongoComponent(mongoEnv()));
+
+        // then
+        assertEquals(
+            Optional.of(new DatabaseConnection(
+                "mongodb", false, "localhost", "27018", "mongodb_app", "mongouser", "mongopass12",
+                Optional.of("admin"))),
+            connection
+        );
+    }
+
+    @Test
+    @DisplayName("MongoDB env 누락 — 접속 정보 생성 시 INVALID_COMPONENT_STATE")
+    void databaseConnection_MongoEnvMissing_ThrowsGenerationException() {
+        // given
+        HostAppEnvContributor contributor = new MongoHostAppEnvContributor();
+        MongoDBComponent component = mongoComponent(null);
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> contributor.databaseConnection(component)
         );
 
         // then
@@ -141,13 +194,13 @@ class HostAppEnvContributorTest {
     }
 
     @Test
-    @DisplayName("Redis — DataSource 대상이 아니라 JDBC 연결 정보가 없다")
-    void jdbcConnection_Redis_ReturnsEmpty() {
+    @DisplayName("Redis — DB 접속 정보가 없다")
+    void databaseConnection_Redis_ReturnsEmpty() {
         // given
         HostAppEnvContributor contributor = new RedisHostAppEnvContributor();
 
         // when
-        Optional<JdbcConnection> connection = contributor.jdbcConnection(redisComponent("redis-password"));
+        Optional<DatabaseConnection> connection = contributor.databaseConnection(redisComponent("redis-password"));
 
         // then
         assertTrue(connection.isEmpty());
@@ -168,6 +221,26 @@ class HostAppEnvContributorTest {
 
         // then
         assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
+    }
+
+    private static MongoDBEnvComponent mongoEnv() {
+        return MongoDBEnvComponent.builder()
+            .databaseName("mongodb_app")
+            .username("mongouser")
+            .password("mongopass12")
+            .build();
+    }
+
+    private static MongoDBComponent mongoComponent(MongoDBEnvComponent env) {
+        return MongoDBComponent.builder()
+            .id("mongo-1")
+            .posX(0f)
+            .posY(0f)
+            .imageVersion("mongo:8.0")
+            .containerName("mongo")
+            .port(27018)
+            .env(env)
+            .build();
     }
 
     private static RedisComponent redisComponent(String password) {

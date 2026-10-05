@@ -128,6 +128,16 @@ public enum ParsingErrorCode implements BaseErrorCode {
             HttpStatus.BAD_REQUEST,
             "하나의 애플리케이션에 같은 타입의 의존 컴포넌트를 둘 이상 연결할 수 없습니다.",
             "PARSING400_25"
+    ),
+    MISSING_MONGODB_IMAGE_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "MongoDB 이미지 버전이 누락되었습니다.",
+            "PARSING400_26"
+    ),
+    MISSING_MONGODB_USERNAME(
+            HttpStatus.BAD_REQUEST,
+            "MongoDB 사용자 이름이 누락되었습니다.",
+            "PARSING400_27"
     );
 
     private final HttpStatus httpStatus;

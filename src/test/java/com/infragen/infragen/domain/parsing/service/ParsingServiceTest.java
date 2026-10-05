@@ -14,9 +14,11 @@ import org.junit.jupiter.api.Test;
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
 import com.infragen.infragen.domain.parsing.dto.request.NodeDTO;
 import com.infragen.infragen.domain.parsing.dto.request.ParsingReqDTO;
+import com.infragen.infragen.domain.parsing.dto.response.MongoDBComponent;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
+import com.infragen.infragen.domain.parsing.parser.MongoDBParser;
 import com.infragen.infragen.domain.parsing.parser.MySQLParser;
 import com.infragen.infragen.domain.parsing.parser.SpringBootParser;
 import com.infragen.infragen.domain.parsing.validator.ValidateGraphStructure;
@@ -33,7 +35,7 @@ class ParsingServiceTest {
         parsingService = new ParsingService(
             new ObjectMapper(),
             new ValidateGraphStructure(),
-            List.of(new SpringBootParser(), new MySQLParser())
+            List.of(new SpringBootParser(), new MySQLParser(), new MongoDBParser())
         );
     }
 
@@ -50,6 +52,27 @@ class ParsingServiceTest {
         assertEquals(1L, result.getProjectId());
         assertEquals(2, result.getComponents().size());
         assertEquals(1, result.getEdges().size());
+    }
+
+    @Test
+    @DisplayName("MongoDB 노드 — parser가 등록되어 MongoDBComponent로 변환")
+    void parsing_MongoNode_ReturnsMongoComponent() {
+        // given
+        ParsingReqDTO request = new ParsingReqDTO(
+            List.of(mongoNode("node-1", 27017), springBootNode("node-2")),
+            List.of(edge("node-1", "node-2"))
+        );
+
+        // when
+        ParsingResultDTO result = parsingService.parsing(request, 1L);
+
+        // then
+        MongoDBComponent mongo = (MongoDBComponent) result.getComponents().stream()
+            .filter(component -> component instanceof MongoDBComponent)
+            .findFirst()
+            .orElseThrow();
+        assertEquals(27017, mongo.getPort());
+        assertEquals("appdb", mongo.getEnv().getDatabaseName());
     }
 
     @Test
@@ -150,6 +173,22 @@ class ParsingServiceTest {
         properties.put("env", env);
 
         return new NodeDTO(nodeId, "MYSQL", 100f, 200f, properties);
+    }
+
+    private static NodeDTO mongoNode(String nodeId, int port) {
+        Map<String, Object> env = new HashMap<>();
+        env.put("databaseName", "appdb");
+        env.put("username", "user");
+        env.put("password", "password12");
+
+        Map<String, Object> properties = new HashMap<>();
+        properties.put("imageVersion", "mongo:8.0");
+        properties.put("containerName", "mongo");
+        properties.put("volumeName", "mongo_data");
+        properties.put("port", port);
+        properties.put("env", env);
+
+        return new NodeDTO(nodeId, "MONGODB", 100f, 200f, properties);
     }
 
     private static NodeDTO springBootNode(String nodeId, int port) {

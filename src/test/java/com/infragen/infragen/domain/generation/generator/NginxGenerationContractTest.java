@@ -229,6 +229,34 @@ class NginxGenerationContractTest {
         );
     }
 
+    @ParameterizedTest
+    @MethodSource("cloudTargets")
+    @DisplayName("NGINX와 MongoDB를 함께 연결해도 앱 환경변수와 프록시를 생성한다")
+    void generate_nginxWithMongo_preservesDatabaseEnvironmentAndProxy(DeploymentTargetReqDTO.Target target) {
+        // given
+        ParsingReqDTO base = request(9090, 80);
+        List<NodeDTO> nodes = new ArrayList<>(base.getNodes());
+        nodes.add(new NodeDTO("mongo", "MONGODB", 0f, 0f, Map.of(
+            "imageVersion", "mongo:8", "port", 27017, "containerName", "mongo-db",
+            "env", Map.of("databaseName", "appdb", "username", "testuser", "password", "test-only-password"))));
+        ParsingReqDTO request = new ParsingReqDTO(nodes,
+            List.of(edge("application", "proxy"), edge("mongo", "application")));
+
+        // when
+        var bundle = cloudGenerator.generate(parsingService.parsing(request, 1L), target);
+
+        // then
+        String compose = file(bundle, "cloud/docker-compose.cloud.yml");
+        String appBlock = compose.substring(compose.indexOf("  app:"), compose.indexOf("\n  mongodb:"));
+        assertAll(
+            () -> assertFalse(appBlock.contains("ports:")),
+            () -> assertTrue(appBlock.contains("SPRING_MONGODB_HOST: \"mongodb\"")),
+            () -> assertTrue(appBlock.contains("depends_on:\n      - mongodb")),
+            () -> assertTrue(compose.contains("\"80:80\"")),
+            () -> assertTrue(file(bundle, "cloud/nginx/default.conf").contains("proxy_pass http://app:9090;"))
+        );
+    }
+
     static Stream<DeploymentTargetReqDTO.Target> cloudTargets() {
         return Stream.of(
             new DeploymentTargetReqDTO.AwsDeploymentTarget("ap-northeast-2", "vpc", "subnet", "igw",

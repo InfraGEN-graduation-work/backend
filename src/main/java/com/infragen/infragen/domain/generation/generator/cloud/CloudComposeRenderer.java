@@ -2,6 +2,7 @@ package com.infragen.infragen.domain.generation.generator.cloud;
 
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
 import com.infragen.infragen.domain.generation.generator.application.ApplicationEnvMapper;
+import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
@@ -9,9 +10,11 @@ import com.infragen.infragen.domain.parsing.dto.response.VolumeComponent;
 import com.infragen.infragen.global.enums.ComponentType;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.SequencedMap;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
@@ -56,9 +59,9 @@ public class CloudComposeRenderer {
         StringBuilder content = new StringBuilder("""
             # CLOUD_DEPLOY 부트스트랩입니다. 민감한 값은 외부 .env 파일에서 주입해 주세요.
             """);
-        if (context.hasMultipleDatabaseDependencies()) {
-            content.append(mapper.multipleDatabaseNotice(ENV_SOURCE));
-        }
+        // 단일 DB 여부는 앱 매퍼가 판단하므로 연결된 모든 DB의 접속 정보를 한 번에 넘긴다.
+        SequencedMap<ComponentType, DatabaseConnection> connections = databaseConnections(context);
+        mapper.multipleDatabaseNotice(connections, ENV_SOURCE).ifPresent(content::append);
         content.append("""
             services:
               app:
@@ -75,7 +78,7 @@ public class CloudComposeRenderer {
                 context.applicationPort()
             ));
         }
-        appendApplicationEnvironment(content, context, mapper);
+        appendApplicationEnvironment(content, context, mapper, connections);
         content.append("    env_file:\n");
         content.append("      - .env\n");
 
@@ -164,24 +167,37 @@ public class CloudComposeRenderer {
         return mapper;
     }
 
+    private SequencedMap<ComponentType, DatabaseConnection> databaseConnections(CloudDeployContext context) {
+        SequencedMap<ComponentType, DatabaseConnection> connections = new LinkedHashMap<>();
+        for (CloudComposeServiceRenderer renderer : serviceRenderers) {
+            if (renderer.isEnabled(context)) {
+                renderer.databaseConnection()
+                    .ifPresent(connection -> connections.put(renderer.getSupportedType(), connection));
+            }
+        }
+        return connections;
+    }
+
     private void appendApplicationEnvironment(
         StringBuilder content,
         CloudDeployContext context,
-        ApplicationEnvMapper mapper
+        ApplicationEnvMapper mapper,
+        SequencedMap<ComponentType, DatabaseConnection> connections
     ) {
-        // DB가 둘 이상이면 기본 DataSource를 정할 수 없어 앱 프레임워크 변수 없이 타입별 접속 변수만 넣는다.
-        boolean singleDatabase = context.hasSingleDatabaseDependency();
+        Map<String, String> databaseEnvironment = mapper.databaseEnvironment(connections);
+        boolean databaseEnvironmentPut = false;
 
         StringBuilder environment = new StringBuilder();
         for (CloudComposeServiceRenderer renderer : serviceRenderers) {
             if (!renderer.isEnabled(context)) {
                 continue;
             }
-            if (singleDatabase) {
-                renderer.jdbcConnection().ifPresent(connection -> mapper
-                    .datasourceEnvironment(connection.url(), connection.username(), connection.password())
-                    .forEach((name, value) -> environment
-                        .append("      ").append(name).append(": ").append(value).append('\n')));
+            // 이전 산출물과 순서를 같게 하려고 프레임워크 변수는 첫 DB 의존의 중립 변수 바로 앞에 넣는다.
+            if (!databaseEnvironmentPut && renderer.databaseConnection().isPresent()) {
+                // 앱 매퍼 값은 평문이라 YAML 스칼라로 출력할 때 따옴표를 감싼다.
+                databaseEnvironment.forEach((name, value) -> environment
+                    .append("      ").append(name).append(": \"").append(value).append("\"\n"));
+                databaseEnvironmentPut = true;
             }
             renderer.applicationEnvironment().forEach((name, value) -> environment
                 .append("      ").append(name).append(": ").append(value).append('\n'));

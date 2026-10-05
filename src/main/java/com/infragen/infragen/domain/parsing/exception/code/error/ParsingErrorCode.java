@@ -10,9 +10,9 @@ import org.springframework.http.HttpStatus;
 public enum ParsingErrorCode implements BaseErrorCode {
 
     INVALID_NGINX_PROPERTIES(HttpStatus.BAD_REQUEST,
-            "NGINX imageVersion 또는 containerName이 잘못되었습니다. 단일 앱 프록시만 지원합니다.", "PARSING400_26"),
+            "NGINX imageVersion 또는 containerName이 잘못되었습니다. 단일 앱 프록시만 지원합니다.", "PARSING400_29"),
     INVALID_NGINX_CONNECTION(HttpStatus.BAD_REQUEST,
-            "NGINX는 단일 앱 그래프에서 APPLICATION → NGINX로 하나만 연결해야 합니다.", "PARSING400_27"),
+            "NGINX는 단일 앱 그래프에서 APPLICATION → NGINX로 하나만 연결해야 합니다.", "PARSING400_30"),
     INVALID_NGINX_PORT(HttpStatus.BAD_REQUEST,
             "NGINX 포트는 정수 1 ~ 65535여야 합니다.", "PARSING400_28"),
     EMPTY_NODES(
@@ -134,6 +134,16 @@ public enum ParsingErrorCode implements BaseErrorCode {
             HttpStatus.BAD_REQUEST,
             "하나의 애플리케이션에 같은 타입의 의존 컴포넌트를 둘 이상 연결할 수 없습니다.",
             "PARSING400_25"
+    ),
+    MISSING_MONGODB_IMAGE_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "MongoDB 이미지 버전이 누락되었습니다.",
+            "PARSING400_26"
+    ),
+    MISSING_MONGODB_USERNAME(
+            HttpStatus.BAD_REQUEST,
+            "MongoDB 사용자 이름이 누락되었습니다.",
+            "PARSING400_27"
     );
 
     private final HttpStatus httpStatus;

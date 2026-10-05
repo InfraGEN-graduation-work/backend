@@ -3,7 +3,7 @@ package com.infragen.infragen.domain.generation.generator.cloud;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.infragen.infragen.domain.generation.generator.cloud.CloudComposeServiceRenderer.JdbcConnection;
+import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -31,20 +31,24 @@ class CloudComposeServiceRendererTest {
     }
 
     @Test
-    @DisplayName("MySQL — 외부 .env를 참조하는 JDBC 연결 정보를 만든다")
-    void jdbcConnection_Mysql_ReturnsServiceDnsJdbcConnection() {
+    @DisplayName("MySQL — 외부 .env 참조식을 평문 그대로 담은 접속 정보를 만든다")
+    void databaseConnection_Mysql_ReturnsServiceDnsConnection() {
         // given
         CloudComposeServiceRenderer renderer = new MysqlCloudComposeServiceRenderer();
 
         // when
-        Optional<JdbcConnection> connection = renderer.jdbcConnection();
+        Optional<DatabaseConnection> connection = renderer.databaseConnection();
 
         // then
         assertEquals(
-            Optional.of(new JdbcConnection(
-                "\"jdbc:mysql://mysql:3306/${MYSQL_DATABASE:?외부 .env에 설정 필요}\"",
-                "\"${MYSQL_USER:?외부 .env에 설정 필요}\"",
-                "\"${MYSQL_PASSWORD:?외부 .env에 설정 필요}\""
+            Optional.of(new DatabaseConnection(
+                "mysql",
+                true,
+                "mysql",
+                "3306",
+                "${MYSQL_DATABASE:?외부 .env에 설정 필요}",
+                "${MYSQL_USER:?외부 .env에 설정 필요}",
+                "${MYSQL_PASSWORD:?외부 .env에 설정 필요}"
             )),
             connection
         );
@@ -67,20 +71,65 @@ class CloudComposeServiceRendererTest {
     }
 
     @Test
-    @DisplayName("PostgreSQL — 외부 .env를 참조하는 JDBC 연결 정보를 만든다")
-    void jdbcConnection_Postgres_ReturnsServiceDnsJdbcConnection() {
+    @DisplayName("PostgreSQL — 외부 .env 참조식을 평문 그대로 담은 접속 정보를 만든다")
+    void databaseConnection_Postgres_ReturnsServiceDnsConnection() {
         // given
         CloudComposeServiceRenderer renderer = new PostgresCloudComposeServiceRenderer();
 
         // when
-        Optional<JdbcConnection> connection = renderer.jdbcConnection();
+        Optional<DatabaseConnection> connection = renderer.databaseConnection();
 
         // then
         assertEquals(
-            Optional.of(new JdbcConnection(
-                "\"jdbc:postgresql://postgres:5432/${POSTGRES_DB:?외부 .env에 설정 필요}\"",
-                "\"${POSTGRES_USER:?외부 .env에 설정 필요}\"",
-                "\"${POSTGRES_PASSWORD:?외부 .env에 설정 필요}\""
+            Optional.of(new DatabaseConnection(
+                "postgresql",
+                true,
+                "postgres",
+                "5432",
+                "${POSTGRES_DB:?외부 .env에 설정 필요}",
+                "${POSTGRES_USER:?외부 .env에 설정 필요}",
+                "${POSTGRES_PASSWORD:?외부 .env에 설정 필요}"
+            )),
+            connection
+        );
+    }
+
+    @Test
+    @DisplayName("MongoDB — 서비스 DNS 기준 MONGO_HOST/PORT를 순서대로 만든다")
+    void applicationEnvironment_Mongo_ReturnsNeutralVariablesInOrder() {
+        // given
+        CloudComposeServiceRenderer renderer = new MongoCloudComposeServiceRenderer();
+
+        // when
+        SequencedMap<String, String> environment = renderer.applicationEnvironment();
+
+        // then
+        assertEquals(
+            List.of(Map.entry("MONGO_HOST", "mongodb"), Map.entry("MONGO_PORT", "\"27017\"")),
+            List.copyOf(environment.entrySet())
+        );
+    }
+
+    @Test
+    @DisplayName("MongoDB — 외부 .env 참조식을 평문 그대로 담고 admin 인증 DB를 가진 비관계형 접속 정보를 만든다")
+    void databaseConnection_Mongo_ReturnsNonRelationalServiceDnsConnection() {
+        // given
+        CloudComposeServiceRenderer renderer = new MongoCloudComposeServiceRenderer();
+
+        // when
+        Optional<DatabaseConnection> connection = renderer.databaseConnection();
+
+        // then
+        assertEquals(
+            Optional.of(new DatabaseConnection(
+                "mongodb",
+                false,
+                "mongodb",
+                "27017",
+                "${MONGO_DATABASE:?외부 .env에 설정 필요}",
+                "${MONGO_USER:?외부 .env에 설정 필요}",
+                "${MONGO_PASSWORD:?외부 .env에 설정 필요}",
+                Optional.of("admin")
             )),
             connection
         );
@@ -107,13 +156,13 @@ class CloudComposeServiceRendererTest {
     }
 
     @Test
-    @DisplayName("Redis — DataSource 대상이 아니라 JDBC 연결 정보가 없다")
-    void jdbcConnection_Redis_ReturnsEmpty() {
+    @DisplayName("Redis — DB 접속 정보가 없다")
+    void databaseConnection_Redis_ReturnsEmpty() {
         // given
         CloudComposeServiceRenderer renderer = new RedisCloudComposeServiceRenderer();
 
         // when
-        Optional<JdbcConnection> connection = renderer.jdbcConnection();
+        Optional<DatabaseConnection> connection = renderer.databaseConnection();
 
         // then
         assertTrue(connection.isEmpty());

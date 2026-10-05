@@ -1,5 +1,6 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
+import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
 import com.infragen.infragen.global.enums.ComponentType;
 import java.util.LinkedHashMap;
@@ -72,12 +73,15 @@ public class MysqlCloudComposeServiceRenderer implements CloudComposeServiceRend
 
     /** DB 이름, 계정, 비밀번호는 서버의 외부 {@code .env} 값을 참조한다. */
     @Override
-    public Optional<JdbcConnection> jdbcConnection() {
-        return Optional.of(new JdbcConnection(
-            "\"jdbc:mysql://" + getServiceName() + ":" + CONTAINER_PORT
-                + "/${MYSQL_DATABASE:?외부 .env에 설정 필요}\"",
-            "\"${MYSQL_USER:?외부 .env에 설정 필요}\"",
-            "\"${MYSQL_PASSWORD:?외부 .env에 설정 필요}\""
+    public Optional<DatabaseConnection> databaseConnection() {
+        return Optional.of(new DatabaseConnection(
+            "mysql",
+            true,
+            getServiceName(),
+            String.valueOf(CONTAINER_PORT),
+            "${MYSQL_DATABASE:?외부 .env에 설정 필요}",
+            "${MYSQL_USER:?외부 .env에 설정 필요}",
+            "${MYSQL_PASSWORD:?외부 .env에 설정 필요}"
         ));
     }
 }

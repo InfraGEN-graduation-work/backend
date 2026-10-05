@@ -1,5 +1,6 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
+import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
 import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLComponent;
 import com.infragen.infragen.global.enums.ComponentType;
 import java.util.LinkedHashMap;
@@ -11,7 +12,7 @@ import org.springframework.stereotype.Component;
  * 파싱된 PostgreSQL 컴포넌트를 CLOUD_DEPLOY Compose service로 렌더링한다.
  *
  * <p>비밀값은 서버의 외부 {@code .env}에서 읽고, 값이 없으면 Compose가 기동 전에 실패하도록 {@code :?}로 참조한다.
- * 앱 컨테이너용 중립 변수와 JDBC 연결 정보도 제공한다.
+ * 앱 컨테이너용 중립 변수와 DB 접속 정보도 제공한다.
  */
 @Component
 public class PostgresCloudComposeServiceRenderer implements CloudComposeServiceRenderer {
@@ -81,12 +82,15 @@ public class PostgresCloudComposeServiceRenderer implements CloudComposeServiceR
 
     /** DB 이름, 계정, 비밀번호는 서버의 외부 {@code .env} 값을 참조한다. */
     @Override
-    public Optional<JdbcConnection> jdbcConnection() {
-        return Optional.of(new JdbcConnection(
-                "\"jdbc:postgresql://" + getServiceName() + ":" + CONTAINER_PORT
-                        + "/${POSTGRES_DB:?외부 .env에 설정 필요}\"",
-                "\"${POSTGRES_USER:?외부 .env에 설정 필요}\"",
-                "\"${POSTGRES_PASSWORD:?외부 .env에 설정 필요}\""
+    public Optional<DatabaseConnection> databaseConnection() {
+        return Optional.of(new DatabaseConnection(
+            "postgresql",
+            true,
+            getServiceName(),
+            String.valueOf(CONTAINER_PORT),
+            "${POSTGRES_DB:?외부 .env에 설정 필요}",
+            "${POSTGRES_USER:?외부 .env에 설정 필요}",
+            "${POSTGRES_PASSWORD:?외부 .env에 설정 필요}"
         ));
     }
 }

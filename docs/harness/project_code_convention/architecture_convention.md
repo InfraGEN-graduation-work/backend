@@ -69,7 +69,7 @@ Collaboration
 
 - `ComponentParser` (`MySQLParser`, `PostgreSQLParser`, `MongoDBParser`, `RedisParser`, `SpringBootParser`): component별 node property 검증과 `BaseComponent` 구현체 변환
 - `IaCGenerator` (`LocalIaCGenerator`: `DockerComposeIaCGenerator`, `TargetAwareIaCGenerator`: `TerraformIaCGenerator`): `ParsingResultDTO`를 `OutputFormat`별 file bundle로 변환
-- `ComposeServiceRenderer` (MySQL, PostgreSQL, MongoDB, Redis): LOCAL_DEV dependency의 Compose service block 생성
+- `ComposeServiceRenderer` (MySQL, PostgreSQL, MongoDB, Redis): LOCAL_DEV dependency의 Compose service block 생성, 컨테이너 실행 변수(DB 비밀번호 등)를 앱 연결 여부와 무관하게 `.env`에 등록
 - `HostAppEnvContributor` (MySQL, PostgreSQL, MongoDB, Redis): 호스트 실행 앱의 `.env`용 타입별 중립 변수와 DB 접속 정보(`DatabaseConnection`, 관계형 여부 포함) 제공. `DockerComposeIaCGenerator`는 앱별로 접속 정보를 모아 앱 타입별 `ApplicationEnvMapper`에 넘기고, 단일 DB 판단은 매퍼가 한다.
 - `ApplicationEnvMapper` (Spring Boot): 앱 타입별로 DB 접속 정보를 프레임워크 변수로 바꾼다. 입력은 `SequencedMap<ComponentType, DatabaseConnection>`이고 키는 그 연결을 낸 노드의 종류다(같은 타입 DB 중복은 parsing이 거부하므로 앱마다 종류당 하나). 관계형 DB는 하나일 때만 `SPRING_DATASOURCE_*`로, 비관계형 DB는 앱 매퍼 안의 종류별 규칙표(Spring은 `MONGODB` → `SPRING_MONGODB_*`)로 매핑한다. 규칙표에 없는 비관계형 종류는 `INVALID_COMPONENT_STATE`로 거부하고, 관계형 DB가 둘 이상이면 안내 주석을 만든다. LOCAL_DEV generator와 CLOUD_DEPLOY renderer가 함께 쓴다.
 - `CloudComposeServiceRenderer` (MySQL, PostgreSQL, MongoDB, Redis): CLOUD_DEPLOY Compose bootstrap의 dependency block 생성, 앱 컨테이너용 타입별 중립 변수와 DB 접속 정보(`DatabaseConnection`, 평문 값) 제공. `CloudComposeRenderer`는 이를 `ComponentType` 순서로 모아 앱 타입별 `ApplicationEnvMapper`에 넘기고, 매퍼가 돌려준 값은 YAML 출력 시 따옴표로 감싼다.

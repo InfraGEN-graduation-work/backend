@@ -274,6 +274,8 @@ UX:
 
 용도: 프로젝트 제목, 설명, 캔버스 node·edge 전체를 저장한다. 부분 수정이 아니라 기존 graph를 전체 교체하는 방식이다.
 
+권한: OWNER와 EDITOR가 호출할 수 있다. 제목과 설명은 OWNER의 요청만 반영하고, EDITOR가 보낸 `title`·`description`은 오류 없이 무시해 기존 값을 유지한다. 응답과 재동기화 이벤트의 제목, 설명도 보존된 값이다. EDITOR의 저장 응답은 입력한 제목이 아니라 응답 값으로 화면을 갱신해야 한다. 제목과 설명 변경은 4.4.1(OWNER 전용)을 사용한다.
+
 현재 전체 저장 요청 계약:
 
     {
@@ -677,6 +679,8 @@ UX:
 
 Cloud Compose에는 graph에 연결된 MySQL·PostgreSQL·MongoDB·Redis dependency만 포함하며, 애플리케이션 container는 `mysql`·`postgres`·`mongodb`·`redis` service DNS로 연결한다. DB 접속 정보 규칙은 6.2와 같고, 비밀값은 서버의 외부 `.env`에서 읽는다.
 
+CLOUD_DEPLOY는 애플리케이션 노드 하나만 지원한다. 둘 이상이면 `GENERATION400_10`(400)으로 거부하고 생성 이력을 저장하지 않는다. 애플리케이션 노드가 없으면 `GENERATION400_2`다. LOCAL_DEV의 애플리케이션 노드 개수 정책은 아직 정하지 않았다.
+
 CLOUD_DEPLOY는 plan-only scaffold이며 자동 terraform apply를 제공하지 않는다.
 
 ### 6.4 통합 출력 계약 (Issue #39)
@@ -813,6 +817,8 @@ UX:
 - PARSING400_27: MongoDB username 누락
 - COMMON400_1: 잘못된 JSON·enum·deployment target 또는 validation 오류
 - GENERATION400_2: 생성에 필요한 component 상태 오류
+- GENERATION400_9: Cloud 생성에서 같은 유형의 dependency 설정이 중복됨
+- GENERATION400_10: CLOUD_DEPLOY 그래프에 애플리케이션 노드가 둘 이상 있음. 6.3 참고
 
 ## 9. 민감 정보 처리
 

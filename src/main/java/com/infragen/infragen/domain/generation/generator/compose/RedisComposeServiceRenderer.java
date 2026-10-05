@@ -2,6 +2,8 @@ package com.infragen.infragen.domain.generation.generator.compose;
 
 import org.springframework.stereotype.Component;
 
+import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
+import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.RedisComponent;
 import com.infragen.infragen.global.enums.ComponentType;
@@ -21,9 +23,16 @@ public class RedisComposeServiceRenderer implements ComposeServiceRenderer {
     @Override
     public String render(BaseComponent component, ComposeGenerationContext context) {
         RedisComponent redis = (RedisComponent) component;
+        if (redis.getPassword() == null || redis.getPassword().isBlank()) {
+            throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
+        }
+
         String serviceName = ComposeYamlSupport.toServiceName(
             redis.getContainerName(), null, TYPE_LABEL);
         String containerName = ComposeYamlSupport.resolveContainerName(redis.getContainerName(), serviceName);
+
+        // 앱과 연결되지 않은 Redis도 compose의 ${REDIS_PASSWORD}를 채우도록 render에서 등록한다.
+        context.getEnvVars().put("REDIS_PASSWORD", redis.getPassword());
 
         StringBuilder yaml = new StringBuilder();
         yaml.append("  ").append(serviceName).append(":\n");

@@ -55,6 +55,11 @@ public enum IaCGenerationErrorCode implements BaseErrorCode {
         HttpStatus.BAD_REQUEST,
         "동일한 유형의 Cloud dependency 설정이 중복되었습니다.",
         "GENERATION400_9"
+    ),
+    MULTIPLE_APPLICATION_COMPONENTS(
+        HttpStatus.BAD_REQUEST,
+        "Cloud 배포는 애플리케이션 노드 하나만 지원합니다.",
+        "GENERATION400_10"
     );
 
     private final HttpStatus httpStatus;

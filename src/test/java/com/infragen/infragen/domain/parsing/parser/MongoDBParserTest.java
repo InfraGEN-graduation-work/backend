@@ -174,6 +174,40 @@ class MongoDBParserTest {
         assertEquals(ParsingErrorCode.MISSING_MONGODB_USERNAME, exception.getCode());
     }
 
+    @Test
+    @DisplayName("imageVersion 누락 — 사용자에게 보이는 메시지가 MongoDB 이미지 버전 누락을 알린다")
+    void parse_MissingImageVersion_ReturnsReadableMessage() {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.remove("imageVersion");
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals("MongoDB 이미지 버전이 누락되었습니다.", exception.getMessage());
+    }
+
+    @Test
+    @DisplayName("username 누락 — 사용자에게 보이는 메시지가 MongoDB 사용자 이름 누락을 알린다")
+    void parse_MissingUsername_ReturnsReadableMessage() {
+        // given
+        Map<String, Object> properties = validProperties();
+        env(properties).remove("username");
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals("MongoDB 사용자 이름이 누락되었습니다.", exception.getMessage());
+    }
+
     private BaseComponent parse(Map<String, Object> properties) {
         NodeDTO node = new NodeDTO(
             "node-1",

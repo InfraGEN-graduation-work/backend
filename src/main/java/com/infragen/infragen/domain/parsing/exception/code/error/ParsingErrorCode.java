@@ -131,7 +131,7 @@ public enum ParsingErrorCode implements BaseErrorCode {
     ),
     MISSING_MONGODB_IMAGE_VERSION(
             HttpStatus.BAD_REQUEST,
-            "MongoD지 버전이 누락되었습니다.",
+            "MongoDB 이미지 버전이 누락되었습니다.",
             "PARSING400_26"
     ),
     MISSING_MONGODB_USERNAME(

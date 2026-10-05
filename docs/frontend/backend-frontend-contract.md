@@ -808,9 +808,9 @@ UX:
 - PARSING400_7: DB 비밀번호 8자 미만(MySQL rootPassword, PostgreSQL·MongoDB password)
 - PARSING400_23: PostgreSQL imageVersion 누락
 - PARSING400_24: PostgreSQL username 누락
+- PARSING400_25: 하나의 애플리케이션에 같은 타입 dependency를 둘 이상 연결
 - PARSING400_26: MongoDB imageVersion 누락
 - PARSING400_27: MongoDB username 누락
-- PARSING400_25: 하나의 애플리케이션에 같은 타입 dependency를 둘 이상 연결
 - COMMON400_1: 잘못된 JSON·enum·deployment target 또는 validation 오류
 - GENERATION400_2: 생성에 필요한 component 상태 오류
 

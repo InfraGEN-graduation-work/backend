@@ -209,9 +209,9 @@ class DockerComposeIaCGeneratorTest {
             # InfraGEN generated environment variables
             # 민감한 정보는 이 파일에만 저장하세요. 버전 관리에 커밋하지 마세요.
 
+            REDIS_PASSWORD=redis-password
             REDIS_HOST=localhost
             REDIS_PORT=6379
-            REDIS_PASSWORD=redis-password
             """, fileContent(bundle, ".env"));
     }
 
@@ -445,6 +445,7 @@ class DockerComposeIaCGeneratorTest {
                 MYSQL_USER=user
                 MYSQL_PASSWORD=userpass12
                 MYSQL_ROOT_PASSWORD=rootpass12
+                REDIS_PASSWORD=redis-password
                 SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/appdb
                 SPRING_DATASOURCE_USERNAME=user
                 SPRING_DATASOURCE_PASSWORD=userpass12
@@ -452,7 +453,6 @@ class DockerComposeIaCGeneratorTest {
                 MYSQL_PORT=3306
                 REDIS_HOST=localhost
                 REDIS_PORT=6379
-                REDIS_PASSWORD=redis-password
                 """, fileContent(bundle, ".env"))
         );
     }
@@ -556,6 +556,68 @@ class DockerComposeIaCGeneratorTest {
             () -> assertFalse(env.contains("POSTGRES_HOST")),
             () -> assertFalse(env.contains("SPRING_DATASOURCE_URL"))
         );
+    }
+
+    @Test
+    @DisplayName("Redis만 있고 앱과 연결되지 않아도 REDIS_PASSWORD는 생성하고 호스트 접속 변수는 미생성")
+    void generate_UnconnectedRedis_RendersPasswordWithoutHostEnv() {
+        // given
+        ParsingResultDTO parsingResult = parsingResult(List.of(redisComponent()), List.of());
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult);
+
+        // then
+        String env = fileContent(bundle, ".env");
+        assertAll(
+            () -> assertTrue(env.contains("REDIS_PASSWORD=redis-password\n")),
+            () -> assertFalse(env.contains("REDIS_HOST")),
+            () -> assertFalse(env.contains("REDIS_PORT"))
+        );
+    }
+
+    @Test
+    @DisplayName("앱이 다른 DB에만 연결되고 Redis가 미연결이어도 REDIS_PASSWORD는 생성")
+    void generate_UnconnectedRedisWithMysqlApp_RendersPassword() {
+        // given
+        ParsingResultDTO parsingResult = parsingResult(
+            List.of(mysqlComponent(), redisComponent(), springBootComponent()),
+            List.of(edge("node-1", "node-2"))
+        );
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult);
+
+        // then
+        String env = fileContent(bundle, ".env");
+        assertAll(
+            () -> assertTrue(env.contains("REDIS_PASSWORD=redis-password\n")),
+            () -> assertTrue(env.contains("SPRING_DATASOURCE_URL=")),
+            () -> assertFalse(env.contains("REDIS_HOST"))
+        );
+    }
+
+    @Test
+    @DisplayName("Redis password 누락 — GENERATION400_2")
+    void generate_RedisPasswordBlank_ThrowsGenerationException() {
+        // given
+        RedisComponent redis = RedisComponent.builder()
+            .id("redis-1")
+            .imageVersion("redis:7.4")
+            .containerName("redis")
+            .port(6379)
+            .password(" ")
+            .build();
+        ParsingResultDTO parsingResult = parsingResult(List.of(redis), List.of());
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> generator.generate(parsingResult)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
     }
 
     private static MongoDBEnvComponent validMongoEnv() {

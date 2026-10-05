@@ -13,6 +13,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class JwtUtilTest {
@@ -31,6 +33,52 @@ class JwtUtilTest {
         // then
         assertEquals(ISSUER, claims.getIssuer());
         assertEquals(JwtUtil.ACCESS_TOKEN_CATEGORY, claims.get("category", String.class));
+    }
+
+    @Test
+    @DisplayName("access, refresh, dev token에 jti를 포함한다")
+    void createToken_IncludesJti() {
+        // given
+        JwtUtil jwtUtil = jwtUtil();
+
+        // when
+        Claims access = jwtUtil.getClaims(jwtUtil.createAccessToken(1L, Role.ROLE_USER));
+        Claims refresh = jwtUtil.getClaims(jwtUtil.createRefreshToken(1L));
+        Claims dev = jwtUtil.getClaims(jwtUtil.createDevToken(1L));
+
+        // then
+        assertNotNull(access.getId());
+        assertNotNull(refresh.getId());
+        assertNotNull(dev.getId());
+    }
+
+    @Test
+    @DisplayName("같은 회원에게 연속 발급한 token은 jti와 문자열이 다르다")
+    void createToken_ConsecutiveIssue_HasDistinctJti() {
+        // given
+        JwtUtil jwtUtil = jwtUtil();
+
+        // when
+        String first = jwtUtil.createAccessToken(1L, Role.ROLE_USER);
+        String second = jwtUtil.createAccessToken(1L, Role.ROLE_USER);
+
+        // then
+        assertNotEquals(jwtUtil.getClaims(first).getId(), jwtUtil.getClaims(second).getId());
+        assertNotEquals(first, second);
+    }
+
+    @Test
+    @DisplayName("jti가 없는 기존 token도 계속 유효하다")
+    void getClaims_TokenWithoutJti_IsStillValid() {
+        // given
+        JwtUtil jwtUtil = jwtUtil();
+        String token = signedToken(ISSUER, "1", JwtUtil.ACCESS_TOKEN_CATEGORY);
+
+        // when
+        Claims claims = jwtUtil.getClaims(token);
+
+        // then
+        assertEquals("1", claims.getSubject());
     }
 
     @Test

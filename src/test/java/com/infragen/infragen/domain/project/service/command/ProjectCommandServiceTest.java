@@ -364,6 +364,42 @@ class ProjectCommandServiceTest {
     }
 
     @Test
+    @DisplayName("프로젝트 수정 - EDITOR는 graph만 교체하고 이름·설명은 기존 값을 유지")
+    void updateProject_Editor_PreservesTitleAndDescription() {
+        // given
+        Long editorId = 2L;
+        Long projectId = 100L;
+        Project project = Project.builder()
+                .title("Old Title")
+                .description("Old Desc")
+                .status(ProjectStatus.DRAFT)
+                .member(owner(1L, Role.ROLE_USER))
+                .build();
+        ReflectionTestUtils.setField(project, "id", projectId);
+        ProjectNodeReqDTO.NodeInfoReqDTO nodeReq = new ProjectNodeReqDTO.NodeInfoReqDTO(
+                "node-1", "Web Server", "NGINX", BigDecimal.valueOf(100.0), BigDecimal.valueOf(200.0), Map.of()
+        );
+        ProjectReqDTO.UpdateProjectReqDTO updateRequest = new ProjectReqDTO.UpdateProjectReqDTO(
+                "New Title", "New Desc", List.of(nodeReq), Collections.emptyList(), 0L
+        );
+        when(projectRepository.findByIdForUpdate(projectId)).thenReturn(Optional.of(project));
+        when(projectQueryService.getWriteableProject(projectId, editorId)).thenReturn(project);
+        when(projectCollaborationVersionService.issueNextVersionForFullReplace(projectId, 0L)).thenReturn(1L);
+        when(projectNodeRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(projectEdgeRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        ProjectResDTO.ProjectDetailResDTO result = projectCommandService.updateProject(projectId, updateRequest, editorId);
+
+        // then
+        assertEquals("Old Title", result.title());
+        assertEquals("Old Desc", result.description());
+        assertEquals("Old Title", project.getTitle());
+        assertEquals(1, result.nodes().size());
+        verify(projectNodeRepository).saveAll(anyList());
+    }
+
+    @Test
     @DisplayName("프로젝트 수정 - nodeId가 중복되면 전용 예외 발생")
     void updateProject_DuplicateNodeId_ThrowsException() {
         // given
@@ -373,6 +409,7 @@ class ProjectCommandServiceTest {
         Project project = Project.builder()
                 .title("Project")
                 .status(ProjectStatus.DRAFT)
+                .member(owner(memberId, Role.ROLE_USER))
                 .build();
         ReflectionTestUtils.setField(project, "id", projectId);
 

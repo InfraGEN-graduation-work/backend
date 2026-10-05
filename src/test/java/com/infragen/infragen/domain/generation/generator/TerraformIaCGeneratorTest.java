@@ -757,6 +757,32 @@ class TerraformIaCGeneratorTest {
         assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
     }
 
+    @Test
+    @DisplayName("애플리케이션 노드 2개 — MULTIPLE_APPLICATION_COMPONENTS")
+    void generate_MultipleApplicationComponents_ThrowsGenerationException() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        SpringBootComponent secondApplication = SpringBootComponent.builder()
+            .id("node-2")
+            .posX(300f)
+            .posY(100f)
+            .name("app2")
+            .port(9091)
+            .javaVersion("17")
+            .containerName("app2")
+            .build();
+        parsingResult.setComponents(List.of(parsingResult.getComponents().get(0), secondApplication));
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> generator.generate(parsingResult, awsTarget())
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.MULTIPLE_APPLICATION_COMPONENTS, exception.getCode());
+    }
+
     private static MySQLComponent mysqlComponent() {
         return MySQLComponent.builder()
             .id("mysql-1")

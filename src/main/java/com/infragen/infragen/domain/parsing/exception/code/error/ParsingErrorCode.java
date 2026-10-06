@@ -138,6 +138,11 @@ public enum ParsingErrorCode implements BaseErrorCode {
             HttpStatus.BAD_REQUEST,
             "MongoDB 사용자 이름이 누락되었습니다.",
             "PARSING400_27"
+    ),
+    NULL_GRAPH_ELEMENT(
+            HttpStatus.BAD_REQUEST,
+            "노드 또는 연결선 목록에 빈 항목이 있습니다.",
+            "PARSING400_28"
     );
 
     private final HttpStatus httpStatus;

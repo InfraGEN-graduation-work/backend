@@ -3,6 +3,7 @@ package com.infragen.infragen.domain.parsing.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -89,6 +90,25 @@ class ParsingServiceTest {
 
         // then
         assertEquals(ParsingErrorCode.EMPTY_NODES, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("nodes에 null 원소 — PARSING400_28")
+    void parsing_NullNodeElement_Throws() {
+        // given
+        ParsingReqDTO request = new ParsingReqDTO(
+            Arrays.asList(mysqlNode("node-1", 3306), null),
+            List.of()
+        );
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parsingService.parsing(request, 1L)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.NULL_GRAPH_ELEMENT, exception.getCode());
     }
 
     @Test

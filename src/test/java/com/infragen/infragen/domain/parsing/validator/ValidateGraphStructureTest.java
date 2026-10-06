@@ -1,15 +1,18 @@
 package com.infragen.infragen.domain.parsing.validator;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
 import com.infragen.infragen.domain.parsing.dto.request.NodeDTO;
@@ -176,6 +179,48 @@ class ValidateGraphStructureTest {
 
         // then
         assertEquals(ParsingErrorCode.INVALID_EDGE_ENDPOINT, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("nodes에 null 원소 — PARSING400_28")
+    void validate_NullNodeElement_Throws() {
+        // given
+        List<NodeDTO> nodes = Arrays.asList(mysqlNode("node-1"), null);
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> validateGraphStructure.validate(nodes, List.of())
+        );
+
+        // then
+        assertAll(
+            () -> assertEquals(ParsingErrorCode.NULL_GRAPH_ELEMENT, exception.getCode()),
+            () -> assertEquals(HttpStatus.BAD_REQUEST, exception.getCode().getHttpStatus())
+        );
+    }
+
+    @Test
+    @DisplayName("edges에 null 원소 — PARSING400_28")
+    void validate_NullEdgeElement_Throws() {
+        // given
+        List<NodeDTO> nodes = List.of(
+            mysqlNode("node-1"),
+            springBootNode("node-2")
+        );
+        List<EdgeDTO> edges = Arrays.asList(edge("node-1", "node-2"), null);
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> validateGraphStructure.validate(nodes, edges)
+        );
+
+        // then
+        assertAll(
+            () -> assertEquals(ParsingErrorCode.NULL_GRAPH_ELEMENT, exception.getCode()),
+            () -> assertEquals(HttpStatus.BAD_REQUEST, exception.getCode().getHttpStatus())
+        );
     }
 
     @Test

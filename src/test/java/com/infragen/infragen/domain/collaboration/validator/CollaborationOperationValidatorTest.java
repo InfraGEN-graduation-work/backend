@@ -5,6 +5,8 @@ import com.infragen.infragen.domain.collaboration.enums.CollaborationOperationTy
 import com.infragen.infragen.domain.collaboration.exception.CollaborationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Map;
 
@@ -69,6 +71,41 @@ class CollaborationOperationValidatorTest {
         CollaborationOperationReqDTO.Operation operation = operation(
                 CollaborationOperationType.UPDATE_NODE_POSITION,
                 Map.of("positionX", 100.1234, "positionY", 200.000)
+        );
+
+        // when
+        CollaborationException exception = assertThrows(
+                CollaborationException.class,
+                () -> validator.validate(operation)
+        );
+
+        // then
+        assertEquals("COLLAB400_2", exception.getCode().getCode());
+    }
+
+    @ParameterizedTest
+    @ValueSource(doubles = {9999999.999, -9999999.999, 0})
+    void validate_updateNodePosition_withinColumnRange_succeeds(double position) {
+        // given
+        CollaborationOperationReqDTO.Operation operation = operation(
+                CollaborationOperationType.UPDATE_NODE_POSITION,
+                Map.of("positionX", position, "positionY", position)
+        );
+
+        // when
+        Executable action = () -> validator.validate(operation);
+
+        // then
+        assertDoesNotThrow(action);
+    }
+
+    @ParameterizedTest
+    @ValueSource(doubles = {10000000, -10000000, 1E+10, 99999999.9})
+    void validate_updateNodePosition_beyondColumnRange_throwsBadRequest(double position) {
+        // given
+        CollaborationOperationReqDTO.Operation operation = operation(
+                CollaborationOperationType.UPDATE_NODE_POSITION,
+                Map.of("positionX", position, "positionY", 0)
         );
 
         // when

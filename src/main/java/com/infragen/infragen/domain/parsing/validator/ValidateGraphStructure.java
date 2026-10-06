@@ -29,7 +29,7 @@ public class ValidateGraphStructure {
 
         for (NodeDTO node : nodes) {
             if (node == null) {
-                continue;
+                throw new ParsingException(ParsingErrorCode.NULL_GRAPH_ELEMENT);
             }
 
             String nodeId = node.getNodeId();
@@ -56,7 +56,7 @@ public class ValidateGraphStructure {
 
         for (EdgeDTO edge : edges) {
             if (edge == null) {
-                continue;
+                throw new ParsingException(ParsingErrorCode.NULL_GRAPH_ELEMENT);
             }
 
             // source 노드와 target 노드 추출

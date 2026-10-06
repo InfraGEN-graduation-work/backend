@@ -1,14 +1,21 @@
 package com.infragen.infragen.domain.generation.generator.compose;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
+
+import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
+import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 
 @DisplayName("Compose renderer 공통 유틸")
 class ComposeYamlSupportTest {
@@ -62,6 +69,54 @@ class ComposeYamlSupportTest {
 
         // then
         assertEquals(expected, escaped);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("lineBreakValueCases")
+    @DisplayName(".env 값에 줄바꿈이나 NUL이 있으면 GENERATION400_13으로 거부한다")
+    void formatEnvFile_ValueWithLineBreakOrNul_Throws(String scenario, String value) {
+        // given
+        Map<String, String> envVars = Map.of("MYSQL_PASSWORD", value);
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> ComposeYamlSupport.formatEnvFile(envVars)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.UNSUPPORTED_ENV_VALUE, exception.getCode());
+    }
+
+    @Test
+    @DisplayName(".env 값이 null이거나 특수문자만 있으면 거부하지 않는다")
+    void formatEnvFile_NullOrSpecialCharacterValue_DoesNotThrow() {
+        // given
+        Map<String, String> envVars = new LinkedHashMap<>();
+        envVars.put("EMPTY", null);
+        envVars.put("PASSWORD", "pa$word 12");
+
+        // when
+        String content = ComposeYamlSupport.formatEnvFile(envVars);
+
+        // then
+        assertEquals("""
+            # InfraGEN generated environment variables
+            # 민감한 정보는 이 파일에만 저장하세요. 버전 관리에 커밋하지 마세요.
+
+            EMPTY=
+            PASSWORD="pa$$word 12"
+            """, content);
+    }
+
+    private static Stream<Arguments> lineBreakValueCases() {
+        return Stream.of(
+            Arguments.of("LF", "pass\nINJECTED=1"),
+            Arguments.of("CR", "pass\rword12"),
+            Arguments.of("CRLF", "pass\r\nword12"),
+            Arguments.of("NUL", "pass\0word12"),
+            Arguments.of("끝의 LF", "password12\n")
+        );
     }
 
     private static Stream<Arguments> envValueCases() {

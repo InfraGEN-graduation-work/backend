@@ -197,6 +197,27 @@ class DockerComposeIaCGeneratorTest {
     }
 
     @Test
+    @DisplayName("비밀번호에 개행이 있으면 생성 단계에서 GENERATION400_13으로 거부")
+    void generate_PasswordWithLineBreak_ThrowsGenerationException() {
+        // given
+        ParsingResultDTO parsingResult = localDevParsingResultWithMysqlEnv(MySQLEnvComponent.builder()
+            .databaseName("appdb")
+            .username("user")
+            .userPassword("userpass12\nINJECTED=1")
+            .rootPassword("rootpass12")
+            .build());
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> generator.generate(parsingResult)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.UNSUPPORTED_ENV_VALUE, exception.getCode());
+    }
+
+    @Test
     @DisplayName("MySQL env 누락 — GENERATION400_2")
     void generate_MysqlEnvMissing_ThrowsGenerationException() {
         ParsingResultDTO parsingResult = localDevParsingResultWithMysqlEnv(null);

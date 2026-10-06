@@ -48,6 +48,7 @@ public class ValidateGraphStructure {
         }
 
         if (edges == null || edges.isEmpty()) {
+            validateInfrastructureTypeUniqueness(nodes, nodeTypeMap);
             return;
         }
 
@@ -123,6 +124,23 @@ public class ValidateGraphStructure {
 
         if (visitedCount != nodeTypeMap.size()) {
             throw new ParsingException(ParsingErrorCode.CYCLE_DETECTED);
+        }
+
+        // 앱 단위 중복(PARSING400_25)과 순환 같은 구조 오류가 먼저 걸리도록 마지막에 수행한다.
+        validateInfrastructureTypeUniqueness(nodes, nodeTypeMap);
+    }
+
+    // LOCAL_DEV .env는 타입별 고정 변수(MYSQL_* 등)를 쓰므로 같은 타입 노드가 둘이면 마지막 노드 값만 남는다.
+    // 앱에 연결되지 않은 노드도 컨테이너와 .env에 등록되므로 연결 여부와 무관하게 그래프 전체에서 센다.
+    private void validateInfrastructureTypeUniqueness(List<NodeDTO> nodes, Map<String, ComponentType> nodeTypeMap) {
+        Set<ComponentType> seenTypes = new HashSet<>();
+        for (NodeDTO node : nodes) {
+            ComponentType type = nodeTypeMap.get(node.getNodeId());
+            boolean infrastructure = type.getCategory() == ComponentCategory.DATABASE
+                    || type.getCategory() == ComponentCategory.CACHE;
+            if (infrastructure && !seenTypes.add(type)) {
+                throw new ParsingException(ParsingErrorCode.DUPLICATE_COMPONENT_TYPE);
+            }
         }
     }
 

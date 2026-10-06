@@ -16,8 +16,9 @@ import java.util.Set;
 public class CollaborationOperationValidator {
     private static final Set<String> NODE_NAME_FIELDS = Set.of("value");
     private static final Set<String> NODE_POSITION_FIELDS = Set.of("positionX", "positionY");
-    private static final int POSITION_PRECISION = 10;
     private static final int POSITION_SCALE = 3;
+    // ProjectNode.positionX/Y 컬럼(DECIMAL(10,3))에 저장 가능한 절댓값 상한. 넘으면 저장 단계에서 DB 오류가 난다.
+    private static final BigDecimal MAX_POSITION_ABS = new BigDecimal("9999999.999");
 
     /**
      * operation이 현재 1차 계약에 맞는지 확인한다.
@@ -68,7 +69,7 @@ public class CollaborationOperationValidator {
             throw invalidOperation(CollaborationErrorCode.INVALID_OPERATION_PAYLOAD);
         }
 
-        if (position.scale() > POSITION_SCALE || position.precision() > POSITION_PRECISION) {
+        if (position.scale() > POSITION_SCALE || position.abs().compareTo(MAX_POSITION_ABS) > 0) {
             throw invalidOperation(CollaborationErrorCode.INVALID_OPERATION_PAYLOAD);
         }
     }

@@ -231,6 +231,61 @@ class ProjectControllerWebTest {
         verifyNoInteractions(projectCommandService);
     }
 
+    @ParameterizedTest
+    @MethodSource("invalidGraphBodies")
+    @DisplayName("PUT /projects/{projectId} — null 원소와 좌표 범위 초과는 service 호출 전에 거부")
+    void updateProject_InvalidGraphElement_ReturnsBadRequest(String requestJson) throws Exception {
+        // given
+        var request = put(PROJECT_URL, 1L)
+            .with(authenticatedAs(7L))
+            .contentType(APPLICATION_JSON)
+            .content(requestJson);
+
+        // when
+        var response = mockMvc.perform(request);
+
+        // then
+        response.andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("COMMON400_1"));
+        verifyNoInteractions(projectCommandService);
+    }
+
+    static Stream<String> invalidGraphBodies() {
+        return Stream.of(
+            REQUEST_JSON.replace("\"nodes\": [", "\"nodes\": [null,"),
+            REQUEST_JSON.replace("\"edges\": [", "\"edges\": [null,"),
+            REQUEST_JSON.replace("\"positionX\": 100,", "\"positionX\": 10000000,"),
+            REQUEST_JSON.replace("\"positionX\": 100,", "\"positionX\": -10000000,"),
+            REQUEST_JSON.replace("\"positionY\": 200,", "\"positionY\": 9999999.9996,")
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("acceptedPositionBodies")
+    @DisplayName("PUT /projects/{projectId} — 경계값과 긴 소수 좌표는 통과")
+    void updateProject_AcceptedPosition_CallsService(String requestJson) throws Exception {
+        // given
+        var request = put(PROJECT_URL, 1L)
+            .with(authenticatedAs(7L))
+            .contentType(APPLICATION_JSON)
+            .content(requestJson);
+
+        // when
+        var response = mockMvc.perform(request);
+
+        // then
+        response.andExpect(status().isOk());
+        verify(projectCommandService).updateProject(eq(1L), any(), eq(7L));
+    }
+
+    static Stream<String> acceptedPositionBodies() {
+        return Stream.of(
+            REQUEST_JSON.replace("\"positionX\": 100,", "\"positionX\": 9999999.999,"),
+            REQUEST_JSON.replace("\"positionX\": 100,", "\"positionX\": -9999999.999,"),
+            REQUEST_JSON.replace("\"positionX\": 100,", "\"positionX\": 123.456789,")
+        );
+    }
+
     @Test
     @DisplayName("홈 목록은 인증 회원으로 조회하고 모든 접근 역할을 반환한다")
     void getProjects_AuthenticatedMember_ReturnsAccessRoles() throws Exception {

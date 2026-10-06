@@ -40,13 +40,11 @@ public final class ProjectReqDTO {
         @NotBlank(message = "프로젝트 이름은 필수 입력 항목입니다.")
         String title,
         String description,
-        // 리스트 내부의 객체 유효성 검사를 전파한다.
-        @Valid 
+        // 리스트 내부의 객체 유효성 검사를 전파하고 null 원소를 거부한다.
         @NotNull
-        List<ProjectNodeReqDTO.NodeInfoReqDTO> nodes,
-        @Valid
+        List<ProjectNodeReqDTO.@Valid @NotNull NodeInfoReqDTO> nodes,
         @NotNull
-        List<ProjectEdgeReqDTO.EdgeInfoReqDTO> edges,
+        List<ProjectEdgeReqDTO.@Valid @NotNull EdgeInfoReqDTO> edges,
         @NotNull
         @PositiveOrZero
         Long baseVersion

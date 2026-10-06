@@ -166,6 +166,37 @@ class DockerComposeIaCGeneratorTest {
     }
 
     @Test
+    @DisplayName("특수문자 비밀번호 — .env에 큰따옴표와 이스케이프로 출력하고 안전한 값은 그대로")
+    void generate_SpecialCharacterPassword_EscapesEnvValues() {
+        // given
+        ParsingResultDTO parsingResult = localDevParsingResultWithMysqlEnv(MySQLEnvComponent.builder()
+            .databaseName("appdb")
+            .username("user")
+            .userPassword("pa$word\"12\\")
+            .rootPassword("rootpass12")
+            .build());
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult);
+
+        // then
+        assertEquals("""
+            # InfraGEN generated environment variables
+            # 민감한 정보는 이 파일에만 저장하세요. 버전 관리에 커밋하지 마세요.
+
+            MYSQL_DATABASE=appdb
+            MYSQL_USER=user
+            MYSQL_PASSWORD="pa$$word\\"12\\\\"
+            MYSQL_ROOT_PASSWORD=rootpass12
+            SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/appdb
+            SPRING_DATASOURCE_USERNAME=user
+            SPRING_DATASOURCE_PASSWORD="pa$$word\\"12\\\\"
+            MYSQL_HOST=localhost
+            MYSQL_PORT=3306
+            """, fileContent(bundle, ".env"));
+    }
+
+    @Test
     @DisplayName("MySQL env 누락 — GENERATION400_2")
     void generate_MysqlEnvMissing_ThrowsGenerationException() {
         ParsingResultDTO parsingResult = localDevParsingResultWithMysqlEnv(null);

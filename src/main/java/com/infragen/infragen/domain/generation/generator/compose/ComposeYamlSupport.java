@@ -40,14 +40,26 @@ public final class ComposeYamlSupport {
     }
 
     // .env 값 이스케이프 — 공백 또는 # 포함 시 따옴표, 내부 " 는 \"
+    /**
+     * {@code .env} 한 줄의 값을 Compose가 입력 그대로 읽도록 직렬화한다.
+     *
+     * <p>공백, {@code #}, {@code $}, 따옴표, 백슬래시, 백틱이 있으면 큰따옴표로 감싸고
+     * {@code \}, {@code "}, {@code $}를 이스케이프한다. 없으면 그대로 출력한다.
+     * 개행 계열 값의 처리는 이 메서드의 책임이 아니다.
+     */
     public static String escapeEnvValue(String value) {
         if (value == null) {
             return "";
         }
-        if (value.contains(" ") || value.contains("#")) {
-            return "\"" + value.replace("\"", "\\\"") + "\"";
+        if (!needsQuoting(value)) {
+            return value;
         }
-        return value;
+        // 작은따옴표는 끝이 백슬래시인 값과 \' 조합을 표현하지 못해 큰따옴표를 쓴다.
+        // $는 Compose 보간이라 $$로 써야 리터럴이 된다.
+        return "\"" + value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("$", "$$") + "\"";
     }
 
     // context.envVars -> .env 파일 본문
@@ -73,6 +85,10 @@ public final class ComposeYamlSupport {
         }
         content.append('\n');
         return content.toString();
+    }
+
+    private static boolean needsQuoting(String value) {
+        return value.chars().anyMatch(c -> " #$'\"\\`".indexOf(c) >= 0);
     }
 
     private static String firstNonBlank(String... candidates) {

@@ -300,6 +300,11 @@ UX:
       ]
     }
 
+요청 검증:
+
+- `nodes`, `edges` 배열에 `null` 원소를 넣을 수 없다. 넣으면 `COMMON400_1`(400)이다.
+- `positionX`, `positionY`는 `-9999999.999` 이상 `9999999.999` 이하여야 한다. 범위를 넘으면 `COMMON400_1`(400)이다. 이 요청에서는 소수 자리를 제한하지 않는다.
+
 현재 코드에는 Issue #31의 DTO·entity·converter·프로젝트 수정 nodeMap 전환이 반영되어 있다. 프로젝트 상세 응답의 node는 `nodeId`와 persistence용 `id`를 함께 제공하고, edge의 `sourceNodeId`·`targetNodeId`는 프론트 nodeId를 반환한다. 기존 DB 행의 nodeId migration과 end-to-end 검증은 아직 남아 있다.
 
 프로젝트 상세 응답의 현재 node·edge 식별자 구조:
@@ -404,7 +409,7 @@ operation 전송 형식:
       "payload": { "value": "mysql" }
     }
 
-- `type`은 `UPDATE_NODE_NAME`, `UPDATE_NODE_POSITION`이다. 위치 수정 payload는 `positionX`, `positionY`다.
+- `type`은 `UPDATE_NODE_NAME`, `UPDATE_NODE_POSITION`이다. 위치 수정 payload는 `positionX`, `positionY`다. 두 값은 절댓값이 `9999999.999` 이하이고 소수 셋째 자리까지만 허용하며, 어기면 `COLLAB400_2`로 거부된다.
 - `baseVersion`은 클라이언트가 마지막으로 반영한 `serverVersion`이다.
 - 적용된 operation은 `operations` 구독으로 `operationId`, `clientId`, `serverVersion`, `actorMemberId`, `type`, `nodeId`, `payload`가 broadcast된다.
 - 같은 `operationId`와 같은 내용을 다시 보냈을 때의 결과는 서버에 원본 log가 남아 있는지에 따라 다르다.
@@ -799,6 +804,7 @@ UX:
 - AUTH400_1: 지원하지 않는 social provider
 - PROJECT404_1: 프로젝트 없음
 - PROJECT409_1: 동시 수정 충돌
+- COLLAB400_2: 협업 operation payload 오류(위치 좌표가 `±9999999.999` 범위 밖이거나 소수 셋째 자리 초과 포함)
 - COLLAB409_1: 같은 operationId에 다른 내용이 사용됨
 - COLLAB409_2: version 불일치. 4.6의 재동기화 절차를 따른다
 - PROJECT400_5: 프로젝트 내부 nodeId 중복
@@ -815,6 +821,7 @@ UX:
 - PARSING400_25: 하나의 애플리케이션에 같은 타입 dependency를 둘 이상 연결
 - PARSING400_26: MongoDB imageVersion 누락
 - PARSING400_27: MongoDB username 누락
+- PARSING400_28: 생성 요청의 `nodes` 또는 `edges`에 빈(`null`) 항목이 있음
 - COMMON400_1: 잘못된 JSON·enum·deployment target 또는 validation 오류
 - GENERATION400_2: 생성에 필요한 component 상태 오류
 - GENERATION400_9: Cloud 생성에서 같은 유형의 dependency 설정이 중복됨

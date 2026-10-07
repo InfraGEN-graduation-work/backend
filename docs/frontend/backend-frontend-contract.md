@@ -593,6 +593,7 @@ Generate graph edge 구조:
 - source가 먼저 준비되고 target이 나중에 실행된다.
 - MySQL·PostgreSQL·MongoDB·Redis → Spring Boot 연결을 사용한다.
 - 하나의 Spring Boot에 같은 타입의 dependency를 둘 이상 연결할 수 없다(`PARSING400_25`). 예: MySQL 둘, Redis 둘
+- 그래프 전체에도 같은 타입의 DB·Redis 노드를 둘 이상 둘 수 없다(`PARSING400_29`). 앱에 연결하지 않았거나 서로 다른 앱에 연결한 경우도 같다. 예: MySQL 노드 둘, Redis 노드 둘
 - 서로 다른 타입의 DB는 함께 연결할 수 있다. 예: MySQL 하나 + PostgreSQL 하나, MySQL 하나 + MongoDB 하나
 - 존재하지 않는 node를 edge가 참조할 수 없다.
 - 순환 참조를 허용하지 않는다.
@@ -645,6 +646,11 @@ query parameter는 사용하지 않는다. 배포 범위와 target은 request bo
 - Spring Boot는 호스트에서 실행
 - MySQL·PostgreSQL·MongoDB·Redis는 Docker Compose에서 실행
 - .env에는 DB와 Redis password가 포함될 수 있음
+
+.env 값 규칙 (LOCAL_DEV):
+
+- 값에 공백, `#`, `$`, 따옴표, 백슬래시, 백틱이 있으면 값 전체를 큰따옴표로 감싸고 `\`, `"`, `$`를 각각 `\\`, `\"`, `$$`로 쓴다. 이 표기는 Docker Compose가 읽은 값이 입력과 같도록 맞춘 것이다. 특수문자가 없는 값은 그대로 출력한다.
+- 값에 줄바꿈(`\n`, `\r`)이나 NUL이 있으면 생성에 실패하고(`GENERATION400_13`) 생성 이력을 저장하지 않는다. 비밀번호 등 입력값에 줄바꿈을 넣을 수 없다는 안내가 필요하다.
 
 DB 접속 정보 규칙 (LOCAL_DEV, CLOUD_DEPLOY 공통):
 
@@ -822,10 +828,12 @@ UX:
 - PARSING400_26: MongoDB imageVersion 누락
 - PARSING400_27: MongoDB username 누락
 - PARSING400_28: 생성 요청의 `nodes` 또는 `edges`에 빈(`null`) 항목이 있음
+- PARSING400_29: 같은 타입의 DB 또는 Redis 노드가 그래프에 둘 이상 있음. 5.6 참고
 - COMMON400_1: 잘못된 JSON·enum·deployment target 또는 validation 오류
 - GENERATION400_2: 생성에 필요한 component 상태 오류
 - GENERATION400_9: Cloud 생성에서 같은 유형의 dependency 설정이 중복됨
 - GENERATION400_10: CLOUD_DEPLOY 그래프에 애플리케이션 노드가 둘 이상 있음. 6.3 참고
+- GENERATION400_13: LOCAL_DEV `.env` 값에 줄바꿈이나 NUL이 있음. 6.2 참고
 
 ## 9. 민감 정보 처리
 

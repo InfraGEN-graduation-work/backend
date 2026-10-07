@@ -143,6 +143,11 @@ public enum ParsingErrorCode implements BaseErrorCode {
             HttpStatus.BAD_REQUEST,
             "노드 또는 연결선 목록에 빈 항목이 있습니다.",
             "PARSING400_28"
+    ),
+    DUPLICATE_COMPONENT_TYPE(
+            HttpStatus.BAD_REQUEST,
+            "같은 타입의 데이터베이스 또는 캐시 컴포넌트를 하나의 그래프에 둘 이상 둘 수 없습니다.",
+            "PARSING400_29"
     );
 
     private final HttpStatus httpStatus;

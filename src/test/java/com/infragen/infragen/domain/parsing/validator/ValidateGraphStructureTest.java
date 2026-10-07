@@ -313,6 +313,101 @@ class ValidateGraphStructureTest {
         assertDoesNotThrow(validation::run);
     }
 
+    @Test
+    @DisplayName("연결 없이 놓인 MySQL 둘 — PARSING400_29")
+    void validate_SameTypeDatabasesWithoutEdges_Throws() {
+        // given
+        List<NodeDTO> nodes = List.of(
+            mysqlNode("mysql-1"),
+            mysqlNode("mysql-2")
+        );
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> validateGraphStructure.validate(nodes, List.of())
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.DUPLICATE_COMPONENT_TYPE, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("서로 다른 앱에 각각 연결된 MySQL 둘 — PARSING400_29")
+    void validate_SameTypeDatabasesToDifferentApplications_Throws() {
+        // given
+        List<NodeDTO> nodes = List.of(
+            mysqlNode("mysql-1"),
+            mysqlNode("mysql-2"),
+            springBootNode("app-1"),
+            springBootNode("app-2")
+        );
+        List<EdgeDTO> edges = List.of(
+            edge("mysql-1", "app-1"),
+            edge("mysql-2", "app-2")
+        );
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> validateGraphStructure.validate(nodes, edges)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.DUPLICATE_COMPONENT_TYPE, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("연결 없이 놓인 Redis 둘 — PARSING400_29")
+    void validate_SameTypeCachesWithoutEdges_Throws() {
+        // given
+        List<NodeDTO> nodes = List.of(
+            redisNode("redis-1"),
+            redisNode("redis-2")
+        );
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> validateGraphStructure.validate(nodes, null)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.DUPLICATE_COMPONENT_TYPE, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("연결 없이 놓인 MySQL과 PostgreSQL — 통과")
+    void validate_DifferentTypeDatabasesWithoutEdges_DoesNotThrow() {
+        // given
+        List<NodeDTO> nodes = List.of(
+            mysqlNode("mysql"),
+            postgresqlNode("postgres")
+        );
+
+        // when
+        Runnable validation = () -> validateGraphStructure.validate(nodes, List.of());
+
+        // then
+        assertDoesNotThrow(validation::run);
+    }
+
+    @Test
+    @DisplayName("애플리케이션 둘은 타입 중복 검사 대상이 아니다 — 통과")
+    void validate_MultipleApplications_DoesNotThrow() {
+        // given
+        List<NodeDTO> nodes = List.of(
+            springBootNode("app-1"),
+            springBootNode("app-2")
+        );
+
+        // when
+        Runnable validation = () -> validateGraphStructure.validate(nodes, List.of());
+
+        // then
+        assertDoesNotThrow(validation::run);
+    }
+
     private static NodeDTO mysqlNode(String nodeId) {
         return new NodeDTO(nodeId, "MYSQL", 100f, 200f, Map.of());
     }

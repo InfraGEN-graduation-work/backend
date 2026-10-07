@@ -4,6 +4,7 @@
 
 - 제품 맥락: `docs/infra-gen-project-overview.md`
 - 작업과 관련된 문서만 읽는다. `docs/harness/personal_convention/`은 개인 로컬 문서 (gitignore 대상)이며, 있으면 따른다.
+- 예외: `docs/harness/personal_convention/planning_communication_convention.md`는 사용자가 이름이나 경로를 직접 언급하며 읽기 또는 적용을 요청한 경우에만 읽는다. 폴더 일괄 읽기·내용 검색에서도 제외하고, 작업 유형이나 다른 문서의 참조로 자동으로 읽거나 적용하지 않는다. 적용은 명시적으로 요청한 작업에 한정한다.
 
 ## 항상 적용
 

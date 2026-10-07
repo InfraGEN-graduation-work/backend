@@ -19,6 +19,7 @@ import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCod
 import com.infragen.infragen.domain.project.repository.ProjectEdgeRepository;
 import com.infragen.infragen.domain.project.repository.ProjectNodeRepository;
 import com.infragen.infragen.domain.project.repository.ProjectRepository;
+import com.infragen.infragen.domain.project.service.query.ProjectAccessService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -41,6 +42,7 @@ public class CollaborationOperationTransactionService {
     private final ProjectNodeRepository projectNodeRepository;
     private final ProjectEdgeRepository projectEdgeRepository;
     private final MemberQueryService memberQueryService;
+    private final ProjectAccessService projectAccessService;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
 
@@ -52,7 +54,7 @@ public class CollaborationOperationTransactionService {
      * @param operation 저장할 collaboration operation
      * @return 신규 operation 결과 또는 lock 안에서 발견한 재전송 결과
      * @throws CollaborationException operationId가 다른 내용으로 재사용된 경우
-     * @throws ProjectException project 또는 대상 node가 존재하지 않는 경우
+     * @throws ProjectException project 또는 대상 node가 존재하지 않거나, lock을 얻은 시점에 member의 쓰기 권한이 없는 경우
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public Optional<CollaborationOperationResDTO.BroadcastOperationResDTO> recordNewOperation(
@@ -66,6 +68,9 @@ public class CollaborationOperationTransactionService {
                         operation.baseVersion(),
                         operation.operationId()
                 );
+        // 호출 전 권한 확인과 이 lock 사이에 권한이 회수되고 커밋됐을 수 있어 lock 뒤에 한 번 더 확인한다.
+        // 재전송 분기보다 앞에 둬서 권한을 잃은 member의 재전송도 빈 결과가 아니라 거부로 응답한다.
+        projectAccessService.requireWriteAccess(projectId, memberId);
 
         ProjectCollaborationOperation existing = issuance.existingOperation();
         if (existing != null) {

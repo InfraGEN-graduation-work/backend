@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -35,12 +36,16 @@ import com.infragen.infragen.domain.project.exception.ProjectException;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.repository.ProjectHistoryRepository;
 import com.infragen.infragen.domain.project.repository.ProjectRepository;
+import com.infragen.infragen.domain.project.service.query.ProjectAccessService;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectHistoryCommandServiceTest {
     @Mock
     private ProjectQueryService projectQueryService;
+
+    @Mock
+    private ProjectAccessService projectAccessService;
 
     @Mock
     private ProjectHistoryRepository projectHistoryRepository;
@@ -90,9 +95,10 @@ class ProjectHistoryCommandServiceTest {
         assertEquals(memberId, result.actorMemberId());
         assertNotNull(result.createdAt());
 
-        InOrder lockOrder = inOrder(projectQueryService, projectRepository, projectHistoryRepository);
+        InOrder lockOrder = inOrder(projectQueryService, projectRepository, projectAccessService, projectHistoryRepository);
         lockOrder.verify(projectQueryService).getWriteableProject(projectId, memberId);
         lockOrder.verify(projectRepository).findByIdForUpdate(projectId);
+        lockOrder.verify(projectAccessService).requireWriteAccess(projectId, memberId);
         lockOrder.verify(projectHistoryRepository).countByProjectIdForUpdate(projectId);
         ArgumentCaptor<ProjectHistory> historyCaptor = ArgumentCaptor.forClass(ProjectHistory.class);
         verify(projectHistoryRepository).save(historyCaptor.capture());
@@ -118,6 +124,38 @@ class ProjectHistoryCommandServiceTest {
         assertEquals(ProjectErrorCode.PROJECT_ACCESS_DENIED, exception.getCode());
         verify(projectQueryService).getWriteableProject(projectId, memberId);
         verify(projectRepository, never()).findByIdForUpdate(projectId);
+        verify(projectHistoryRepository, never()).countByProjectIdForUpdate(projectId);
+        verify(projectHistoryRepository, never()).save(any(ProjectHistory.class));
+    }
+
+    @Test
+    @DisplayName("히스토리 생성 - 잠금 뒤 쓰기 권한이 회수됐으면 저장 전에 거부")
+    void createHistory_AccessRevokedAfterLock_DoesNotSaveHistory() {
+        // given
+        Long memberId = 1L;
+        Long projectId = 100L;
+        ProjectHistoryReqDTO.CreateHistoryReqDTO request = new ProjectHistoryReqDTO.CreateHistoryReqDTO("Initial commit");
+        Project project = Project.builder()
+                .title("Test Project")
+                .description("Test Description")
+                .build();
+        ReflectionTestUtils.setField(project, "id", projectId);
+
+        when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(project);
+        when(projectRepository.findByIdForUpdate(projectId)).thenReturn(Optional.of(project));
+        doThrow(new ProjectException(ProjectErrorCode.PROJECT_ACCESS_DENIED))
+            .when(projectAccessService).requireWriteAccess(projectId, memberId);
+
+        // when
+        ProjectException exception = assertThrows(ProjectException.class,
+                () -> projectHistoryCommandService.createHistory(projectId, request, memberId));
+
+        // then
+        assertEquals(ProjectErrorCode.PROJECT_ACCESS_DENIED, exception.getCode());
+        InOrder lockOrder = inOrder(projectQueryService, projectRepository, projectAccessService);
+        lockOrder.verify(projectQueryService).getWriteableProject(projectId, memberId);
+        lockOrder.verify(projectRepository).findByIdForUpdate(projectId);
+        lockOrder.verify(projectAccessService).requireWriteAccess(projectId, memberId);
         verify(projectHistoryRepository, never()).countByProjectIdForUpdate(projectId);
         verify(projectHistoryRepository, never()).save(any(ProjectHistory.class));
     }
@@ -199,9 +237,10 @@ class ProjectHistoryCommandServiceTest {
         assertEquals("cloud/Dockerfile", dockerfile.getFileName());
         assertEquals("projects/100/histories/v2/cloud/Dockerfile", dockerfile.getFilePath());
 
-        InOrder lockOrder = inOrder(projectQueryService, projectRepository, projectHistoryRepository);
+        InOrder lockOrder = inOrder(projectQueryService, projectRepository, projectAccessService, projectHistoryRepository);
         lockOrder.verify(projectQueryService).getWriteableProject(projectId, memberId);
         lockOrder.verify(projectRepository).findByIdForUpdate(projectId);
+        lockOrder.verify(projectAccessService).requireWriteAccess(projectId, memberId);
         lockOrder.verify(projectHistoryRepository).countByProjectIdForUpdate(projectId);
     }
 
@@ -226,6 +265,43 @@ class ProjectHistoryCommandServiceTest {
         assertEquals(ProjectErrorCode.PROJECT_NOT_FOUND, exception.getCode());
         verify(projectQueryService).getWriteableProject(projectId, memberId);
         verify(projectRepository, never()).findByIdForUpdate(projectId);
+        verify(projectHistoryRepository, never()).countByProjectIdForUpdate(projectId);
+        verify(projectHistoryRepository, never()).save(any(ProjectHistory.class));
+    }
+
+    @Test
+    @DisplayName("생성 이력 저장 - 잠금 뒤 쓰기 권한이 회수됐으면 저장 전에 거부")
+    void saveGeneratedHistory_AccessRevokedAfterLock_DoesNotSaveHistory() {
+        // given
+        Long memberId = 1L;
+        Long projectId = 100L;
+        List<IaCFileDTO.FileContentResDTO> generatedFiles = List.of(
+            IaCFileDTO.FileContentResDTO.builder()
+                .fileName("docker-compose.yml")
+                .content("services: {}")
+                .build()
+        );
+        Project project = Project.builder()
+            .title("Test Project")
+            .description("Test Description")
+            .build();
+        ReflectionTestUtils.setField(project, "id", projectId);
+
+        when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(project);
+        when(projectRepository.findByIdForUpdate(projectId)).thenReturn(Optional.of(project));
+        doThrow(new ProjectException(ProjectErrorCode.PROJECT_ACCESS_DENIED))
+            .when(projectAccessService).requireWriteAccess(projectId, memberId);
+
+        // when
+        ProjectException exception = assertThrows(ProjectException.class,
+            () -> projectHistoryCommandService.saveGeneratedHistory(projectId, memberId, generatedFiles));
+
+        // then
+        assertEquals(ProjectErrorCode.PROJECT_ACCESS_DENIED, exception.getCode());
+        InOrder lockOrder = inOrder(projectQueryService, projectRepository, projectAccessService);
+        lockOrder.verify(projectQueryService).getWriteableProject(projectId, memberId);
+        lockOrder.verify(projectRepository).findByIdForUpdate(projectId);
+        lockOrder.verify(projectAccessService).requireWriteAccess(projectId, memberId);
         verify(projectHistoryRepository, never()).countByProjectIdForUpdate(projectId);
         verify(projectHistoryRepository, never()).save(any(ProjectHistory.class));
     }

@@ -1,11 +1,16 @@
 package com.infragen.infragen.global.auth.websocket;
 
+import com.infragen.infragen.domain.auth.exception.AuthException;
+import com.infragen.infragen.domain.auth.exception.code.error.AuthErrorCode;
 import com.infragen.infragen.domain.member.dto.response.MemberResDTO;
 import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.project.exception.ProjectException;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.service.query.ProjectAccessService;
 import com.infragen.infragen.global.auth.CustomUserDetails;
+import com.infragen.infragen.global.util.JwtUtil;
+import com.infragen.infragen.global.util.RedisUtil;
+import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,16 +33,30 @@ import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.messaging.SessionConnectedEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Date;
+
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class StompProjectOutboundInterceptorTest {
+    private static final Instant NOW = Instant.parse("2026-10-07T00:00:00Z");
+    private static final String TOKEN = "access-token";
+
     @Mock
     private ProjectAccessService projectAccessService;
+    @Mock
+    private RedisUtil redisUtil;
+    @Mock
+    private JwtUtil jwtUtil;
     @Mock
     private MessageChannel channel;
     @Mock
@@ -47,7 +66,8 @@ class StompProjectOutboundInterceptorTest {
 
     @BeforeEach
     void setUp() {
-        interceptor = new StompProjectOutboundInterceptor(projectAccessService);
+        interceptor = new StompProjectOutboundInterceptor(
+                projectAccessService, redisUtil, jwtUtil, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     @ParameterizedTest
@@ -194,6 +214,108 @@ class StompProjectOutboundInterceptorTest {
     }
 
     @ParameterizedTest
+    @ValueSource(longs = {0, 1})
+    @DisplayName("session의 access token이 만료됐으면 project 방송을 차단한다")
+    void beforeHandle_TokenExpired_BlocksMessage(long secondsPastExpiry) {
+        // given
+        connected("receiver-session", 2L, TOKEN, NOW.minusSeconds(secondsPastExpiry));
+        Message<byte[]> message = message(SimpMessageType.MESSAGE, "/topic/projects/10/operations", "receiver-session");
+
+        // when
+        Message<?> result = interceptor.beforeHandle(message, channel, handler);
+
+        // then
+        assertNull(result);
+        verifyNoInteractions(redisUtil, projectAccessService);
+    }
+
+    @Test
+    @DisplayName("session의 access token이 blacklist에 있으면 읽기 권한이 있어도 project 방송을 차단한다")
+    void beforeHandle_TokenBlacklisted_BlocksMessage() {
+        // given
+        connected("receiver-session", 2L);
+        Message<byte[]> message = message(SimpMessageType.MESSAGE, "/topic/projects/10/resync", "receiver-session");
+        when(redisUtil.isBlackList(TOKEN)).thenReturn(true);
+
+        // when
+        Message<?> result = interceptor.beforeHandle(message, channel, handler);
+
+        // then
+        assertNull(result);
+        verifyNoInteractions(projectAccessService);
+    }
+
+    @Test
+    @DisplayName("한 token이 로그아웃돼도 같은 회원의 다른 token session은 방송을 계속 받는다")
+    void beforeHandle_OneTokenBlacklisted_PreservesOtherSessionOfSameMember() {
+        // given
+        connected("logged-out-session", 2L, "token-a", NOW.plusSeconds(3600));
+        connected("other-device-session", 2L, "token-b", NOW.plusSeconds(3600));
+        Message<byte[]> loggedOut = message(SimpMessageType.MESSAGE, "/topic/projects/10/operations", "logged-out-session");
+        Message<byte[]> otherDevice = message(SimpMessageType.MESSAGE, "/topic/projects/10/operations", "other-device-session");
+        when(redisUtil.isBlackList("token-a")).thenReturn(true);
+
+        // when
+        Message<?> loggedOutResult = interceptor.beforeHandle(loggedOut, channel, handler);
+        Message<?> otherDeviceResult = interceptor.beforeHandle(otherDevice, channel, handler);
+
+        // then
+        assertNull(loggedOutResult);
+        assertSame(otherDevice, otherDeviceResult);
+        verify(projectAccessService).requireReadAccess(10L, 2L);
+    }
+
+    @Test
+    @DisplayName("blacklist 조회에 실패해도 project 방송을 허용하지 않는다")
+    void beforeHandle_BlacklistLookupFails_BlocksMessage() {
+        // given
+        connected("receiver-session", 2L);
+        Message<byte[]> message = message(SimpMessageType.MESSAGE, "/topic/projects/10/resync", "receiver-session");
+        when(redisUtil.isBlackList(TOKEN)).thenThrow(new DataAccessResourceFailureException("test redis unavailable"));
+
+        // when
+        Message<?> result = interceptor.beforeHandle(message, channel, handler);
+
+        // then
+        assertNull(result);
+        verifyNoInteractions(projectAccessService);
+    }
+
+    @Test
+    @DisplayName("token 만료 시각을 확인할 수 없으면 session을 등록하지 않아 방송을 차단한다")
+    void beforeHandle_ExpirationUnreadable_BlocksMessage() {
+        // given
+        when(jwtUtil.getClaims(TOKEN)).thenThrow(new AuthException(AuthErrorCode.TOKEN_INVALID));
+        interceptor.onSessionConnected(new SessionConnectedEvent(this,
+                message(SimpMessageType.CONNECT_ACK, null, "receiver-session"), authentication(2L)));
+        Message<byte[]> message = message(SimpMessageType.MESSAGE, "/topic/projects/10/resync", "receiver-session");
+
+        // when
+        Message<?> result = interceptor.beforeHandle(message, channel, handler);
+
+        // then
+        assertNull(result);
+        verifyNoInteractions(redisUtil, projectAccessService);
+    }
+
+    @Test
+    @DisplayName("인증 객체에 token이 없으면 session을 등록하지 않아 방송을 차단한다")
+    void beforeHandle_CredentialsMissing_BlocksMessage() {
+        // given
+        Authentication withoutToken = authentication(2L, null);
+        interceptor.onSessionConnected(new SessionConnectedEvent(this,
+                message(SimpMessageType.CONNECT_ACK, null, "receiver-session"), withoutToken));
+        Message<byte[]> message = message(SimpMessageType.MESSAGE, "/topic/projects/10/resync", "receiver-session");
+
+        // when
+        Message<?> result = interceptor.beforeHandle(message, channel, handler);
+
+        // then
+        assertNull(result);
+        verifyNoInteractions(redisUtil, projectAccessService);
+    }
+
+    @ParameterizedTest
     @EnumSource(value = SimpMessageType.class, names = {"CONNECT_ACK", "DISCONNECT_ACK", "HEARTBEAT"})
     @DisplayName("연결·종료·heartbeat frame에는 project 권한 검사를 적용하지 않는다")
     void beforeHandle_ControlFrame_PassesThrough(SimpMessageType type) {
@@ -240,14 +362,25 @@ class StompProjectOutboundInterceptorTest {
     }
 
     private void connected(String sessionId, Long memberId) {
+        connected(sessionId, memberId, TOKEN, NOW.plusSeconds(3600));
+    }
+
+    private void connected(String sessionId, Long memberId, String token, Instant expiresAt) {
+        Claims claims = mock(Claims.class);
+        when(claims.getExpiration()).thenReturn(Date.from(expiresAt));
+        when(jwtUtil.getClaims(token)).thenReturn(claims);
         interceptor.onSessionConnected(new SessionConnectedEvent(this,
-                message(SimpMessageType.CONNECT_ACK, null, sessionId), authentication(memberId)));
+                message(SimpMessageType.CONNECT_ACK, null, sessionId), authentication(memberId, token)));
     }
 
     private Authentication authentication(Long memberId) {
+        return authentication(memberId, TOKEN);
+    }
+
+    private Authentication authentication(Long memberId, String token) {
         CustomUserDetails details = new CustomUserDetails(MemberResDTO.MemberResultDTO.builder()
                 .id(memberId).isActive(true).role(Role.ROLE_USER).build());
-        return new UsernamePasswordAuthenticationToken(details, null, details.getAuthorities());
+        return new UsernamePasswordAuthenticationToken(details, token, details.getAuthorities());
     }
 
     private Message<byte[]> message(SimpMessageType type, String destination, String sessionId) {

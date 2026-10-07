@@ -18,6 +18,7 @@ import com.infragen.infragen.domain.project.exception.ProjectException;
 import com.infragen.infragen.domain.project.exception.code.error.ProjectErrorCode;
 import com.infragen.infragen.domain.project.repository.ProjectHistoryRepository;
 import com.infragen.infragen.domain.project.repository.ProjectRepository;
+import com.infragen.infragen.domain.project.service.query.ProjectAccessService;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
 
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ProjectHistoryCommandService {
     private final ProjectQueryService projectQueryService;
+    private final ProjectAccessService projectAccessService;
     private final ProjectHistoryRepository projectHistoryRepository;
     private final ProjectRepository projectRepository;
 
@@ -41,7 +43,7 @@ public class ProjectHistoryCommandService {
         log.info("프로젝트 히스토리 생성 요청: projectId={}, memberId={}", projectId, memberId);
 
         projectQueryService.getWriteableProject(projectId, memberId);
-        Project project = lockProjectForVersionAllocation(projectId);
+        Project project = lockProjectAndRequireWriteAccess(projectId, memberId);
         String versionName = nextVersionName(projectId);
 
         ProjectHistory history = ProjectHistory.builder()
@@ -68,7 +70,7 @@ public class ProjectHistoryCommandService {
             projectId, memberId, generatedFiles.size());
 
         projectQueryService.getWriteableProject(projectId, memberId);
-        Project project = lockProjectForVersionAllocation(projectId);
+        Project project = lockProjectAndRequireWriteAccess(projectId, memberId);
         String versionName = nextVersionName(projectId);
 
         ProjectHistory history = ProjectHistory.builder()
@@ -94,8 +96,12 @@ public class ProjectHistoryCommandService {
         return "v" + (historyCount + 1);
     }
 
-    private Project lockProjectForVersionAllocation(Long projectId) {
-        return projectRepository.findByIdForUpdate(projectId)
+    private Project lockProjectAndRequireWriteAccess(Long projectId, Long memberId) {
+        Project project = projectRepository.findByIdForUpdate(projectId)
             .orElseThrow(() -> new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
+        // 잠금 대기 중에 다른 트랜잭션이 이 회원의 권한을 회수하고 커밋했을 수 있어 잠금 뒤에 한 번 더 확인한다.
+        // 앞선 getWriteableProject는 권한 없는 요청이 잠금을 잡지 못하게 하는 경로라 유지한다.
+        projectAccessService.requireWriteAccess(projectId, memberId);
+        return project;
     }
 }

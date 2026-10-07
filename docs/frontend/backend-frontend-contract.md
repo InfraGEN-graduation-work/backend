@@ -198,6 +198,7 @@ UX:
 
 - logout 경로는 /api/v1/auth/logout이 아니라 /api/v1/members/logout이다.
 - refresh cookie가 Secure=true, SameSite=None이므로 로컬 HTTP 환경에서는 cookie 동작을 별도로 확인한다.
+- 로그아웃하면 열려 있는 협업 STOMP 연결도 직접 닫는다. 서버는 로그아웃한 access token의 연결로 가는 협업 방송을 막지만 연결을 닫지는 않는다. 4.6 참고.
 
 ## 4. 프로젝트 관리 정책
 
@@ -397,6 +398,15 @@ STOMP 연결과 구독:
 - 구독 `/topic/projects/{projectId}/resync`: PUT 전체 저장이나 metadata 수정 뒤 최신 graph(snapshot 응답과 같은 구조)를 받는다. 받으면 graph를 교체한다.
 - 구독 `/user/queue/projects/{projectId}/operation-results`: 내 operation의 오류를 받는다. 형식은 `{"code": "...", "message": "..."}`이다.
 - 전송 `/app/projects/{projectId}/operations`: operation을 보낸다.
+
+연결의 유효 기간과 권한 회수:
+
+- 서버는 CONNECT에 쓴 access token의 만료 시각을 기억하고, `operations`와 `resync` 방송을 연결에 전달하기 직전에 그 token의 만료와 로그아웃 여부를 확인한다. 만료됐거나 로그아웃된 token의 연결에는 방송이 전달되지 않는다. 오류 frame은 없고 연결도 유지되므로 클라이언트에는 수신이 조용히 멈춘 것으로 보인다.
+- 로그아웃은 요청에 쓴 access token만 무효로 한다. 같은 회원의 다른 기기나 다른 탭에서 다른 access token으로 연 연결은 계속 수신한다.
+- 클라이언트는 access token이 만료되기 전에 재발급하고, 새 token으로 STOMP를 다시 연결한 뒤 위 "진입과 재연결" 절차로 동기화한다. 연결이 끊기지 않으므로 만료 시각을 클라이언트가 직접 관리해야 한다.
+- 만료됐거나 로그아웃된 token으로 SUBSCRIBE나 SEND를 보내면 STOMP ERROR frame으로 거부된다.
+- 협업자에서 삭제되면 해당 프로젝트의 방송이 차단된다. VIEWER로 바뀌면 방송은 계속 받지만 operation 쓰기는 거부된다.
+- 이미 전송한 operation도 서버가 프로젝트 잠금을 얻은 뒤 쓰기 권한을 다시 확인하며, 권한이 없으면 `PROJECT403_1`로 거부한다. 거부된 operation은 적용되지 않고 `operation-results`로 전달된다.
 
 operation 전송 형식:
 
@@ -808,6 +818,7 @@ UX:
 - AUTH401_2: 로그아웃된 token
 - AUTH401_3: 만료된 token
 - AUTH400_1: 지원하지 않는 social provider
+- PROJECT403_1: 프로젝트 접근 권한 없음(협업 operation 전송 중 권한이 회수된 경우 포함)
 - PROJECT404_1: 프로젝트 없음
 - PROJECT409_1: 동시 수정 충돌
 - COLLAB400_2: 협업 operation payload 오류(위치 좌표가 `±9999999.999` 범위 밖이거나 소수 셋째 자리 초과 포함)

@@ -40,7 +40,7 @@ Controller가 하지 않는 일:
 ## Validation
 
 - RequestBody DTO에는 `@Valid`, PathVariable·RequestParam 검증이 필요하면 `@Validated`를 쓴다.
-- 형식과 단순 제약은 Request DTO에서, DB 조회가 필요한 검증과 비즈니스 규칙은 Service에서 처리한다.
+- 검증 분담(Request DTO와 Service)은 [dto_convention.md](./dto_convention.md)를 따른다.
 
 ## Docs 인터페이스
 

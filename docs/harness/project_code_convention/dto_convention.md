@@ -48,7 +48,7 @@ public record SignUp(
 ## 응답 DTO
 
 - validation annotation을 쓰지 않는다.
-- DTO 안에 `from`, `of` 같은 변환 메서드를 두지 않는다. Entity와 DTO 사이의 변환과 응답 조립은 Converter가 맡는다.
+- DTO 안에 `from`, `of` 같은 변환 메서드를 두지 않는다. 변환과 응답 조립은 [converter_convention.md](./converter_convention.md)의 Converter가 맡는다.
 - Entity를 API 요청·응답 타입으로 직접 쓰지 않고, 민감 정보와 불필요한 연관관계를 노출하지 않는다.
 - DTO에서 DB 조회나 비즈니스 처리를 하지 않는다.
 

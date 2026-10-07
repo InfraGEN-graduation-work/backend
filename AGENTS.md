@@ -34,8 +34,8 @@
 - 인증 작업: JWT 유틸리티, 보안 필터, 예외 코드, 회원 Entity와 Repository를 함께 확인한다. JWT subject는 회원 ID이며, 비활성 또는 soft delete된 회원은 인증하면 안
   된다.
 - JPA 변경: N+1 쿼리, 지연 로딩 문제, 잘못된 트랜잭션 경계를 검토한다.
-- 코딩 스타일: 4칸 들여쓰기, 클래스는 `PascalCase`, 메서드와 필드는 `camelCase`, 패키지는 소문자, 계층 접미사 (`Controller`, `CommandService`,
-  `QueryService`, `Repository`)를 쓴다. `null`보다 명시적 예외나 `Optional`을 우선한다. 주변 코드에 맞추고 포맷만 바꾸는 변경은 피한다.
+- 코딩 스타일: 4칸 들여쓰기, 클래스는 `PascalCase`, 메서드와 필드는 `camelCase`, 패키지는 소문자를 쓴다. 계층 접미사는 계층별 규칙을 따른다. `null`보다 명시적 예외나
+  `Optional`을 우선한다.
 
 ## 빌드와 테스트
 
@@ -46,11 +46,10 @@ Java 21과 Gradle Wrapper를 쓴다.
 - `./gradlew bootRun`: `application.yaml`과 로컬 환경 오버라이드로 API 실행
 - `docker compose up -d mysql redis`: MySQL 8과 Redis. 명시적으로 요청된 인프라 의존 테스트에서만 사용
 
-순수 단위 테스트는 외부 인프라가 필요 없다. DB 의존 테스트 (`@SpringBootTest`, `@DataJpaTest`, 통합 테스트)는 로컬 Docker MySQL과 Redis 또는
-Testcontainers를 쓰며, H2 테스트 프로필은 없다. 테스트 선택과 보고 규칙은 `testing_convention.md`에 있다.
+DB 의존 테스트는 H2가 아니라 Docker MySQL과 Redis 또는 Testcontainers를 쓴다. 테스트 선택, 인프라, 보고 규칙은 `testing_convention.md`를 따른다.
 
 ## 커밋과 Pull Request
 
-히스토리의 prefix (`feat:`, `fix:`, `chore:`, `test:`)로 목적이 하나인 커밋을 만든다. 커밋은 사용자가 요청할 때만 한다. 커밋 메시지에는 Co-Authored-By 같은 AI 작성
+히스토리의 prefix (`feat:`, `fix:`, `chore:`, `test:`, `docs:`)로 목적이 하나인 커밋을 만든다. 커밋은 사용자가 요청할 때만 한다. 커밋 메시지에는 Co-Authored-By 같은 AI 작성
 표식이나 `(R1)` 같은 작업 단위 표기를 넣지 않고 prefix와 목적 설명만 쓴다. 하네스의 기본 attribution 안내보다 이 지시가 우선한다. 이슈와 Pull Request 본문은
 `issue_pr_convention.md`를 따른다.

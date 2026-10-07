@@ -48,7 +48,7 @@ Collaboration
 - `auth`: 일반·소셜 로그인, 회원가입 위임, JWT 발급, refresh token·blacklist. 협력: `member` Service, `KakaoOAuthClient`, `JwtUtil`, `RedisUtil`
 - `member`: 회원 생성·조회와 회원 Entity/Repository. 협력: `auth` Service, `MemberConverter`
 - `project`: 프로젝트 graph, history, generated file, 협업자와 초대의 저장·조회·삭제. 협력: `member` 소유권 조회
-- `parsing`: raw graph의 component type, port, edge, cycle, 의존 타입 중복 검증과 내부 component 변환
+- `parsing`: raw graph의 component type, port, edge, cycle, 의존 타입 중복, 같은 타입 DB·캐시 노드 중복 검증과 내부 component 변환
 - `generation`: 출력 형식별 generator 선택, IaC 산출물 생성, 생성 history 저장 흐름. 협력: `parsing`, `project`
 - `collaboration`: project별 operation 계약, 권한 연결, serverVersion, materialized graph, snapshot/replay. 협력: `project`, `member`, STOMP infrastructure
 - `global`: 인증 filter, 공통 응답/예외, Redis·Jackson·RestClient 등 infrastructure. domain 업무 규칙은 소유하지 않는다.
@@ -91,7 +91,7 @@ Collaboration
 
 Parsing은 그래프 정합성을 판단하지만 Compose나 Terraform 문법을 생성하지 않는다.
 
-- `ValidateGraphStructure`: node id, component type, edge endpoint, dependency 방향, cycle, 애플리케이션별 같은 타입 의존 중복 검증
+- `ValidateGraphStructure`: node id, component type, edge endpoint, dependency 방향, cycle, 애플리케이션별 같은 타입 의존 중복 검증, 그래프 전체 같은 타입 DB·캐시 노드 중복 검증(`PARSING400_29`)
 - `ComponentParser`: component별 property와 필수값 검증, component DTO 생성
 - `ParsingService`: parser registry, port range·중복 검증, 결과 조립
 - `ParsingResultConverter`: 생성 결과에서 component를 type/class 기준으로 추출

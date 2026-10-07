@@ -37,7 +37,7 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 @Slf4j
 public class StompProjectOutboundInterceptor implements ExecutorChannelInterceptor {
-    private static final Pattern PROJECT_TOPIC = Pattern.compile("^/topic/projects/(\\d+)/(operations|resync)$");
+    private static final Pattern PROJECT_TOPIC = Pattern.compile("^/topic/projects/(\\d+)/(operations|resync|cursors)$");
 
     private final ProjectAccessService projectAccessService;
     private final RedisUtil redisUtil;

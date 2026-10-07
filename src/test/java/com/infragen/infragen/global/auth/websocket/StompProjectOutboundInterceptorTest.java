@@ -71,7 +71,7 @@ class StompProjectOutboundInterceptorTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"operations", "resync"})
+    @ValueSource(strings = {"operations", "resync", "cursors"})
     @DisplayName("현재 읽기 권한이 있으면 project 방송을 수신 session에 전달한다")
     void beforeHandle_ReadAllowed_DeliversMessage(String topic) {
         // given
@@ -87,7 +87,7 @@ class StompProjectOutboundInterceptorTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"operations", "resync"})
+    @ValueSource(strings = {"operations", "resync", "cursors"})
     @DisplayName("방송 헤더의 발신자가 owner여도 실제 수신자의 권한이 없으면 차단한다")
     void beforeHandle_SenderHeaderIsOwner_ChecksRecipient(String topic) {
         // given

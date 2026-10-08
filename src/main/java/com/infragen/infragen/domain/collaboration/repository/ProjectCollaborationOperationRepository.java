@@ -56,4 +56,44 @@ public interface ProjectCollaborationOperationRepository
      * @return project operation log 목록
      */
     List<ProjectCollaborationOperation> findAllByProjectIdOrderByServerVersionAsc(Long projectId);
+
+    /**
+     * project의 operation log 중 serverVersion이 가장 작은 한 건을 조회한다.
+     *
+     * @param projectId 조회할 project 식별자
+     * @return 가장 오래된 operation log, log가 없으면 빈 값
+     */
+    Optional<ProjectCollaborationOperation> findFirstByProjectIdOrderByServerVersionAsc(Long projectId);
+
+    /**
+     * project의 operation log 중 serverVersion이 가장 큰 한 건을 조회한다.
+     *
+     * @param projectId 조회할 project 식별자
+     * @return 가장 최신 operation log, log가 없으면 빈 값
+     */
+    Optional<ProjectCollaborationOperation> findFirstByProjectIdOrderByServerVersionDesc(Long projectId);
+
+    /**
+     * {@code afterVersion < serverVersion <= untilVersion} 구간의 operation log를 오름차순으로 조회한다.
+     *
+     * <p>하한은 제외하고 상한은 포함한다. 상한은 호출자가 읽은 state version이며, 그 뒤에 저장된 log가
+     * 같은 응답에 섞이지 않게 한다.
+     *
+     * @param projectId 조회할 project 식별자
+     * @param afterVersion client가 이미 가진 version (제외)
+     * @param untilVersion 응답 기준 serverVersion (포함)
+     * @return 구간 안의 operation log 목록
+     */
+    @Query("""
+            SELECT operation FROM ProjectCollaborationOperation operation
+            WHERE operation.project.id = :projectId
+              AND operation.serverVersion > :afterVersion
+              AND operation.serverVersion <= :untilVersion
+            ORDER BY operation.serverVersion ASC
+            """)
+    List<ProjectCollaborationOperation> findAllInVersionRange(
+            @Param("projectId") Long projectId,
+            @Param("afterVersion") Long afterVersion,
+            @Param("untilVersion") Long untilVersion
+    );
 }

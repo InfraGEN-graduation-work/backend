@@ -36,7 +36,9 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -80,8 +82,8 @@ class CollaborationSnapshotQueryServiceTest {
                 .thenReturn(Optional.empty());
         when(projectNodeRepository.findAllByProjectId(projectId)).thenReturn(List.of());
         when(projectEdgeRepository.findAllByProjectId(projectId)).thenReturn(List.of());
-        when(operationRepository.findAllByProjectIdOrderByServerVersionAsc(projectId))
-                .thenReturn(List.of(operation(1L), operation(3L)));
+        when(operationRepository.findFirstByProjectIdOrderByServerVersionDesc(projectId))
+                .thenReturn(Optional.of(operation(3L)));
 
         // when
         CollaborationSnapshotResDTO.SnapshotResDTO result =
@@ -93,6 +95,7 @@ class CollaborationSnapshotQueryServiceTest {
         assertEquals(3L, result.graphVersion());
         assertEquals(0, result.operations().size());
         verify(projectAccessService).requireReadAccess(projectId, memberId);
+        verify(operationRepository, never()).findAllInVersionRange(any(), any(), any());
     }
 
     @Test
@@ -102,8 +105,12 @@ class CollaborationSnapshotQueryServiceTest {
         Long projectId = 1L;
         Long memberId = 2L;
         when(projectRepository.findById(projectId)).thenReturn(Optional.of(project()));
-        when(operationRepository.findAllByProjectIdOrderByServerVersionAsc(projectId))
-                .thenReturn(List.of(operation(1L), operation(3L)));
+        when(operationRepository.findFirstByProjectIdOrderByServerVersionDesc(projectId))
+                .thenReturn(Optional.of(operation(3L)));
+        when(operationRepository.findAllInVersionRange(projectId, 1L, 3L))
+                .thenReturn(List.of(operation(3L)));
+        when(operationRepository.findFirstByProjectIdOrderByServerVersionAsc(projectId))
+                .thenReturn(Optional.of(operation(1L)));
 
         // when
         CollaborationSnapshotResDTO.SnapshotResDTO result =
@@ -130,7 +137,7 @@ class CollaborationSnapshotQueryServiceTest {
                 .build();
         when(projectRepository.findById(projectId)).thenReturn(Optional.of(project()));
         when(stateRepository.findByProjectId(projectId)).thenReturn(Optional.of(state(5L)));
-        when(operationRepository.findAllByProjectIdOrderByServerVersionAsc(projectId))
+        when(operationRepository.findAllInVersionRange(projectId, 3L, 5L))
                 .thenReturn(List.of(operation(5L)));
         when(snapshotRepository.findTopByProjectIdOrderByServerVersionDesc(projectId))
                 .thenReturn(Optional.of(snapshot));
@@ -163,8 +170,10 @@ class CollaborationSnapshotQueryServiceTest {
                 .title("snapshot")
                 .build();
         when(projectRepository.findById(projectId)).thenReturn(Optional.of(project()));
-        when(operationRepository.findAllByProjectIdOrderByServerVersionAsc(projectId))
-                .thenReturn(List.of(operation(1L), operation(3L)));
+        when(operationRepository.findFirstByProjectIdOrderByServerVersionDesc(projectId))
+                .thenReturn(Optional.of(operation(3L)));
+        when(operationRepository.findAllInVersionRange(projectId, 1L, 3L))
+                .thenReturn(List.of(operation(3L)));
         when(snapshotRepository.findTopByProjectIdOrderByServerVersionDesc(projectId))
                 .thenReturn(Optional.of(snapshot));
         when(objectMapper.convertValue(
@@ -191,8 +200,8 @@ class CollaborationSnapshotQueryServiceTest {
         Long projectId = 1L;
         Long memberId = 2L;
         when(projectRepository.findById(projectId)).thenReturn(Optional.of(project()));
-        when(operationRepository.findAllByProjectIdOrderByServerVersionAsc(projectId))
-                .thenReturn(List.of(operation(1L)));
+        when(operationRepository.findFirstByProjectIdOrderByServerVersionDesc(projectId))
+                .thenReturn(Optional.of(operation(1L)));
 
         // when
         CollaborationException exception = assertThrows(
@@ -202,6 +211,108 @@ class CollaborationSnapshotQueryServiceTest {
 
         // then
         assertEquals(CollaborationErrorCode.VERSION_CONFLICT, exception.getCode());
+        verify(operationRepository, never()).findAllInVersionRange(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("이미 최신 version을 가진 client에는 operation을 조회하지 않고 빈 delta를 반환한다")
+    void getSnapshot_withLatestVersion_returnsEmptyDeltaWithoutReplayQuery() {
+        // given
+        Long projectId = 1L;
+        Long memberId = 2L;
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project()));
+        when(stateRepository.findByProjectId(projectId)).thenReturn(Optional.of(state(5L)));
+
+        // when
+        CollaborationSnapshotResDTO.SnapshotResDTO result =
+                collaborationSnapshotQueryService.getSnapshot(projectId, memberId, 5L);
+
+        // then
+        assertNull(result.project());
+        assertEquals(5L, result.graphVersion());
+        assertEquals(5L, result.serverVersion());
+        assertEquals(0, result.operations().size());
+        verify(projectAccessService).requireReadAccess(projectId, memberId);
+        verify(operationRepository, never()).findAllInVersionRange(any(), any(), any());
+        verify(operationRepository, never()).findFirstByProjectIdOrderByServerVersionAsc(any());
+    }
+
+    @Test
+    @DisplayName("state와 operation log가 모두 없으면 version 0의 현재 graph를 반환한다")
+    void getSnapshot_withoutStateAndOperations_returnsGraphAtVersionZero() {
+        // given
+        Long projectId = 1L;
+        Long memberId = 2L;
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project()));
+        when(operationRepository.findFirstByProjectIdOrderByServerVersionDesc(projectId))
+                .thenReturn(Optional.empty());
+        when(snapshotRepository.findTopByProjectIdOrderByServerVersionDesc(projectId))
+                .thenReturn(Optional.empty());
+        when(projectNodeRepository.findAllByProjectId(projectId)).thenReturn(List.of());
+        when(projectEdgeRepository.findAllByProjectId(projectId)).thenReturn(List.of());
+
+        // when
+        CollaborationSnapshotResDTO.SnapshotResDTO result =
+                collaborationSnapshotQueryService.getSnapshot(projectId, memberId, 0L);
+
+        // then
+        assertEquals(0L, result.graphVersion());
+        assertEquals(0L, result.serverVersion());
+        assertEquals(0, result.operations().size());
+    }
+
+    @Test
+    @DisplayName("요청 version 다음부터 현재 version까지 이어지는 구간만 조회한다")
+    void getSnapshot_withContiguousRange_queriesOnlyRangeAfterVersionUpToServerVersion() {
+        // given
+        Long projectId = 1L;
+        Long memberId = 2L;
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project()));
+        when(stateRepository.findByProjectId(projectId)).thenReturn(Optional.of(state(5L)));
+        when(snapshotRepository.findTopByProjectIdOrderByServerVersionDesc(projectId))
+                .thenReturn(Optional.empty());
+        when(operationRepository.findAllInVersionRange(projectId, 3L, 5L))
+                .thenReturn(List.of(operation(4L), operation(5L)));
+
+        // when
+        CollaborationSnapshotResDTO.SnapshotResDTO result =
+                collaborationSnapshotQueryService.getSnapshot(projectId, memberId, 3L);
+
+        // then
+        assertNull(result.project());
+        assertEquals(3L, result.graphVersion());
+        assertEquals(5L, result.serverVersion());
+        assertEquals(List.of(4L, 5L), result.operations().stream()
+                .map(operation -> operation.serverVersion()).toList());
+        verify(operationRepository, never()).findFirstByProjectIdOrderByServerVersionAsc(any());
+    }
+
+    @Test
+    @DisplayName("operation log가 요청 version 다음부터 남아 있지 않으면 현재 graph를 반환한다")
+    void getSnapshot_withLogStartingAfterRequestedVersion_returnsMaterializedGraph() {
+        // given
+        Long projectId = 1L;
+        Long memberId = 2L;
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project()));
+        when(stateRepository.findByProjectId(projectId)).thenReturn(Optional.of(state(5L)));
+        when(snapshotRepository.findTopByProjectIdOrderByServerVersionDesc(projectId))
+                .thenReturn(Optional.empty());
+        when(operationRepository.findAllInVersionRange(projectId, 2L, 5L))
+                .thenReturn(List.of(operation(5L)));
+        when(operationRepository.findFirstByProjectIdOrderByServerVersionAsc(projectId))
+                .thenReturn(Optional.of(operation(4L)));
+        when(projectNodeRepository.findAllByProjectId(projectId)).thenReturn(List.of());
+        when(projectEdgeRepository.findAllByProjectId(projectId)).thenReturn(List.of());
+
+        // when
+        CollaborationSnapshotResDTO.SnapshotResDTO result =
+                collaborationSnapshotQueryService.getSnapshot(projectId, memberId, 2L);
+
+        // then
+        assertEquals(projectId, result.project().projectId());
+        assertEquals(5L, result.graphVersion());
+        assertEquals(5L, result.serverVersion());
+        assertEquals(0, result.operations().size());
     }
 
     @Test

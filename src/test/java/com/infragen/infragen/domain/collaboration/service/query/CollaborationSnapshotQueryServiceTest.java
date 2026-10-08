@@ -23,12 +23,15 @@ import com.infragen.infragen.domain.project.service.query.ProjectAccessService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -108,9 +111,7 @@ class CollaborationSnapshotQueryServiceTest {
         when(operationRepository.findFirstByProjectIdOrderByServerVersionDesc(projectId))
                 .thenReturn(Optional.of(operation(3L)));
         when(operationRepository.findAllInVersionRange(projectId, 1L, 3L))
-                .thenReturn(List.of(operation(3L)));
-        when(operationRepository.findFirstByProjectIdOrderByServerVersionAsc(projectId))
-                .thenReturn(Optional.of(operation(1L)));
+                .thenReturn(List.of(operation(2L), operation(3L)));
 
         // when
         CollaborationSnapshotResDTO.SnapshotResDTO result =
@@ -120,8 +121,8 @@ class CollaborationSnapshotQueryServiceTest {
         assertNull(result.project());
         assertEquals(1L, result.graphVersion());
         assertEquals(3L, result.serverVersion());
-        assertEquals(1, result.operations().size());
-        assertEquals(3L, result.operations().get(0).serverVersion());
+        assertEquals(List.of(2L, 3L), result.operations().stream()
+                .map(operation -> operation.serverVersion()).toList());
     }
 
     @Test
@@ -138,7 +139,7 @@ class CollaborationSnapshotQueryServiceTest {
         when(projectRepository.findById(projectId)).thenReturn(Optional.of(project()));
         when(stateRepository.findByProjectId(projectId)).thenReturn(Optional.of(state(5L)));
         when(operationRepository.findAllInVersionRange(projectId, 3L, 5L))
-                .thenReturn(List.of(operation(5L)));
+                .thenReturn(List.of(operation(4L), operation(5L)));
         when(snapshotRepository.findTopByProjectIdOrderByServerVersionDesc(projectId))
                 .thenReturn(Optional.of(snapshot));
         when(objectMapper.convertValue(
@@ -154,8 +155,8 @@ class CollaborationSnapshotQueryServiceTest {
         assertEquals(snapshotProject, result.project());
         assertEquals(3L, result.graphVersion());
         assertEquals(5L, result.serverVersion());
-        assertEquals(1, result.operations().size());
-        assertEquals(5L, result.operations().get(0).serverVersion());
+        assertEquals(List.of(4L, 5L), result.operations().stream()
+                .map(operation -> operation.serverVersion()).toList());
     }
 
     @Test
@@ -173,7 +174,7 @@ class CollaborationSnapshotQueryServiceTest {
         when(operationRepository.findFirstByProjectIdOrderByServerVersionDesc(projectId))
                 .thenReturn(Optional.of(operation(3L)));
         when(operationRepository.findAllInVersionRange(projectId, 1L, 3L))
-                .thenReturn(List.of(operation(3L)));
+                .thenReturn(List.of(operation(2L), operation(3L)));
         when(snapshotRepository.findTopByProjectIdOrderByServerVersionDesc(projectId))
                 .thenReturn(Optional.of(snapshot));
         when(objectMapper.convertValue(
@@ -189,8 +190,8 @@ class CollaborationSnapshotQueryServiceTest {
         assertEquals(snapshotProject, result.project());
         assertEquals(1L, result.graphVersion());
         assertEquals(3L, result.serverVersion());
-        assertEquals(1, result.operations().size());
-        assertEquals(3L, result.operations().get(0).serverVersion());
+        assertEquals(List.of(2L, 3L), result.operations().stream()
+                .map(operation -> operation.serverVersion()).toList());
     }
 
     @Test
@@ -234,7 +235,6 @@ class CollaborationSnapshotQueryServiceTest {
         assertEquals(0, result.operations().size());
         verify(projectAccessService).requireReadAccess(projectId, memberId);
         verify(operationRepository, never()).findAllInVersionRange(any(), any(), any());
-        verify(operationRepository, never()).findFirstByProjectIdOrderByServerVersionAsc(any());
     }
 
     @Test
@@ -284,29 +284,55 @@ class CollaborationSnapshotQueryServiceTest {
         assertEquals(5L, result.serverVersion());
         assertEquals(List.of(4L, 5L), result.operations().stream()
                 .map(operation -> operation.serverVersion()).toList());
-        verify(operationRepository, never()).findFirstByProjectIdOrderByServerVersionAsc(any());
     }
 
-    @Test
-    @DisplayName("operation log가 요청 version 다음부터 남아 있지 않으면 현재 graph를 반환한다")
-    void getSnapshot_withLogStartingAfterRequestedVersion_returnsMaterializedGraph() {
+    @ParameterizedTest
+    @ValueSource(strings = {"4,5", "3,5", "3,4"})
+    @DisplayName("구간의 시작·중간·끝 operation이 누락되면 현재 graph를 반환한다")
+    void getSnapshot_withIncompleteRange_returnsMaterializedGraph(String versions) {
         // given
         Long projectId = 1L;
         Long memberId = 2L;
+        List<ProjectCollaborationOperation> incomplete = Arrays.stream(versions.split(","))
+                .map(version -> operation(Long.parseLong(version)))
+                .toList();
         when(projectRepository.findById(projectId)).thenReturn(Optional.of(project()));
         when(stateRepository.findByProjectId(projectId)).thenReturn(Optional.of(state(5L)));
         when(snapshotRepository.findTopByProjectIdOrderByServerVersionDesc(projectId))
                 .thenReturn(Optional.empty());
-        when(operationRepository.findAllInVersionRange(projectId, 2L, 5L))
-                .thenReturn(List.of(operation(5L)));
-        when(operationRepository.findFirstByProjectIdOrderByServerVersionAsc(projectId))
-                .thenReturn(Optional.of(operation(4L)));
+        when(operationRepository.findAllInVersionRange(projectId, 2L, 5L)).thenReturn(incomplete);
         when(projectNodeRepository.findAllByProjectId(projectId)).thenReturn(List.of());
         when(projectEdgeRepository.findAllByProjectId(projectId)).thenReturn(List.of());
 
         // when
         CollaborationSnapshotResDTO.SnapshotResDTO result =
                 collaborationSnapshotQueryService.getSnapshot(projectId, memberId, 2L);
+
+        // then
+        assertEquals(projectId, result.project().projectId());
+        assertEquals(5L, result.graphVersion());
+        assertEquals(5L, result.serverVersion());
+        assertEquals(0, result.operations().size());
+    }
+
+    @Test
+    @DisplayName("snapshot 이후 operation이 누락되면 snapshot 대신 현재 graph를 반환한다")
+    void getSnapshot_withIncompleteReplayAfterSnapshot_returnsMaterializedGraph() {
+        // given
+        Long projectId = 1L;
+        Long memberId = 2L;
+        when(projectRepository.findById(projectId)).thenReturn(Optional.of(project()));
+        when(stateRepository.findByProjectId(projectId)).thenReturn(Optional.of(state(5L)));
+        when(snapshotRepository.findTopByProjectIdOrderByServerVersionDesc(projectId))
+                .thenReturn(Optional.of(snapshot(3L)));
+        when(operationRepository.findAllInVersionRange(projectId, 3L, 5L))
+                .thenReturn(List.of(operation(5L)));
+        when(projectNodeRepository.findAllByProjectId(projectId)).thenReturn(List.of());
+        when(projectEdgeRepository.findAllByProjectId(projectId)).thenReturn(List.of());
+
+        // when
+        CollaborationSnapshotResDTO.SnapshotResDTO result =
+                collaborationSnapshotQueryService.getSnapshot(projectId, memberId, 1L);
 
         // then
         assertEquals(projectId, result.project().projectId());

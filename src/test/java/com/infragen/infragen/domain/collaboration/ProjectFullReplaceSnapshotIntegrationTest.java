@@ -186,7 +186,7 @@ class ProjectFullReplaceSnapshotIntegrationTest {
         when(snapshotRepository.findTopByProjectIdOrderByServerVersionDesc(1L)).thenAnswer(invocation ->
                 snapshots.stream().max(Comparator.comparing(ProjectCollaborationSnapshot::getServerVersion)));
         when(stateRepository.findByProjectId(1L)).thenReturn(Optional.of(state));
-        // 구간·첫 log 조회는 현재 operations 목록을 그대로 반영해 compaction 뒤 상태도 따라가게 한다.
+        // 구간 조회는 현재 operations 목록을 그대로 반영해 compaction 뒤 상태도 따라가게 한다.
         when(operationRepository.findAllInVersionRange(eq(1L), anyLong(), anyLong())).thenAnswer(invocation -> {
             long afterVersion = invocation.getArgument(1);
             long untilVersion = invocation.getArgument(2);
@@ -196,8 +196,6 @@ class ProjectFullReplaceSnapshotIntegrationTest {
                     .sorted(Comparator.comparing(ProjectCollaborationOperation::getServerVersion))
                     .toList();
         });
-        when(operationRepository.findFirstByProjectIdOrderByServerVersionAsc(1L)).thenAnswer(invocation ->
-                operations.stream().min(Comparator.comparing(ProjectCollaborationOperation::getServerVersion)));
     }
 
     @ParameterizedTest

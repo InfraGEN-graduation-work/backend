@@ -97,7 +97,7 @@ public class CollaborationSnapshotQueryService {
 
         List<ProjectCollaborationOperation> operations =
                 operationRepository.findAllInVersionRange(projectId, afterVersion, serverVersion);
-        if (hasOperationGap(projectId, afterVersion, serverVersion, operations)) {
+        if (!isContinuous(afterVersion, serverVersion, operations)) {
             return buildFullSnapshot(projectId, project, serverVersion, latestSnapshot);
         }
 
@@ -116,20 +116,14 @@ public class CollaborationSnapshotQueryService {
                 .build();
     }
 
-    // 구간의 첫 log가 afterVersion + 1이면 이어지는 것이므로 gap이 아니다. 그렇지 않을 때만 project 전체의 첫 log를 확인한다.
-    // 전체 log가 없으면 afterVersion이 serverVersion보다 작을 때, 있으면 첫 log가 afterVersion + 1보다 클 때 gap으로 본다.
-    private boolean hasOperationGap(
-            Long projectId,
+    // 구간 안 log는 (project, serverVersion) unique라 중복이 없으므로, 개수가 구간 길이와 같으면 시작·중간·끝 누락 없이 이어진다.
+    // PUT·metadata version은 log 없이 snapshot만 남기지만, snapshot보다 오래된 요청은 full 경로로 가므로 delta 구간에는 들어오지 않는다.
+    private boolean isContinuous(
             Long afterVersion,
             Long serverVersion,
             List<ProjectCollaborationOperation> operations
     ) {
-        if (!operations.isEmpty() && operations.getFirst().getServerVersion() == afterVersion + 1) {
-            return false;
-        }
-        return operationRepository.findFirstByProjectIdOrderByServerVersionAsc(projectId)
-                .map(first -> afterVersion + 1 < first.getServerVersion())
-                .orElse(afterVersion < serverVersion);
+        return operations.size() == serverVersion - afterVersion;
     }
 
     private List<CollaborationOperationResDTO.BroadcastOperationResDTO> toBroadcasts(
@@ -148,23 +142,24 @@ public class CollaborationSnapshotQueryService {
     ) {
         if (latestSnapshot != null) {
             // snapshot에 이미 반영된 version은 제외하고 serverVersion까지의 log만 replay한다.
-            List<CollaborationOperationResDTO.BroadcastOperationResDTO> operations = toBroadcasts(
-                    operationRepository.findAllInVersionRange(
-                            projectId,
-                            latestSnapshot.getServerVersion(),
-                            serverVersion
-                    )
+            List<ProjectCollaborationOperation> replay = operationRepository.findAllInVersionRange(
+                    projectId,
+                    latestSnapshot.getServerVersion(),
+                    serverVersion
             );
 
-            return CollaborationSnapshotResDTO.SnapshotResDTO.builder()
-                    .project(ProjectCollaborationSnapshotConverter.toProjectDetailResDTO(
-                            latestSnapshot,
-                            objectMapper
-                    ))
-                    .graphVersion(latestSnapshot.getServerVersion())
-                    .serverVersion(serverVersion)
-                    .operations(operations)
-                    .build();
+            // replay에 누락이 있으면 snapshot 위에 쌓을 수 없으므로 아래의 현재 graph로 대체한다.
+            if (isContinuous(latestSnapshot.getServerVersion(), serverVersion, replay)) {
+                return CollaborationSnapshotResDTO.SnapshotResDTO.builder()
+                        .project(ProjectCollaborationSnapshotConverter.toProjectDetailResDTO(
+                                latestSnapshot,
+                                objectMapper
+                        ))
+                        .graphVersion(latestSnapshot.getServerVersion())
+                        .serverVersion(serverVersion)
+                        .operations(toBroadcasts(replay))
+                        .build();
+            }
         }
 
         List<ProjectNode> nodes = projectNodeRepository.findAllByProjectId(projectId);

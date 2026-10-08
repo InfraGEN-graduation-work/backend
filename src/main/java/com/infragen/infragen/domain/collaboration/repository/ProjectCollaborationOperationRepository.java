@@ -58,14 +58,6 @@ public interface ProjectCollaborationOperationRepository
     List<ProjectCollaborationOperation> findAllByProjectIdOrderByServerVersionAsc(Long projectId);
 
     /**
-     * project의 operation log 중 serverVersion이 가장 작은 한 건을 조회한다.
-     *
-     * @param projectId 조회할 project 식별자
-     * @return 가장 오래된 operation log, log가 없으면 빈 값
-     */
-    Optional<ProjectCollaborationOperation> findFirstByProjectIdOrderByServerVersionAsc(Long projectId);
-
-    /**
      * project의 operation log 중 serverVersion이 가장 큰 한 건을 조회한다.
      *
      * @param projectId 조회할 project 식별자

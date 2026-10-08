@@ -61,7 +61,7 @@ Collaboration
 - Generate: `GenerationController` → `GenerationCommandService` → `ParsingService` → `IaCGenerationService` → history 저장
 - Collaboration operation: `CollaborationOperationMessageController` → `CollaborationOperationCommandService` → version·materialization·operation log → STOMP broadcast
 - Collaboration cursor: `CollaborationCursorMessageController` → `CollaborationCursorCommandService`(읽기 권한 → 좌표 검증 → 연결별 `cursorId`) → `CollaborationCursorSessionService`(표시 중인 project 기억) → STOMP broadcast. 연결 종료는 `CollaborationCursorSessionListener`가 `SessionDisconnectEvent`로 받아 숨김을 broadcast한다. operation log, version, snapshot은 호출하지 않는다.
-- Collaboration reconnect: `CollaborationSnapshotController` → `CollaborationSnapshotQueryService` → snapshot/replay 또는 materialized graph fallback
+- Collaboration reconnect: `CollaborationSnapshotController` → `CollaborationSnapshotQueryService`(읽기 전용 `REPEATABLE_READ`, state `serverVersion`을 응답 기준으로 필요한 구간의 operation만 조회) → snapshot/replay 또는 materialized graph fallback. 이미 최신인 요청은 replay를 조회하지 않고, replay 구간에 누락 version이 있으면 snapshot 대신 현재 graph로 복원한다.
 - 일반 로그인: `AuthController` → `AuthService` → `MemberQueryService` → `JwtUtil`·`RedisUtil`
 - 소셜 로그인: `AuthController` → `AuthService` → `KakaoOAuthClient` → member 조회·생성 → token 발급
 - 인증된 요청: `JwtExceptionFilter` → `JwtAuthFilter` → `CustomUserDetailsService` → `SecurityContext`
@@ -125,6 +125,7 @@ Generator는 parsing 결과를 재검증하지 않고 출력 형식의 renderer�
 7. `MemberQueryService`, `MemberCommandService`에는 class-level transaction annotation이 있다. 새 코드는 `service_convention.md`의 method-level 규칙을 따른다.
 8. STOMP 협업 controller(`CollaborationOperationMessageController`, `CollaborationCursorMessageController`, `CollaborationSnapshotController`)와 `HealthCheckController`는 Docs interface를 구현하지 않는다. 나머지 REST controller는 `*ControllerDocs`를 구현한다.
 9. `GeneralExceptionAdvice`의 `ResponseEntity`는 global 예외 변환 경계의 구현이며, 일반 controller의 정상 응답 규칙과 다르다.
+10. PUT·metadata 변경은 version을 올리지만 operation 행 없이 같은 version의 snapshot만 저장한다. 재접속 delta 구간의 연속성 검사(`(afterVersion, serverVersion]`의 log 개수 비교)는 snapshot보다 오래된 요청이 full 경로로 간다는 전제에 의존하므로, snapshot 보존 정책을 바꾸면 이 전제를 다시 확인한다.
 
 ## 새 기능 추가 시 확인 순서
 

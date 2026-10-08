@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
@@ -185,7 +186,16 @@ class ProjectFullReplaceSnapshotIntegrationTest {
         when(snapshotRepository.findTopByProjectIdOrderByServerVersionDesc(1L)).thenAnswer(invocation ->
                 snapshots.stream().max(Comparator.comparing(ProjectCollaborationSnapshot::getServerVersion)));
         when(stateRepository.findByProjectId(1L)).thenReturn(Optional.of(state));
-        when(operationRepository.findAllByProjectIdOrderByServerVersionAsc(1L)).thenReturn(operations);
+        // 구간 조회는 현재 operations 목록을 그대로 반영해 compaction 뒤 상태도 따라가게 한다.
+        when(operationRepository.findAllInVersionRange(eq(1L), anyLong(), anyLong())).thenAnswer(invocation -> {
+            long afterVersion = invocation.getArgument(1);
+            long untilVersion = invocation.getArgument(2);
+            return operations.stream()
+                    .filter(operation -> operation.getServerVersion() > afterVersion
+                            && operation.getServerVersion() <= untilVersion)
+                    .sorted(Comparator.comparing(ProjectCollaborationOperation::getServerVersion))
+                    .toList();
+        });
     }
 
     @ParameterizedTest

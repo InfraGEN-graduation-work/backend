@@ -50,7 +50,7 @@ Collaboration
 - `project`: 프로젝트 graph, history, generated file, 협업자와 초대의 저장·조회·삭제. 협력: `member` 소유권 조회
 - `parsing`: raw graph의 component type, port, edge, cycle, 의존 타입 중복, 같은 타입 DB·캐시 노드 중복 검증과 내부 component 변환
 - `generation`: 출력 형식별 generator 선택, IaC 산출물 생성, 생성 history 저장 흐름. 협력: `parsing`, `project`
-- `collaboration`: project별 operation 계약, 권한 연결, serverVersion, materialized graph, snapshot/replay. 협력: `project`, `member`, STOMP infrastructure
+- `collaboration`: project별 operation 계약, 권한 연결, serverVersion, materialized graph, snapshot/replay, 저장하지 않는 커서 공유(연결별 표시 상태와 종료 시 숨김). 협력: `project`, `member`, STOMP infrastructure
 - `global`: 인증 filter, 공통 응답/예외, Redis·Jackson·RestClient 등 infrastructure. domain 업무 규칙은 소유하지 않는다.
 
 도메인 간 호출은 유스케이스 조정에 필요한 범위로 제한한다.
@@ -60,6 +60,7 @@ Collaboration
 - Project 저장, 조회: `ProjectController` → `ProjectCommandService` / `ProjectQueryService` → project Repository/Converter
 - Generate: `GenerationController` → `GenerationCommandService` → `ParsingService` → `IaCGenerationService` → history 저장
 - Collaboration operation: `CollaborationOperationMessageController` → `CollaborationOperationCommandService` → version·materialization·operation log → STOMP broadcast
+- Collaboration cursor: `CollaborationCursorMessageController` → `CollaborationCursorCommandService`(읽기 권한 → 좌표 검증 → 연결별 `cursorId`) → `CollaborationCursorSessionService`(표시 중인 project 기억) → STOMP broadcast. 연결 종료는 `CollaborationCursorSessionListener`가 `SessionDisconnectEvent`로 받아 숨김을 broadcast한다. operation log, version, snapshot은 호출하지 않는다.
 - Collaboration reconnect: `CollaborationSnapshotController` → `CollaborationSnapshotQueryService` → snapshot/replay 또는 materialized graph fallback
 - 일반 로그인: `AuthController` → `AuthService` → `MemberQueryService` → `JwtUtil`·`RedisUtil`
 - 소셜 로그인: `AuthController` → `AuthService` → `KakaoOAuthClient` → member 조회·생성 → token 발급
@@ -122,7 +123,7 @@ Generator는 parsing 결과를 재검증하지 않고 출력 형식의 renderer�
 5. LOCAL_DEV는 Spring Boot를 호스트에서 실행하고 의존 인프라만 Compose service로 생성한다.
 6. CLOUD_DEPLOY Terraform은 plan-only scaffold이며 `terraform apply`, 실제 cloud account 조회, provider credential을 처리하지 않는다.
 7. `MemberQueryService`, `MemberCommandService`에는 class-level transaction annotation이 있다. 새 코드는 `service_convention.md`의 method-level 규칙을 따른다.
-8. STOMP 협업 controller(`CollaborationOperationMessageController`, `CollaborationSnapshotController`)와 `HealthCheckController`는 Docs interface를 구현하지 않는다. 나머지 REST controller는 `*ControllerDocs`를 구현한다.
+8. STOMP 협업 controller(`CollaborationOperationMessageController`, `CollaborationCursorMessageController`, `CollaborationSnapshotController`)와 `HealthCheckController`는 Docs interface를 구현하지 않는다. 나머지 REST controller는 `*ControllerDocs`를 구현한다.
 9. `GeneralExceptionAdvice`의 `ResponseEntity`는 global 예외 변환 경계의 구현이며, 일반 controller의 정상 응답 규칙과 다르다.
 
 ## 새 기능 추가 시 확인 순서

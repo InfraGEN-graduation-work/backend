@@ -28,4 +28,19 @@ public final class CollaborationCursorConverter {
                 .y(cursor.y())
                 .build();
     }
+
+    /**
+     * 연결 종료로 서버가 대신 보내는 숨김 응답을 만든다.
+     *
+     * @param actorMemberId 연결을 소유한 회원 식별자
+     * @param cursorId 숨길 커서의 연결 식별자
+     * @return 좌표가 없는 숨김 응답
+     */
+    public static CollaborationCursorResDTO.BroadcastCursorResDTO toHidden(Long actorMemberId, String cursorId) {
+        return CollaborationCursorResDTO.BroadcastCursorResDTO.builder()
+                .actorMemberId(actorMemberId)
+                .cursorId(cursorId)
+                .visible(false)
+                .build();
+    }
 }

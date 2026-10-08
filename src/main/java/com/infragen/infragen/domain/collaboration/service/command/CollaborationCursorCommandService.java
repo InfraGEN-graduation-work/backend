@@ -20,6 +20,7 @@ import java.util.UUID;
 public class CollaborationCursorCommandService {
     private final ProjectAccessService projectAccessService;
     private final CollaborationCursorValidator cursorValidator;
+    private final CollaborationCursorSessionService cursorSessionService;
 
     /**
      * 읽기 권한과 좌표를 확인하고 서버가 식별한 회원·연결 정보를 붙여 방송용 커서를 만든다.
@@ -41,7 +42,9 @@ public class CollaborationCursorCommandService {
     ) {
         projectAccessService.requireReadAccess(projectId, memberId);
         cursorValidator.validate(cursor);
-        return CollaborationCursorConverter.toBroadcast(cursor, memberId, cursorId(sessionId));
+        String cursorId = cursorId(sessionId);
+        cursorSessionService.track(sessionId, memberId, cursorId, projectId, cursor.visible());
+        return CollaborationCursorConverter.toBroadcast(cursor, memberId, cursorId);
     }
 
     // session ID를 그대로 노출하지 않는다. 같은 연결은 항상 같은 값을 받으므로 서버에 매핑을 저장하지 않는다.

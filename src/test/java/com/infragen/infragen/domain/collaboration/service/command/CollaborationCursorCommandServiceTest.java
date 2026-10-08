@@ -33,6 +33,9 @@ class CollaborationCursorCommandServiceTest {
     @Mock
     private CollaborationCursorValidator cursorValidator;
 
+    @Mock
+    private CollaborationCursorSessionService cursorSessionService;
+
     @InjectMocks
     private CollaborationCursorCommandService service;
 
@@ -46,9 +49,10 @@ class CollaborationCursorCommandServiceTest {
         CollaborationCursorResDTO.BroadcastCursorResDTO result = service.shareCursor(1L, 2L, "session-a", cursor);
 
         // then
-        InOrder order = inOrder(projectAccessService, cursorValidator);
+        InOrder order = inOrder(projectAccessService, cursorValidator, cursorSessionService);
         order.verify(projectAccessService).requireReadAccess(1L, 2L);
         order.verify(cursorValidator).validate(cursor);
+        order.verify(cursorSessionService).track("session-a", 2L, result.cursorId(), 1L, true);
         assertAll(
                 () -> assertEquals(2L, result.actorMemberId()),
                 () -> assertEquals(true, result.visible()),
@@ -77,6 +81,19 @@ class CollaborationCursorCommandServiceTest {
     }
 
     @Test
+    @DisplayName("숨김 메시지는 해당 project의 표시 상태를 해제하도록 추적 서비스에 알린다")
+    void shareCursor_hiddenCursor_tracksAsHidden() {
+        // given
+        CollaborationCursorReqDTO.Cursor cursor = new CollaborationCursorReqDTO.Cursor(false, null, null);
+
+        // when
+        CollaborationCursorResDTO.BroadcastCursorResDTO result = service.shareCursor(1L, 2L, "session-a", cursor);
+
+        // then
+        verify(cursorSessionService).track("session-a", 2L, result.cursorId(), 1L, false);
+    }
+
+    @Test
     @DisplayName("읽기 권한이 없으면 검증과 전달 없이 권한 예외를 던진다")
     void shareCursor_accessDenied_throwsBeforeValidation() {
         // given
@@ -92,7 +109,7 @@ class CollaborationCursorCommandServiceTest {
 
         // then
         assertEquals(ProjectErrorCode.PROJECT_ACCESS_DENIED, exception.getCode());
-        verifyNoInteractions(cursorValidator);
+        verifyNoInteractions(cursorValidator, cursorSessionService);
     }
 
     @Test
@@ -112,5 +129,6 @@ class CollaborationCursorCommandServiceTest {
         // then
         assertEquals(CollaborationErrorCode.INVALID_CURSOR, exception.getCode());
         verify(projectAccessService).requireReadAccess(1L, 2L);
+        verifyNoInteractions(cursorSessionService);
     }
 }

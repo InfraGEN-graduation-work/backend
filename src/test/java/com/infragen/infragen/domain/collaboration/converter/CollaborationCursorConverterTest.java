@@ -47,4 +47,24 @@ class CollaborationCursorConverterTest {
                 () -> assertNull(result.y())
         );
     }
+
+    @Test
+    @DisplayName("연결 종료 숨김 응답은 회원·커서 식별자만 담고 좌표는 없다")
+    void toHidden_returnsHiddenWithoutCoordinates() {
+        // given
+        Long actorMemberId = 2L;
+
+        // when
+        CollaborationCursorResDTO.BroadcastCursorResDTO result =
+                CollaborationCursorConverter.toHidden(actorMemberId, "cursor-1");
+
+        // then
+        assertAll(
+                () -> assertEquals(2L, result.actorMemberId()),
+                () -> assertEquals("cursor-1", result.cursorId()),
+                () -> assertEquals(false, result.visible()),
+                () -> assertNull(result.x()),
+                () -> assertNull(result.y())
+        );
+    }
 }

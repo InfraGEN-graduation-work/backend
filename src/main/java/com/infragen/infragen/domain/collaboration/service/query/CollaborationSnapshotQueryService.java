@@ -26,6 +26,7 @@ import com.infragen.infragen.domain.project.service.query.ProjectAccessService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -47,6 +48,9 @@ public class CollaborationSnapshotQueryService {
      * <p>state의 serverVersion을 먼저 읽어 응답 기준으로 삼고, 필요한 version 구간의 operation만 조회한다.
      * 이미 최신 version인 client에는 operation을 조회하지 않고 빈 delta를 반환한다.
      *
+     * <p>state, snapshot, operation, 현재 graph를 같은 DB 시점에서 읽도록 {@code REPEATABLE_READ}로 실행한다.
+     * 독립 transaction으로 시작될 때만 적용되며, 바깥 transaction에 참여하면 그 격리 수준을 따른다.
+     *
      * @param projectId    snapshot을 조회할 project 식별자
      * @param memberId     조회를 요청한 member 식별자
      * @param afterVersion replay 기준 version
@@ -54,7 +58,8 @@ public class CollaborationSnapshotQueryService {
      * @throws CollaborationException afterVersion이 음수인 경우
      * @throws ProjectException       project가 존재하지 않는 경우
      */
-    @Transactional(readOnly = true)
+    // 재접속 중 PUT·compaction이 커밋돼도 version, snapshot, log, graph가 서로 다른 시점으로 섞이지 않게 한다.
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public CollaborationSnapshotResDTO.SnapshotResDTO getSnapshot(
             Long projectId,
             Long memberId,

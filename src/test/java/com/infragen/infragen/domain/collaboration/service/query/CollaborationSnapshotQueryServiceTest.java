@@ -29,16 +29,21 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -339,6 +344,23 @@ class CollaborationSnapshotQueryServiceTest {
         assertEquals(5L, result.graphVersion());
         assertEquals(5L, result.serverVersion());
         assertEquals(0, result.operations().size());
+    }
+
+    @Test
+    @DisplayName("재접속 조회는 읽기 전용 REPEATABLE_READ transaction으로 실행한다")
+    void getSnapshot_declaresReadOnlyRepeatableRead() throws NoSuchMethodException {
+        // given
+        Method method = CollaborationSnapshotQueryService.class.getMethod(
+                "getSnapshot", Long.class, Long.class, Long.class);
+
+        // when
+        Transactional transactional = method.getAnnotation(Transactional.class);
+
+        // then
+        assertAll(
+                () -> assertTrue(transactional.readOnly()),
+                () -> assertEquals(Isolation.REPEATABLE_READ, transactional.isolation())
+        );
     }
 
     @Test

@@ -148,6 +148,21 @@ public enum ParsingErrorCode implements BaseErrorCode {
             HttpStatus.BAD_REQUEST,
             "같은 타입의 데이터베이스 또는 캐시 컴포넌트를 하나의 그래프에 둘 이상 둘 수 없습니다.",
             "PARSING400_29"
+    ),
+    MISSING_NODE_JS_NAME(
+            HttpStatus.BAD_REQUEST,
+            "Node.js 서비스 이름이 누락되었습니다.",
+            "PARSING400_30"
+    ),
+    MISSING_NODE_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "Node.js 버전이 누락되었습니다.",
+            "PARSING400_31"
+    ),
+    INVALID_NODE_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "Node.js 버전은 숫자 형식이어야 합니다.",
+            "PARSING400_32"
     );
 
     private final HttpStatus httpStatus;

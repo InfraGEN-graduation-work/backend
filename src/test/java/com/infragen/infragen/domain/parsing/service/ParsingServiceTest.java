@@ -16,11 +16,13 @@ import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
 import com.infragen.infragen.domain.parsing.dto.request.NodeDTO;
 import com.infragen.infragen.domain.parsing.dto.request.ParsingReqDTO;
 import com.infragen.infragen.domain.parsing.dto.response.MongoDBComponent;
+import com.infragen.infragen.domain.parsing.dto.response.NodeJsComponent;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
 import com.infragen.infragen.domain.parsing.parser.MongoDBParser;
 import com.infragen.infragen.domain.parsing.parser.MySQLParser;
+import com.infragen.infragen.domain.parsing.parser.NodeJsParser;
 import com.infragen.infragen.domain.parsing.parser.SpringBootParser;
 import com.infragen.infragen.domain.parsing.validator.ValidateGraphStructure;
 
@@ -36,7 +38,7 @@ class ParsingServiceTest {
         parsingService = new ParsingService(
             new ObjectMapper(),
             new ValidateGraphStructure(),
-            List.of(new SpringBootParser(), new MySQLParser(), new MongoDBParser())
+            List.of(new SpringBootParser(), new NodeJsParser(), new MySQLParser(), new MongoDBParser())
         );
     }
 
@@ -171,6 +173,46 @@ class ParsingServiceTest {
         assertEquals(ParsingErrorCode.CYCLE_DETECTED, exception.getCode());
     }
 
+    @Test
+    @DisplayName("Node.js 노드 — parser가 등록되어 NodeJsComponent로 변환")
+    void parsing_NodeJsNode_ReturnsNodeJsComponent() {
+        // given
+        ParsingReqDTO request = new ParsingReqDTO(
+            List.of(mysqlNode("node-1", 3306), nodeJsNode("node-2", 3000)),
+            List.of(edge("node-1", "node-2"))
+        );
+
+        // when
+        ParsingResultDTO result = parsingService.parsing(request, 1L);
+
+        // then
+        NodeJsComponent nodeJs = (NodeJsComponent) result.getComponents().stream()
+            .filter(component -> component instanceof NodeJsComponent)
+            .findFirst()
+            .orElseThrow();
+        assertEquals(3000, nodeJs.getPort());
+        assertEquals("22", nodeJs.getNodeVersion());
+    }
+
+    @Test
+    @DisplayName("Spring Boot과 Node.js가 같은 포트를 쓰면 DUPLICATE_PORT")
+    void parsing_SpringBootAndNodeJsSamePort_ThrowsDuplicatePort() {
+        // given
+        ParsingReqDTO request = new ParsingReqDTO(
+            List.of(springBootNode("node-1", 8080), nodeJsNode("node-2", 8080)),
+            List.of()
+        );
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parsingService.parsing(request, 1L)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.DUPLICATE_PORT, exception.getCode());
+    }
+
     private static ParsingReqDTO validRequest() {
         return new ParsingReqDTO(
             List.of(mysqlNode("node-1", 3306), springBootNode("node-2")),
@@ -219,6 +261,16 @@ class ParsingServiceTest {
         properties.put("containerName", "spring-app");
 
         return new NodeDTO(nodeId, "SPRING_BOOT", 400f, 200f, properties);
+    }
+
+    private static NodeDTO nodeJsNode(String nodeId, int port) {
+        Map<String, Object> properties = new HashMap<>();
+        properties.put("name", "api");
+        properties.put("port", port);
+        properties.put("nodeVersion", "22");
+        properties.put("containerName", "node-app");
+
+        return new NodeDTO(nodeId, "NODE_JS", 400f, 200f, properties);
     }
 
     private static NodeDTO springBootNode(String nodeId) {

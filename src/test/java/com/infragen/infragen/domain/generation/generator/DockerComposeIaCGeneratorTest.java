@@ -16,6 +16,7 @@ import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
 import com.infragen.infragen.domain.generation.enums.OutputFormat;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
+import com.infragen.infragen.domain.generation.generator.application.NodeJsApplicationEnvMapper;
 import com.infragen.infragen.domain.generation.generator.application.SpringBootApplicationEnvMapper;
 import com.infragen.infragen.domain.generation.generator.compose.MongoComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.compose.MongoHostAppEnvContributor;
@@ -31,6 +32,7 @@ import com.infragen.infragen.domain.parsing.dto.response.MongoDBComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MongoDBEnvComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLEnvComponent;
+import com.infragen.infragen.domain.parsing.dto.response.NodeJsComponent;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLEnvComponent;
@@ -142,7 +144,7 @@ class DockerComposeIaCGeneratorTest {
                 new PostgresHostAppEnvContributor(),
                 new MongoHostAppEnvContributor()
             ),
-            List.of(new SpringBootApplicationEnvMapper())
+            List.of(new SpringBootApplicationEnvMapper(), new NodeJsApplicationEnvMapper())
         );
     }
 
@@ -672,6 +674,66 @@ class DockerComposeIaCGeneratorTest {
         assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
     }
 
+    @Test
+    @DisplayName("LOCAL_DEV golden — Node.js 앱은 프레임워크 변수 없이 MySQL과 Redis 중립 변수만 생성")
+    void generate_LocalDevMysqlAndRedisWithNodeJs_MatchesGolden() {
+        // given
+        ParsingResultDTO parsingResult = parsingResult(
+            List.of(mysqlComponent(), redisComponent(), nodeJsComponent("node-2")),
+            List.of(edge("node-1", "node-2"), edge("redis-1", "node-2"))
+        );
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult);
+
+        // then
+        assertAll(
+            () -> assertEquals("""
+                services:
+                """ + MYSQL_SERVICE_BLOCK + REDIS_SERVICE_BLOCK + """
+
+                volumes:
+                  mysql_data:
+                  redis_data:
+                """, fileContent(bundle, "docker-compose.yml")),
+            () -> assertEquals("""
+                # InfraGEN generated environment variables
+                # 민감한 정보는 이 파일에만 저장하세요. 버전 관리에 커밋하지 마세요.
+
+                MYSQL_DATABASE=appdb
+                MYSQL_USER=user
+                MYSQL_PASSWORD=userpass12
+                MYSQL_ROOT_PASSWORD=rootpass12
+                REDIS_PASSWORD=redis-password
+                MYSQL_HOST=localhost
+                MYSQL_PORT=3306
+                REDIS_HOST=localhost
+                REDIS_PORT=6379
+                """, fileContent(bundle, ".env"))
+        );
+    }
+
+    @Test
+    @DisplayName("Spring Boot과 Node.js가 같은 MySQL을 쓰면 DataSource는 Spring에만 생성하고 중립 변수는 한 번씩만 생성")
+    void generate_LocalDevMysqlWithSpringBootAndNodeJs_KeepsSingleEntryPerKey() {
+        // given
+        ParsingResultDTO parsingResult = parsingResult(
+            List.of(mysqlComponent(), springBootComponent(), nodeJsComponent("node-3")),
+            List.of(edge("node-1", "node-2"), edge("node-1", "node-3"))
+        );
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult);
+
+        // then
+        List<String> envLines = fileContent(bundle, ".env").lines().toList();
+        assertAll(
+            () -> assertEquals(1, countLinesStartingWith(envLines, "SPRING_DATASOURCE_URL=")),
+            () -> assertEquals(1, countLinesStartingWith(envLines, "MYSQL_HOST=")),
+            () -> assertEquals(1, countLinesStartingWith(envLines, "MYSQL_PASSWORD="))
+        );
+    }
+
     private static MongoDBEnvComponent validMongoEnv() {
         return MongoDBEnvComponent.builder()
             .databaseName("mongodb_app")
@@ -755,6 +817,22 @@ class DockerComposeIaCGeneratorTest {
             .javaVersion("17")
             .containerName("spring-app")
             .build();
+    }
+
+    private static NodeJsComponent nodeJsComponent(String id) {
+        return NodeJsComponent.builder()
+            .id(id)
+            .posX(400f)
+            .posY(200f)
+            .name("api")
+            .port(3000)
+            .nodeVersion("22")
+            .containerName("node-app")
+            .build();
+    }
+
+    private static long countLinesStartingWith(List<String> lines, String prefix) {
+        return lines.stream().filter(line -> line.startsWith(prefix)).count();
     }
 
     private static EdgeDTO edge(String sourceNodeId, String targetNodeId) {

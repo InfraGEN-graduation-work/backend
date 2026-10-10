@@ -13,6 +13,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
@@ -62,13 +63,27 @@ class ComposeYamlSupportTest {
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("envValueCases")
-    @DisplayName(".env 값은 특수 문자가 있을 때만 큰따옴표로 감싸고 \\, \", $를 이스케이프한다")
-    void escapeEnvValue_SerializesSpecialCharacters(String scenario, String value, String expected) {
+    @DisplayName(".env 값은 특수문자가 있을 때만 큰따옴표로 감싸고 이스케이프하지 않는다")
+    void escapeEnvValue_SerializesAllowedCharacters(String scenario, String value, String expected) {
         // when
         String escaped = ComposeYamlSupport.escapeEnvValue(value);
 
         // then
         assertEquals(expected, escaped);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {"pa$word12", "pa${HOME}x12", "\"abcd1234", "ab\"cd1234", "back\\slash12", "abcd123\\"})
+    @DisplayName(".env 값에 큰따옴표, 백슬래시, 달러 기호가 있으면 GENERATION400_14로 거부한다")
+    void escapeEnvValue_ValueWithUnsupportedCharacter_Throws(String value) {
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> ComposeYamlSupport.escapeEnvValue(value)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.UNSUPPORTED_ENV_CHARACTER, exception.getCode());
     }
 
     @ParameterizedTest(name = "{0}")
@@ -89,12 +104,12 @@ class ComposeYamlSupportTest {
     }
 
     @Test
-    @DisplayName(".env 값이 null이거나 특수문자만 있으면 거부하지 않는다")
-    void formatEnvFile_NullOrSpecialCharacterValue_DoesNotThrow() {
+    @DisplayName(".env 값이 null이거나 허용된 특수문자만 있으면 거부하지 않는다")
+    void formatEnvFile_NullOrAllowedSpecialCharacterValue_DoesNotThrow() {
         // given
         Map<String, String> envVars = new LinkedHashMap<>();
         envVars.put("EMPTY", null);
-        envVars.put("PASSWORD", "pa$word 12");
+        envVars.put("PASSWORD", "pa#word 12");
 
         // when
         String content = ComposeYamlSupport.formatEnvFile(envVars);
@@ -105,7 +120,7 @@ class ComposeYamlSupportTest {
             # 민감한 정보는 이 파일에만 저장하세요. 버전 관리에 커밋하지 마세요.
 
             EMPTY=
-            PASSWORD="pa$$word 12"
+            PASSWORD="pa#word 12"
             """, content);
     }
 
@@ -125,14 +140,7 @@ class ComposeYamlSupportTest {
             Arguments.of("안전한 값은 그대로", "abcd1234", "abcd1234"),
             Arguments.of("공백", "pass word1", "\"pass word1\""),
             Arguments.of("#", "pass#word1", "\"pass#word1\""),
-            Arguments.of("$는 $$", "pa$word12", "\"pa$$word12\""),
-            Arguments.of("${} 보간 표기", "pa${HOME}x12", "\"pa$${HOME}x12\""),
-            Arguments.of("큰따옴표로 시작", "\"abcd1234", "\"\\\"abcd1234\""),
-            Arguments.of("안쪽 큰따옴표", "ab\"cd1234", "\"ab\\\"cd1234\""),
             Arguments.of("작은따옴표", "it's1234pw", "\"it's1234pw\""),
-            Arguments.of("백슬래시", "back\\slash12", "\"back\\\\slash12\""),
-            Arguments.of("끝이 백슬래시", "abcd123\\", "\"abcd123\\\\\""),
-            Arguments.of("백슬래시 뒤 작은따옴표", "a\\'bcd1234", "\"a\\\\'bcd1234\""),
             Arguments.of("백틱", "ab`cd1234", "\"ab`cd1234\"")
         );
     }

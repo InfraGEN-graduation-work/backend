@@ -168,13 +168,13 @@ class DockerComposeIaCGeneratorTest {
     }
 
     @Test
-    @DisplayName("특수문자 비밀번호 — .env에 큰따옴표와 이스케이프로 출력하고 안전한 값은 그대로")
-    void generate_SpecialCharacterPassword_EscapesEnvValues() {
+    @DisplayName("허용된 특수문자 비밀번호 — .env에 큰따옴표로 감싸서 출력")
+    void generate_SpecialCharacterPassword_QuotesAllowedEnvValues() {
         // given
         ParsingResultDTO parsingResult = localDevParsingResultWithMysqlEnv(MySQLEnvComponent.builder()
             .databaseName("appdb")
             .username("user")
-            .userPassword("pa$word\"12\\")
+            .userPassword("pa#word'1 2")
             .rootPassword("rootpass12")
             .build());
 
@@ -188,14 +188,35 @@ class DockerComposeIaCGeneratorTest {
 
             MYSQL_DATABASE=appdb
             MYSQL_USER=user
-            MYSQL_PASSWORD="pa$$word\\"12\\\\"
+            MYSQL_PASSWORD="pa#word'1 2"
             MYSQL_ROOT_PASSWORD=rootpass12
             SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/appdb
             SPRING_DATASOURCE_USERNAME=user
-            SPRING_DATASOURCE_PASSWORD="pa$$word\\"12\\\\"
+            SPRING_DATASOURCE_PASSWORD="pa#word'1 2"
             MYSQL_HOST=localhost
             MYSQL_PORT=3306
             """, fileContent(bundle, ".env"));
+    }
+
+    @Test
+    @DisplayName("비밀번호에 달러 기호가 있으면 생성 단계에서 GENERATION400_14로 거부")
+    void generate_PasswordWithDollar_ThrowsUnsupportedEnvCharacter() {
+        // given
+        ParsingResultDTO parsingResult = localDevParsingResultWithMysqlEnv(MySQLEnvComponent.builder()
+            .databaseName("appdb")
+            .username("user")
+            .userPassword("pa$word12")
+            .rootPassword("rootpass12")
+            .build());
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> generator.generate(parsingResult)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.UNSUPPORTED_ENV_CHARACTER, exception.getCode());
     }
 
     @Test

@@ -65,6 +65,11 @@ public enum IaCGenerationErrorCode implements BaseErrorCode {
         HttpStatus.BAD_REQUEST,
         "환경변수 값에 줄바꿈이나 NUL 문자를 사용할 수 없습니다.",
         "GENERATION400_13"
+    ),
+    UNSUPPORTED_ENV_CHARACTER(
+        HttpStatus.BAD_REQUEST,
+        "환경변수 값에 큰따옴표, 백슬래시, 달러 기호를 사용할 수 없습니다.",
+        "GENERATION400_14"
     );
 
     private final HttpStatus httpStatus;

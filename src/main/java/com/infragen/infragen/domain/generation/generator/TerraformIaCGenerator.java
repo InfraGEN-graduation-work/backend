@@ -105,8 +105,8 @@ public class TerraformIaCGenerator implements TargetAwareIaCGenerator {
             files.addAll(renderer.render(context, deploymentTarget));
         }
 
+        files.addAll(runtimeDockerfileRenderer(context).renderFiles(context));
         files.addAll(List.of(
-            runtimeDockerfileRenderer(context).render(context),
             cloudComposeRenderer.render(context),
             cloudDeployWarningRenderer.render()
         ));

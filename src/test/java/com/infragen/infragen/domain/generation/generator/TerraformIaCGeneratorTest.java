@@ -22,6 +22,7 @@ import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
 import com.infragen.infragen.domain.generation.enums.OutputFormat;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
+import com.infragen.infragen.domain.generation.generator.application.NodeJsApplicationEnvMapper;
 import com.infragen.infragen.domain.generation.generator.application.SpringBootApplicationEnvMapper;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployFileAssembler;
 import com.infragen.infragen.domain.generation.generator.cloud.SpringBootRuntimeDockerfileRenderer;
@@ -30,12 +31,14 @@ import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployContex
 import com.infragen.infragen.domain.generation.generator.cloud.AwsTerraformRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.MongoCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.MysqlCloudComposeServiceRenderer;
+import com.infragen.infragen.domain.generation.generator.cloud.NodeJsRuntimeDockerfileRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.OciTerraformRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.PostgresCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.RedisCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
 import com.infragen.infragen.domain.parsing.dto.response.MongoDBComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
+import com.infragen.infragen.domain.parsing.dto.response.NodeJsComponent;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.RedisComponent;
@@ -91,8 +94,8 @@ class TerraformIaCGeneratorTest {
             new PostgresCloudComposeServiceRenderer(),
             new RedisCloudComposeServiceRenderer(),
             new MongoCloudComposeServiceRenderer()
-        ), List.of(new SpringBootApplicationEnvMapper())),
-        List.of(new SpringBootRuntimeDockerfileRenderer()),
+        ), List.of(new SpringBootApplicationEnvMapper(), new NodeJsApplicationEnvMapper())),
+        List.of(new SpringBootRuntimeDockerfileRenderer(), new NodeJsRuntimeDockerfileRenderer()),
         List.of(new AwsTerraformRenderer(), new OciTerraformRenderer())
     );
     private final CloudDeployFileAssembler fileAssembler = new CloudDeployFileAssembler();
@@ -781,6 +784,71 @@ class TerraformIaCGeneratorTest {
 
         // then
         assertEquals(IaCGenerationErrorCode.MULTIPLE_APPLICATION_COMPONENTS, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("Node.js + MySQL, AWS target — .dockerignore를 Dockerfile 뒤에 두고 프레임워크 변수 없이 생성")
+    void generate_NodeJsWithMysqlAwsTarget_RendersNodeRuntimeAndDockerignore() {
+        // given
+        ParsingResultDTO parsingResult = nodeJsParsingResult();
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
+
+        // then
+        assertAll(
+            () -> assertEquals(7, bundle.files().size()),
+            () -> assertEquals("cloud/Dockerfile", bundle.files().get(3).fileName()),
+            () -> assertEquals("cloud/.dockerignore", bundle.files().get(4).fileName()),
+            () -> assertEquals("cloud/docker-compose.cloud.yml", bundle.files().get(5).fileName()),
+            () -> assertEquals("cloud/CLOUD_DEPLOY_WARNING.md", bundle.files().get(6).fileName()),
+            () -> assertTrue(fileContent(bundle, "Dockerfile").contains("FROM node:22-slim")),
+            () -> assertTrue(fileContent(bundle, "Dockerfile").contains("EXPOSE 3000")),
+            () -> assertTrue(fileContent(bundle, ".dockerignore").contains(".env")),
+            () -> assertTrue(fileContent(bundle, "docker-compose.cloud.yml").contains("${APP_PORT:-3000}:3000")),
+            () -> assertTrue(fileContent(bundle, "docker-compose.cloud.yml").contains("MYSQL_HOST: mysql")),
+            () -> assertFalse(fileContent(bundle, "docker-compose.cloud.yml").contains("SPRING_")),
+            () -> assertTrue(fileContent(bundle, "aws/terraform/variables.tf").contains("default     = 3000")),
+            () -> assertFalse(allContent(bundle).contains("COPY app.jar"))
+        );
+    }
+
+    @Test
+    @DisplayName("Node.js + MySQL, OCI target — OCI Terraform과 Node.js runtime 산출물만 생성")
+    void generate_NodeJsWithMysqlOciTarget_RendersOciAndNodeRuntime() {
+        // given
+        ParsingResultDTO parsingResult = nodeJsParsingResult();
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, ociTarget());
+
+        // then
+        assertAll(
+            () -> assertEquals(7, bundle.files().size()),
+            () -> assertEquals("cloud/Dockerfile", bundle.files().get(3).fileName()),
+            () -> assertEquals("cloud/.dockerignore", bundle.files().get(4).fileName()),
+            () -> assertTrue(fileContent(bundle, "oci/terraform/variables.tf").contains("default     = 3000")),
+            () -> assertFalse(bundle.files().stream()
+                .anyMatch(file -> file.fileName().startsWith("cloud/aws/")))
+        );
+    }
+
+    private static ParsingResultDTO nodeJsParsingResult() {
+        NodeJsComponent nodeJs = NodeJsComponent.builder()
+            .id("node-1")
+            .posX(100f)
+            .posY(100f)
+            .name("api")
+            .port(3000)
+            .nodeVersion("22")
+            .containerName("node-app")
+            .build();
+
+        ParsingResultDTO parsingResult = new ParsingResultDTO();
+        parsingResult.setProjectId(1L);
+        parsingResult.setComponents(List.of(mysqlComponent(), nodeJs));
+        parsingResult.setEdges(List.of(edgeToApplication("mysql-1")));
+        return parsingResult;
     }
 
     private static MySQLComponent mysqlComponent() {

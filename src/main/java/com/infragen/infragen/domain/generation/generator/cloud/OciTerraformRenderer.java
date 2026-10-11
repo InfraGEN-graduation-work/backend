@@ -239,7 +239,7 @@ public class OciTerraformRenderer implements CloudTerraformRenderer {
 
             variable "oci_app_cidr" {
               type        = string
-              description = "Spring Boot 애플리케이션 접근을 허용할 CIDR 블록"
+              description = "애플리케이션 접근을 허용할 CIDR 블록"
             }
 
             variable "oci_ssh_authorized_keys" {
@@ -249,7 +249,7 @@ public class OciTerraformRenderer implements CloudTerraformRenderer {
 
             variable "app_port" {
               type        = number
-              description = "파싱된 그래프의 Spring Boot 애플리케이션 포트"
+              description = "파싱된 그래프의 애플리케이션 포트"
               default     = %d
             }
             """.formatted(applicationPort);

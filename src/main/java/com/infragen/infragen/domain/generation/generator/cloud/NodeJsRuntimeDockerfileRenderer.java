@@ -15,7 +15,8 @@ import com.infragen.infragen.global.enums.ComponentType;
  * Node.js 애플리케이션의 CLOUD_DEPLOY runtime Dockerfile과 {@code .dockerignore}를 만든다.
  *
  * <p>빌드 컨텍스트는 생성 파일이 놓이는 {@code cloud/} 디렉터리이고, 사용자가 앱 파일을 그 안에 둔다. 운영 의존성만
- * 설치하고 실행은 {@code package.json}의 {@code start} 스크립트에 맡긴다.
+ * 설치하고 실행은 {@code package.json}의 {@code start} 스크립트에 맡긴다. 앱이 {@code /app} 아래에 파일을 쓸 수 있도록
+ * 디렉터리와 복사 파일, 설치 결과의 소유자를 {@code node}로 맞춘다.
  *
  * <p>{@code .dockerignore}가 없으면 {@code COPY . .}가 {@code .env}의 비밀번호를 이미지에 넣으므로 함께 만든다.
  */
@@ -62,13 +63,14 @@ public class NodeJsRuntimeDockerfileRenderer implements RuntimeDockerfileRendere
             FROM node:%s-slim
 
             WORKDIR /app
+            RUN chown node:node /app
             ENV NODE_ENV=production
+            USER node
 
-            COPY package.json package-lock.json ./
+            COPY --chown=node:node package.json package-lock.json ./
             RUN npm ci --omit=dev
 
-            COPY . .
-            USER node
+            COPY --chown=node:node . .
             EXPOSE %d
             CMD ["npm", "start"]
             """.formatted(nodeVersion, application.getPort());

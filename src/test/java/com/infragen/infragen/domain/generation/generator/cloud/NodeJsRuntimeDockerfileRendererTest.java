@@ -61,13 +61,14 @@ class NodeJsRuntimeDockerfileRendererTest {
                 FROM node:22-slim
 
                 WORKDIR /app
+                RUN chown node:node /app
                 ENV NODE_ENV=production
+                USER node
 
-                COPY package.json package-lock.json ./
+                COPY --chown=node:node package.json package-lock.json ./
                 RUN npm ci --omit=dev
 
-                COPY . .
-                USER node
+                COPY --chown=node:node . .
                 EXPOSE 3000
                 CMD ["npm", "start"]
                 """, dockerfile.content())

@@ -19,7 +19,7 @@ InfraGEN은 사용자가 웹 캔버스에서 인프라 노드와 연결 관계�
 
 ## 4. 산출물
 
-- **LOCAL_DEV**: Spring Boot 앱은 호스트에서 실행하고, 캔버스에 배치된 지원 의존 인프라만 `docker-compose.yml`로 만든다. 앱 연결 정보는 호스트 실행용 `.env`로 제공한다.
+- **LOCAL_DEV**: Spring Boot 또는 Node.js 앱은 호스트에서 실행하고, 캔버스에 배치된 지원 의존 인프라만 `docker-compose.yml`로 만든다. 앱 연결 정보는 호스트 실행용 `.env`로 제공한다.
 - **CLOUD_DEPLOY**: AWS EC2, OCI Compute Instance 대상의 plan-only Terraform scaffold, runtime Dockerfile, Docker Compose bootstrap. 실제 `terraform apply`와 클라우드 계정 연동은 하지 않는다.
 - 공통: 생성 파일 본문과 생성 이력
 
@@ -39,4 +39,16 @@ InfraGEN은 사용자가 웹 캔버스에서 인프라 노드와 연결 관계�
 - 생성 이력: 프로젝트에서 생성된 결과의 버전과 메타데이터
 - 생성 파일: 생성 결과를 구성하는 파일과 내용
 
-지원 입력 노드는 `SPRING_BOOT`, `MYSQL`, `POSTGRESQL`, `MONGODB`, `REDIS`다. 의존 인프라는 캔버스에 있을 때만 Compose service와 접속 정보에 반영한다. NGINX, Apache는 계획 단계다(`docs/handoff/plan/backend-future-plan.md` Gate 6).
+지원 입력 노드는 `SPRING_BOOT`, `NODE_JS`, `MYSQL`, `POSTGRESQL`, `MONGODB`, `REDIS`다. 의존 인프라는 캔버스에 있을 때만 Compose service와 접속 정보에 반영한다. NGINX는 계획 단계이고, Apache는 보류 상태다(`docs/handoff/plan/backend-future-plan.md` Gate 6).
+
+## 7. 앱 준비 사항
+
+생성된 파일을 쓰려면 앱 쪽에서 아래 내용을 맞춰야 한다. 생성기는 앱 코드를 만들지 않는다.
+
+- **Spring Boot**: 연결 설정은 `SPRING_DATASOURCE_*`, `SPRING_MONGODB_*` 같은 프레임워크 변수로 자동 전달된다. 앱 코드를 바꿀 필요가 없다.
+- **Node.js**
+  - DB 접속 정보는 `MYSQL_HOST`, `MYSQL_PORT`처럼 DB별 중립 변수로 전달된다. 앱 코드에서 연결 설정을 직접 조립한다.
+  - LOCAL_DEV에서 Node.js는 `.env`를 자동으로 읽지 않는다. `node --env-file=local/.env`(Node 20.6 이상)를 쓰거나 dotenv로 읽는다.
+  - `package.json`의 `start` 스크립트는 `exec node server.js`처럼 `exec`로 시작해야 한다. 그래야 `docker stop`의 종료 신호(SIGTERM)가 앱에 전달된다. 앱이 `process.on("SIGTERM", ...)`로 신호를 받아 정리하는 코드를 가져야 정리 작업이 실행된다.
+  - CLOUD_DEPLOY에서는 `cloud/` 폴더에 `package.json`, `package-lock.json`과 앱 파일을 둔다. 생성된 `.dockerignore`가 `.env`와 `node_modules`를 이미지에서 제외한다.
+- **공통**: `.env` 값(비밀번호, 사용자 이름 등)에 큰따옴표, 백슬래시, 달러 기호를 쓸 수 없다. 생성 시 `GENERATION400_14`로 거부된다. 이 제한은 Spring 프로젝트에도 똑같이 적용된다.

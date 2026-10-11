@@ -1,5 +1,6 @@
 package com.infragen.infragen.domain.generation.generator.application;
 
+import java.util.LinkedHashMap;
 import java.util.Optional;
 import java.util.SequencedMap;
 
@@ -30,6 +31,19 @@ public interface ApplicationEnvMapper {
      * @return 변수 이름과 값. 출력은 map 순서를 따른다.
      */
     SequencedMap<String, String> databaseEnvironment(SequencedMap<ComponentType, DatabaseConnection> connections);
+
+    /**
+     * 컨테이너 안의 앱이 그래프에 입력한 포트로 listen하도록 CLOUD_DEPLOY에서 넘길 실행 변수를 만든다.
+     *
+     * <p>Compose가 포트를 그래프 포트로 연결하므로 앱이 다른 포트로 뜨면 접속이 끊긴다. 프레임워크가 포트를 따로 읽는
+     * 앱 타입만 재정의하고, 기본값은 변수를 만들지 않는다.
+     *
+     * @param port 그래프에 입력한 앱 포트
+     * @return 변수 이름과 값. 출력은 map 순서를 따른다.
+     */
+    default SequencedMap<String, String> cloudRuntimeEnvironment(int port) {
+        return new LinkedHashMap<>();
+    }
 
     /**
      * {@link #databaseEnvironment}가 DB가 여러 개라 변수를 만들지 않았을 때의 Compose 안내 주석을 만든다.

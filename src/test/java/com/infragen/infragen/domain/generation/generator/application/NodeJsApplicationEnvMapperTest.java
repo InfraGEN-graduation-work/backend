@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Optional;
 import java.util.SequencedMap;
 
@@ -25,6 +26,17 @@ class NodeJsApplicationEnvMapperTest {
 
         // then
         assertEquals(ComponentType.NODE_JS, applicationType);
+    }
+
+    @Test
+    @DisplayName("CLOUD 실행 변수로 그래프 포트를 PORT에 담는다")
+    void cloudRuntimeEnvironment_port_returnsPortVariable() {
+        // when
+        var environment = mapper.cloudRuntimeEnvironment(4000);
+
+        // then
+        assertEquals(List.of("PORT"), List.copyOf(environment.keySet()));
+        assertEquals("4000", environment.get("PORT"));
     }
 
     @Test

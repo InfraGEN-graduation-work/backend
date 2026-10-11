@@ -177,6 +177,7 @@ class TerraformIaCGeneratorTest {
             () -> assertTrueContains(first, "apply_ready=false"),
             () -> assertTrueContains(first, "aws_instance"),
             () -> assertTrueContains(first, "COPY app.jar app.jar"),
+            () -> assertFalse(fileContent(first, "docker-compose.cloud.yml").contains("      PORT: ")),
             () -> assertTrue(fileContent(first, "CLOUD_DEPLOY_WARNING.md")
                 .contains("외부 `.env`, `app.jar`, provider 자격증명을")),
             () -> assertFalse(allContent(first).contains("userpass12")),
@@ -809,6 +810,7 @@ class TerraformIaCGeneratorTest {
             () -> assertTrue(fileContent(bundle, ".dockerignore").contains(".env")),
             () -> assertTrue(fileContent(bundle, "docker-compose.cloud.yml").contains("${APP_PORT:-3000}:3000")),
             () -> assertTrue(fileContent(bundle, "docker-compose.cloud.yml").contains("MYSQL_HOST: mysql")),
+            () -> assertTrue(fileContent(bundle, "docker-compose.cloud.yml").contains("      PORT: \"3000\"\n")),
             () -> assertFalse(fileContent(bundle, "docker-compose.cloud.yml").contains("SPRING_")),
             () -> assertTrue(fileContent(bundle, "aws/terraform/variables.tf").contains("default     = 3000")),
             () -> assertFalse(allContent(bundle).contains("COPY app.jar"))

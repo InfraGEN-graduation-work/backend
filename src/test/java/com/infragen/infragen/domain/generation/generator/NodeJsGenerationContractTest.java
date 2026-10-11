@@ -112,6 +112,7 @@ class NodeJsGenerationContractTest {
         assertTrue(bundle.files().stream().noneMatch(file -> file.content().contains("Spring Boot")));
         String compose = fileContent(bundle, "cloud/docker-compose.cloud.yml");
         assertTrue(compose.contains("${APP_PORT:-3000}:3000"));
+        assertTrue(compose.contains("      PORT: \"3000\"\n"));
         assertTrue(compose.contains("MYSQL_HOST: mysql"));
         assertFalse(compose.contains("SPRING_"));
     }

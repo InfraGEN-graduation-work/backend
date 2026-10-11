@@ -24,6 +24,14 @@ public class NodeJsApplicationEnvMapper implements ApplicationEnvMapper {
         return ComponentType.NODE_JS;
     }
 
+    /** Node.js 앱은 관례상 {@code PORT}로 listen 포트를 읽으므로 그래프 포트를 넘긴다. */
+    @Override
+    public SequencedMap<String, String> cloudRuntimeEnvironment(int port) {
+        SequencedMap<String, String> environment = new LinkedHashMap<>();
+        environment.put("PORT", String.valueOf(port));
+        return environment;
+    }
+
     @Override
     public SequencedMap<String, String> databaseEnvironment(
         SequencedMap<ComponentType, DatabaseConnection> connections

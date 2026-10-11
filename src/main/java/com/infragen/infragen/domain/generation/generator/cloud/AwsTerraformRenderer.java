@@ -122,7 +122,7 @@ public class AwsTerraformRenderer implements CloudTerraformRenderer {
               }
 
               ingress {
-                description = "Spring Boot 애플리케이션"
+                description = "애플리케이션"
                 from_port   = var.app_port
                 to_port     = var.app_port
                 protocol    = "tcp"
@@ -238,12 +238,12 @@ public class AwsTerraformRenderer implements CloudTerraformRenderer {
 
             variable "aws_app_cidr" {
               type        = string
-              description = "Spring Boot 애플리케이션 접근을 허용할 CIDR 블록"
+              description = "애플리케이션 접근을 허용할 CIDR 블록"
             }
 
             variable "app_port" {
               type        = number
-              description = "파싱된 그래프의 Spring Boot 애플리케이션 포트"
+              description = "파싱된 그래프의 애플리케이션 포트"
               default     = %d
             }
             """.formatted(applicationPort);

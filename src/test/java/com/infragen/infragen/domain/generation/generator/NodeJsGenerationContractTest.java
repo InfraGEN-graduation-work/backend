@@ -109,6 +109,7 @@ class NodeJsGenerationContractTest {
         String warning = fileContent(bundle, "cloud/CLOUD_DEPLOY_WARNING.md");
         assertTrue(warning.contains("`package.json`, `package-lock.json`, 앱 파일"));
         assertFalse(warning.contains("app.jar"));
+        assertTrue(bundle.files().stream().noneMatch(file -> file.content().contains("Spring Boot")));
         String compose = fileContent(bundle, "cloud/docker-compose.cloud.yml");
         assertTrue(compose.contains("${APP_PORT:-3000}:3000"));
         assertTrue(compose.contains("MYSQL_HOST: mysql"));

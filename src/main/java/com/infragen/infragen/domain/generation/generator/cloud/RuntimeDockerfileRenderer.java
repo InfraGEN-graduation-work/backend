@@ -15,6 +15,13 @@ public interface RuntimeDockerfileRenderer {
     ComponentType getApplicationType();
 
     /**
+     * 사용자가 빌드 컨텍스트에 직접 준비해야 하는 앱 파일을 경고 문서에 적을 문구로 반환한다.
+     *
+     * @return 마크다운 코드 표기를 포함한 파일 목록 문구. 예: {@code `app.jar`}
+     */
+    String requiredAppFiles();
+
+    /**
      * 컴파일이 끝난 산출물만 복사하는 runtime-only Dockerfile을 생성한다.
      *
      * @param context 선택된 애플리케이션 정보를 담은 CLOUD_DEPLOY 컨텍스트

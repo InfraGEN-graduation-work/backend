@@ -43,6 +43,11 @@ public class NodeJsRuntimeDockerfileRenderer implements RuntimeDockerfileRendere
     }
 
     @Override
+    public String requiredAppFiles() {
+        return "`package.json`, `package-lock.json`, 앱 파일";
+    }
+
+    @Override
     public IaCFileDTO.FileContentResDTO render(CloudDeployContext context) {
         NodeJsComponent application = nodeJsApplication(context);
         String nodeVersion = application.getNodeVersion();

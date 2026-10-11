@@ -17,6 +17,11 @@ public class SpringBootRuntimeDockerfileRenderer implements RuntimeDockerfileRen
         return ComponentType.SPRING_BOOT;
     }
 
+    @Override
+    public String requiredAppFiles() {
+        return "`app.jar`";
+    }
+
     /** 컴파일이 끝난 {@code app.jar}만 복사하는 Java 실행 이미지를 생성한다. */
     @Override
     public IaCFileDTO.FileContentResDTO render(CloudDeployContext context) {

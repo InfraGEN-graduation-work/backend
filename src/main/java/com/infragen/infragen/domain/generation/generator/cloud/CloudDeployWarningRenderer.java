@@ -1,8 +1,6 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
-import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
-import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 
 /** CLOUD_DEPLOY 산출물의 plan-only 실행 경계를 문서화한다. */
 public class CloudDeployWarningRenderer {
@@ -10,16 +8,10 @@ public class CloudDeployWarningRenderer {
     /**
      * provider 입력과 외부 runtime 파일이 필요한 비실행 scaffold 경고를 생성한다.
      *
-     * @param context 앱 타입에 맞는 준비물 안내를 고르는 CLOUD_DEPLOY 실행 정보
+     * @param requiredAppFiles 사용자가 직접 준비해야 하는 앱 파일 문구
      * @return CLOUD_DEPLOY 경고 문서
-     * @throws IaCGenerationException 안내 문구가 없는 앱 타입인 경우
      */
-    public IaCFileDTO.FileContentResDTO render(CloudDeployContext context) {
-        String appFiles = switch (context.applicationType()) {
-            case SPRING_BOOT -> "`app.jar`";
-            case NODE_JS -> "`package.json`, `package-lock.json`, 앱 파일";
-            default -> throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
-        };
+    public IaCFileDTO.FileContentResDTO render(String requiredAppFiles) {
         String content = """
             # CLOUD_DEPLOY 계획 전용 scaffold 안내
 
@@ -30,7 +22,7 @@ public class CloudDeployWarningRenderer {
               `terraform validate`를 실행해 주세요.
             - DB 비밀번호, JWT secret, runtime 자격증명 또는 이를 포함한 tfvars를 커밋하지 마세요.
             - 이 프로젝트는 `terraform apply`나 cloud account 조회를 실행하지 않습니다.
-            """.formatted(appFiles);
+            """.formatted(requiredAppFiles);
 
         return IaCFileDTO.FileContentResDTO.builder()
             .fileName("CLOUD_DEPLOY_WARNING.md")

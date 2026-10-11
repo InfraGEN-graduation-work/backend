@@ -34,6 +34,16 @@ class NodeJsRuntimeDockerfileRendererTest {
     }
 
     @Test
+    @DisplayName("경고 문서에 적을 준비물로 package.json, package-lock.json, 앱 파일을 안내한다")
+    void requiredAppFiles_returnsNodeFiles() {
+        // when
+        String requiredAppFiles = renderer.requiredAppFiles();
+
+        // then
+        assertEquals("`package.json`, `package-lock.json`, 앱 파일", requiredAppFiles);
+    }
+
+    @Test
     @DisplayName("운영 의존성만 설치하고 npm start로 실행하는 Dockerfile을 기준 출력과 같게 만든다")
     void render_nodeJsApplication_returnsExactDockerfile() {
         // given

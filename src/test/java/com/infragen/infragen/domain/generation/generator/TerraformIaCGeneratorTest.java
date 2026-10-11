@@ -177,6 +177,8 @@ class TerraformIaCGeneratorTest {
             () -> assertTrueContains(first, "apply_ready=false"),
             () -> assertTrueContains(first, "aws_instance"),
             () -> assertTrueContains(first, "COPY app.jar app.jar"),
+            () -> assertTrue(fileContent(first, "CLOUD_DEPLOY_WARNING.md")
+                .contains("외부 `.env`, `app.jar`, provider 자격증명을")),
             () -> assertFalse(allContent(first).contains("userpass12")),
             () -> assertFalse(allContent(first).contains("rootpass12")),
             () -> assertFalseContainsAny(first,

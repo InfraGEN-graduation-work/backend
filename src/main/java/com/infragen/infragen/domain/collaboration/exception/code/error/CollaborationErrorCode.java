@@ -18,6 +18,11 @@ public enum CollaborationErrorCode implements BaseErrorCode {
             "협업 operation payload가 올바르지 않습니다.",
             "COLLAB400_2"
     ),
+    INVALID_CURSOR(
+            HttpStatus.BAD_REQUEST,
+            "협업 커서 형식이 올바르지 않습니다.",
+            "COLLAB400_3"
+    ),
     OPERATION_ID_REUSED(
             HttpStatus.CONFLICT,
             "이미 다른 내용으로 사용된 operationId입니다.",

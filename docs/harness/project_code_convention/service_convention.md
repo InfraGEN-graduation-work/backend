@@ -27,7 +27,7 @@ Service는 애플리케이션 유스케이스와 트랜잭션 경계를 담당�
 
 Service가 하는 일: 유스케이스 실행과 흐름 조정, Repository를 통한 조회와 저장, 트랜잭션 경계 설정, 비즈니스 예외 발생, 여러 도메인 객체의 작업 조합
 
-Service가 하지 않는 일: HTTP 요청·응답 처리, `ResponseEntity` 생성, Swagger 문서화, validation annotation 정의, 단순 객체 매핑 구현이나 DTO 조립 반복
+Service가 하지 않는 일: HTTP 요청·응답 처리, Swagger 문서화, validation annotation 정의, 단순 객체 매핑 구현이나 DTO 조립 반복
 
 ## 의존성
 
@@ -37,7 +37,7 @@ Service가 하지 않는 일: HTTP 요청·응답 처리, `ResponseEntity` 생�
 
 ## 예외와 반환
 
-- 조회 실패나 규칙 위반은 도메인 예외로 던지고, 응답 변환은 전역 예외 처리기에 맡긴다. `IllegalArgumentException`을 비즈니스 예외 대용으로 남용하지 않는다.
+- 조회 실패나 규칙 위반은 도메인 예외로 던지고, 응답 변환은 전역 예외 처리기에 맡긴다. 예외 코드와 사용 책임은 [exception_convention.md](./exception_convention.md)를 따른다.
 - Repository 결과에 무조건 `.get()`을 호출하지 않는다.
 - Entity를 Controller에 직접 반환하지 않는다. 생성은 식별자나 결과 DTO를, 응답이 필요 없는 수정과 삭제는 `void`를 반환한다.
 

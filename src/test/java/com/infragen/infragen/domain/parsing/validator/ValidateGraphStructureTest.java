@@ -1,15 +1,18 @@
 package com.infragen.infragen.domain.parsing.validator;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
 import com.infragen.infragen.domain.parsing.dto.request.NodeDTO;
@@ -179,6 +182,48 @@ class ValidateGraphStructureTest {
     }
 
     @Test
+    @DisplayName("nodes에 null 원소 — PARSING400_28")
+    void validate_NullNodeElement_Throws() {
+        // given
+        List<NodeDTO> nodes = Arrays.asList(mysqlNode("node-1"), null);
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> validateGraphStructure.validate(nodes, List.of())
+        );
+
+        // then
+        assertAll(
+            () -> assertEquals(ParsingErrorCode.NULL_GRAPH_ELEMENT, exception.getCode()),
+            () -> assertEquals(HttpStatus.BAD_REQUEST, exception.getCode().getHttpStatus())
+        );
+    }
+
+    @Test
+    @DisplayName("edges에 null 원소 — PARSING400_28")
+    void validate_NullEdgeElement_Throws() {
+        // given
+        List<NodeDTO> nodes = List.of(
+            mysqlNode("node-1"),
+            springBootNode("node-2")
+        );
+        List<EdgeDTO> edges = Arrays.asList(edge("node-1", "node-2"), null);
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> validateGraphStructure.validate(nodes, edges)
+        );
+
+        // then
+        assertAll(
+            () -> assertEquals(ParsingErrorCode.NULL_GRAPH_ELEMENT, exception.getCode()),
+            () -> assertEquals(HttpStatus.BAD_REQUEST, exception.getCode().getHttpStatus())
+        );
+    }
+
+    @Test
     @DisplayName("앱 하나에 같은 타입 DB 둘 연결 — PARSING400_25")
     void validate_SameTypeDatabasesToOneApplication_Throws() {
         // given
@@ -263,6 +308,101 @@ class ValidateGraphStructureTest {
 
         // when
         Runnable validation = () -> validateGraphStructure.validate(nodes, edges);
+
+        // then
+        assertDoesNotThrow(validation::run);
+    }
+
+    @Test
+    @DisplayName("연결 없이 놓인 MySQL 둘 — PARSING400_29")
+    void validate_SameTypeDatabasesWithoutEdges_Throws() {
+        // given
+        List<NodeDTO> nodes = List.of(
+            mysqlNode("mysql-1"),
+            mysqlNode("mysql-2")
+        );
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> validateGraphStructure.validate(nodes, List.of())
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.DUPLICATE_COMPONENT_TYPE, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("서로 다른 앱에 각각 연결된 MySQL 둘 — PARSING400_29")
+    void validate_SameTypeDatabasesToDifferentApplications_Throws() {
+        // given
+        List<NodeDTO> nodes = List.of(
+            mysqlNode("mysql-1"),
+            mysqlNode("mysql-2"),
+            springBootNode("app-1"),
+            springBootNode("app-2")
+        );
+        List<EdgeDTO> edges = List.of(
+            edge("mysql-1", "app-1"),
+            edge("mysql-2", "app-2")
+        );
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> validateGraphStructure.validate(nodes, edges)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.DUPLICATE_COMPONENT_TYPE, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("연결 없이 놓인 Redis 둘 — PARSING400_29")
+    void validate_SameTypeCachesWithoutEdges_Throws() {
+        // given
+        List<NodeDTO> nodes = List.of(
+            redisNode("redis-1"),
+            redisNode("redis-2")
+        );
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> validateGraphStructure.validate(nodes, null)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.DUPLICATE_COMPONENT_TYPE, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("연결 없이 놓인 MySQL과 PostgreSQL — 통과")
+    void validate_DifferentTypeDatabasesWithoutEdges_DoesNotThrow() {
+        // given
+        List<NodeDTO> nodes = List.of(
+            mysqlNode("mysql"),
+            postgresqlNode("postgres")
+        );
+
+        // when
+        Runnable validation = () -> validateGraphStructure.validate(nodes, List.of());
+
+        // then
+        assertDoesNotThrow(validation::run);
+    }
+
+    @Test
+    @DisplayName("애플리케이션 둘은 타입 중복 검사 대상이 아니다 — 통과")
+    void validate_MultipleApplications_DoesNotThrow() {
+        // given
+        List<NodeDTO> nodes = List.of(
+            springBootNode("app-1"),
+            springBootNode("app-2")
+        );
+
+        // when
+        Runnable validation = () -> validateGraphStructure.validate(nodes, List.of());
 
         // then
         assertDoesNotThrow(validation::run);

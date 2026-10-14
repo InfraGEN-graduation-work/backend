@@ -48,9 +48,9 @@ Collaboration
 - `auth`: 일반·소셜 로그인, 회원가입 위임, JWT 발급, refresh token·blacklist. 협력: `member` Service, `KakaoOAuthClient`, `JwtUtil`, `RedisUtil`
 - `member`: 회원 생성·조회와 회원 Entity/Repository. 협력: `auth` Service, `MemberConverter`
 - `project`: 프로젝트 graph, history, generated file, 협업자와 초대의 저장·조회·삭제. 협력: `member` 소유권 조회
-- `parsing`: raw graph의 component type, port, edge, cycle, 의존 타입 중복 검증과 내부 component 변환
+- `parsing`: raw graph의 component type, port, edge, cycle, 의존 타입 중복, 같은 타입 DB·캐시 노드 중복 검증과 내부 component 변환
 - `generation`: 출력 형식별 generator 선택, IaC 산출물 생성, 생성 history 저장 흐름. 협력: `parsing`, `project`
-- `collaboration`: project별 operation 계약, 권한 연결, serverVersion, materialized graph, snapshot/replay. 협력: `project`, `member`, STOMP infrastructure
+- `collaboration`: project별 operation 계약, 권한 연결, serverVersion, materialized graph, snapshot/replay, 저장하지 않는 커서 공유(연결별 표시 상태와 종료 시 숨김). 협력: `project`, `member`, STOMP infrastructure
 - `global`: 인증 filter, 공통 응답/예외, Redis·Jackson·RestClient 등 infrastructure. domain 업무 규칙은 소유하지 않는다.
 
 도메인 간 호출은 유스케이스 조정에 필요한 범위로 제한한다.
@@ -60,24 +60,25 @@ Collaboration
 - Project 저장, 조회: `ProjectController` → `ProjectCommandService` / `ProjectQueryService` → project Repository/Converter
 - Generate: `GenerationController` → `GenerationCommandService` → `ParsingService` → `IaCGenerationService` → history 저장
 - Collaboration operation: `CollaborationOperationMessageController` → `CollaborationOperationCommandService` → version·materialization·operation log → STOMP broadcast
-- Collaboration reconnect: `CollaborationSnapshotController` → `CollaborationSnapshotQueryService` → snapshot/replay 또는 materialized graph fallback
+- Collaboration cursor: `CollaborationCursorMessageController` → `CollaborationCursorCommandService`(읽기 권한 → 좌표 검증 → 연결별 `cursorId`) → `CollaborationCursorSessionService`(표시 중인 project 기억) → STOMP broadcast. 연결 종료는 `CollaborationCursorSessionListener`가 `SessionDisconnectEvent`로 받아 숨김을 broadcast한다. operation log, version, snapshot은 호출하지 않는다.
+- Collaboration reconnect: `CollaborationSnapshotController` → `CollaborationSnapshotQueryService`(읽기 전용 `REPEATABLE_READ`, state `serverVersion`을 응답 기준으로 필요한 구간의 operation만 조회) → snapshot/replay 또는 materialized graph fallback. 이미 최신인 요청은 replay를 조회하지 않고, replay 구간에 누락 version이 있으면 snapshot 대신 현재 graph로 복원한다.
 - 일반 로그인: `AuthController` → `AuthService` → `MemberQueryService` → `JwtUtil`·`RedisUtil`
 - 소셜 로그인: `AuthController` → `AuthService` → `KakaoOAuthClient` → member 조회·생성 → token 발급
 - 인증된 요청: `JwtExceptionFilter` → `JwtAuthFilter` → `CustomUserDetailsService` → `SecurityContext`
 
 ## 주요 인터페이스와 확장 지점
 
-- `ComponentParser` (`MySQLParser`, `PostgreSQLParser`, `MongoDBParser`, `RedisParser`, `SpringBootParser`): component별 node property 검증과 `BaseComponent` 구현체 변환
+- `ComponentParser` (`MySQLParser`, `PostgreSQLParser`, `MongoDBParser`, `RedisParser`, `SpringBootParser`, `NodeJsParser`): component별 node property 검증과 `BaseComponent` 구현체 변환
 - `IaCGenerator` (`LocalIaCGenerator`: `DockerComposeIaCGenerator`, `TargetAwareIaCGenerator`: `TerraformIaCGenerator`): `ParsingResultDTO`를 `OutputFormat`별 file bundle로 변환
-- `ComposeServiceRenderer` (MySQL, PostgreSQL, MongoDB, Redis): LOCAL_DEV dependency의 Compose service block 생성
+- `ComposeServiceRenderer` (MySQL, PostgreSQL, MongoDB, Redis): LOCAL_DEV dependency의 Compose service block 생성, 컨테이너 실행 변수(DB 비밀번호 등)를 앱 연결 여부와 무관하게 `.env`에 등록
 - `HostAppEnvContributor` (MySQL, PostgreSQL, MongoDB, Redis): 호스트 실행 앱의 `.env`용 타입별 중립 변수와 DB 접속 정보(`DatabaseConnection`, 관계형 여부 포함) 제공. `DockerComposeIaCGenerator`는 앱별로 접속 정보를 모아 앱 타입별 `ApplicationEnvMapper`에 넘기고, 단일 DB 판단은 매퍼가 한다.
-- `ApplicationEnvMapper` (Spring Boot): 앱 타입별로 DB 접속 정보를 프레임워크 변수로 바꾼다. 입력은 `SequencedMap<ComponentType, DatabaseConnection>`이고 키는 그 연결을 낸 노드의 종류다(같은 타입 DB 중복은 parsing이 거부하므로 앱마다 종류당 하나). 관계형 DB는 하나일 때만 `SPRING_DATASOURCE_*`로, 비관계형 DB는 앱 매퍼 안의 종류별 규칙표(Spring은 `MONGODB` → `SPRING_MONGODB_*`)로 매핑한다. 규칙표에 없는 비관계형 종류는 `INVALID_COMPONENT_STATE`로 거부하고, 관계형 DB가 둘 이상이면 안내 주석을 만든다. LOCAL_DEV generator와 CLOUD_DEPLOY renderer가 함께 쓴다.
+- `ApplicationEnvMapper` (Spring Boot, Node.js): 앱 타입별로 DB 접속 정보를 프레임워크 변수로 바꾼다. 입력은 `SequencedMap<ComponentType, DatabaseConnection>`이고 키는 그 연결을 낸 노드의 종류다(같은 타입 DB 중복은 parsing이 거부하므로 앱마다 종류당 하나). 관계형 DB는 하나일 때만 `SPRING_DATASOURCE_*`로, 비관계형 DB는 앱 매퍼 안의 종류별 규칙표(Spring은 `MONGODB` → `SPRING_MONGODB_*`)로 매핑한다. 규칙표에 없는 비관계형 종류는 `INVALID_COMPONENT_STATE`로 거부하고, 관계형 DB가 둘 이상이면 안내 주석을 만든다. LOCAL_DEV generator와 CLOUD_DEPLOY renderer가 함께 쓴다. Node.js 매퍼는 프레임워크 변수가 없어 `databaseEnvironment`가 빈 결과를 돌려주며, 등록되어 있어야 "매퍼 없음" 경고가 나지 않는다. 컨테이너 앱이 그래프 포트로 listen하도록 CLOUD Compose에만 넘길 실행 변수는 기본 메서드 `cloudRuntimeEnvironment(port)`가 정하고(기본값 빈 결과), Node.js만 `PORT`를 반환한다. `CloudComposeRenderer`가 environment 맨 앞에 출력한다.
 - `CloudComposeServiceRenderer` (MySQL, PostgreSQL, MongoDB, Redis): CLOUD_DEPLOY Compose bootstrap의 dependency block 생성, 앱 컨테이너용 타입별 중립 변수와 DB 접속 정보(`DatabaseConnection`, 평문 값) 제공. `CloudComposeRenderer`는 이를 `ComponentType` 순서로 모아 앱 타입별 `ApplicationEnvMapper`에 넘기고, 매퍼가 돌려준 값은 YAML 출력 시 따옴표로 감싼다.
-- `RuntimeDockerfileRenderer` (`SpringBootRuntimeDockerfileRenderer`): CLOUD_DEPLOY runtime Dockerfile을 앱 타입별로 생성한다. `TerraformIaCGenerator`가 `context.applicationType()`으로 구현을 고르고, 없으면 `INVALID_COMPONENT_STATE`로 거부한다.
+- `RuntimeDockerfileRenderer` (`SpringBootRuntimeDockerfileRenderer`, `NodeJsRuntimeDockerfileRenderer`): CLOUD_DEPLOY runtime Dockerfile을 앱 타입별로 생성한다. `TerraformIaCGenerator`가 `context.applicationType()`으로 구현을 고르고, 없으면 `INVALID_COMPONENT_STATE`로 거부한다. 사용자가 빌드 컨텍스트에 준비할 앱 파일 문구는 구현체의 `requiredAppFiles()`가 정하고 `CloudDeployWarningRenderer`는 그 문구를 받아 끼우기만 한다(앱 타입 분기 없음). Dockerfile과 함께 빌드 컨텍스트에 둘 파일(예: Node.js의 `.dockerignore`)이 있으면 `renderFiles`를 재정의한다. 기본 구현은 `render` 결과 하나만 돌려준다.
 - `OAuth2UserInfo` (`KakaoUserInfoDTO`): provider별 사용자 응답을 공통 social identity로 제공
 - `BaseErrorCode` / `BaseSuccessCode` (domain·general enum): 공통 HTTP status, code, message 계약
 - `VolumeComponent` (`MySQLComponent`, `PostgreSQLComponent`, `MongoDBComponent`, `RedisComponent`): volume 정보를 제공하는 component marker
-- `ApplicationComponent` (`SpringBootComponent`): 앱 타입 DTO의 공통 상위 클래스. renderer가 앱 타입을 구분하지 않고 쓰는 값(`getPort()`)만 두고 타입 전용 속성은 하위 DTO가 가진다.
+- `ApplicationComponent` (`SpringBootComponent`, `NodeJsComponent`): 앱 타입 DTO의 공통 상위 클래스. renderer가 앱 타입을 구분하지 않고 쓰는 값(`getPort()`)만 두고 타입 전용 속성은 하위 DTO가 가진다.
 
 사용 규칙:
 
@@ -91,7 +92,7 @@ Collaboration
 
 Parsing은 그래프 정합성을 판단하지만 Compose나 Terraform 문법을 생성하지 않는다.
 
-- `ValidateGraphStructure`: node id, component type, edge endpoint, dependency 방향, cycle, 애플리케이션별 같은 타입 의존 중복 검증
+- `ValidateGraphStructure`: node id, component type, edge endpoint, dependency 방향, cycle, 애플리케이션별 같은 타입 의존 중복 검증, 그래프 전체 같은 타입 DB·캐시 노드 중복 검증(`PARSING400_29`)
 - `ComponentParser`: component별 property와 필수값 검증, component DTO 생성
 - `ParsingService`: parser registry, port range·중복 검증, 결과 조립
 - `ParsingResultConverter`: 생성 결과에서 component를 type/class 기준으로 추출
@@ -116,14 +117,16 @@ Generator는 parsing 결과를 재검증하지 않고 출력 형식의 renderer�
 다음은 현재 코드의 사실이며, 목표 계약으로 추정해 바꾸지 않는다.
 
 1. Parsing component DTO, Project 저장 request, `ProjectNode` Entity는 문자열 `nodeId`를 쓰고 `nodeName`은 표시용이다. Project node response는 canvas `nodeId`와 내부 DB `Long id`를 함께 제공하고, edge response endpoint는 문자열 nodeId다.
-2. parser·generator는 MySQL, PostgreSQL, MongoDB, Redis, Spring Boot와 단일 앱 리버스 프록시용 NGINX를 지원한다. Apache는 enum에만 있다. 애플리케이션의 관계형 DB 의존이 둘 이상이면 LOCAL_DEV와 CLOUD_DEPLOY 모두 앱 타입별 DataSource 변수 대신 Compose 안내 주석을 만든다.
+2. parser·generator는 MySQL, PostgreSQL, MongoDB, Redis, Spring Boot, Node.js와 단일 앱 리버스 프록시용 NGINX를 지원한다. Apache는 enum에만 있다. 애플리케이션의 관계형 DB 의존이 둘 이상이면 LOCAL_DEV와 CLOUD_DEPLOY 모두 앱 타입별 DataSource 변수 대신 Compose 안내 주석을 만든다.
 3. Parsing component DTO(`BaseComponent` 상속)는 HTTP 응답으로 노출되지 않는 내부 전달 객체라 `dto_convention.md`의 `ResDTO` 내부 record 구조를 따르지 않는다.
 4. Project graph 수정은 patch merge가 아니라 기존 edge·node를 삭제한 뒤 전체 graph를 교체한다.
-5. LOCAL_DEV는 Spring Boot를 호스트에서 실행하고 의존 인프라만 Compose service로 생성한다.
+5. LOCAL_DEV는 Spring Boot와 Node.js 앱을 호스트에서 실행하고 의존 인프라만 Compose service로 생성한다. Node.js 앱은 `.env`를 자동으로 읽지 않으므로 앱이 직접 로드한다(`node --env-file` 또는 dotenv).
 6. CLOUD_DEPLOY Terraform은 plan-only scaffold이며 `terraform apply`, 실제 cloud account 조회, provider credential을 처리하지 않는다.
 7. `MemberQueryService`, `MemberCommandService`에는 class-level transaction annotation이 있다. 새 코드는 `service_convention.md`의 method-level 규칙을 따른다.
-8. STOMP 협업 controller(`CollaborationOperationMessageController`, `CollaborationSnapshotController`)와 `HealthCheckController`는 Docs interface를 구현하지 않는다. 나머지 REST controller는 `*ControllerDocs`를 구현한다.
+8. STOMP 협업 controller(`CollaborationOperationMessageController`, `CollaborationCursorMessageController`, `CollaborationSnapshotController`)와 `HealthCheckController`는 Docs interface를 구현하지 않는다. 나머지 REST controller는 `*ControllerDocs`를 구현한다.
 9. `GeneralExceptionAdvice`의 `ResponseEntity`는 global 예외 변환 경계의 구현이며, 일반 controller의 정상 응답 규칙과 다르다.
+10. PUT·metadata 변경은 version을 올리지만 operation 행 없이 같은 version의 snapshot만 저장한다. 재접속 delta 구간의 연속성 검사(`(afterVersion, serverVersion]`의 log 개수 비교)는 snapshot보다 오래된 요청이 full 경로로 간다는 전제에 의존하므로, snapshot 보존 정책을 바꾸면 이 전제를 다시 확인한다.
+11. `.env` 값에 큰따옴표, 백슬래시, 달러 기호가 있으면 `ComposeYamlSupport.escapeEnvValue`가 `GENERATION400_14`로 거부한다. 이스케이프 규칙은 Compose 전용이라 Node.js가 값을 다르게 읽기 때문이다. 이 메서드는 LOCAL `.env` 생성에서만 쓰이며, CLOUD Compose의 `${...}` 참조는 거치지 않는다.
 
 ## 새 기능 추가 시 확인 순서
 

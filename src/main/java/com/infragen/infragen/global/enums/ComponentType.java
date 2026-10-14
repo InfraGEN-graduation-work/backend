@@ -16,7 +16,8 @@ public enum ComponentType {
 
     // 애플리케이션
     SPRING_BOOT(ComponentCategory.APPLICATION, 3),
-    
+    NODE_JS(ComponentCategory.APPLICATION, 3),
+
     // 웹 서버
     NGINX(ComponentCategory.WEB_SERVER, 4),
     APACHE(ComponentCategory.WEB_SERVER, 4),

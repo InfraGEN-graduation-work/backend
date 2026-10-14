@@ -55,6 +55,21 @@ public enum IaCGenerationErrorCode implements BaseErrorCode {
         HttpStatus.BAD_REQUEST,
         "동일한 유형의 Cloud dependency 설정이 중복되었습니다.",
         "GENERATION400_9"
+    ),
+    MULTIPLE_APPLICATION_COMPONENTS(
+        HttpStatus.BAD_REQUEST,
+        "Cloud 배포는 애플리케이션 노드 하나만 지원합니다.",
+        "GENERATION400_10"
+    ),
+    UNSUPPORTED_ENV_VALUE(
+        HttpStatus.BAD_REQUEST,
+        "환경변수 값에 줄바꿈이나 NUL 문자를 사용할 수 없습니다.",
+        "GENERATION400_13"
+    ),
+    UNSUPPORTED_ENV_CHARACTER(
+        HttpStatus.BAD_REQUEST,
+        "환경변수 값에 큰따옴표, 백슬래시, 달러 기호를 사용할 수 없습니다.",
+        "GENERATION400_14"
     );
 
     private final HttpStatus httpStatus;

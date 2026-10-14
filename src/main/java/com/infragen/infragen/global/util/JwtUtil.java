@@ -3,6 +3,7 @@ package com.infragen.infragen.global.util;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Date;
+import java.util.UUID;
 
 import javax.crypto.SecretKey;
 
@@ -45,6 +46,8 @@ public class JwtUtil {
         Date now = new Date();
         Date validity = new Date(now.getTime() + expiration.toMillis());
         return Jwts.builder()
+                // iat가 초 단위라 같은 초에 발급한 토큰이 같은 문자열이 되지 않도록 발급마다 고유 jti를 넣는다.
+                .id(UUID.randomUUID().toString())
                 .issuer(issuer)
                 .subject(memberId.toString())
                 .issuedAt(now)

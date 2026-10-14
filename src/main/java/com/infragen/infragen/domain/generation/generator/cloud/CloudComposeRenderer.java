@@ -73,7 +73,7 @@ public class CloudComposeRenderer {
         if (context.nginx().isEmpty()) {
             content.append("    ports:\n");
             content.append(String.format(
-                "      - \"${APP_PORT:-%d}:%d\"%n",
+                "      - \"${APP_PORT:-%d}:%d\"\n",
                 context.applicationPort(),
                 context.applicationPort()
             ));
@@ -188,6 +188,9 @@ public class CloudComposeRenderer {
         boolean databaseEnvironmentPut = false;
 
         StringBuilder environment = new StringBuilder();
+        // 앱이 그래프 포트로 listen해야 포트 매핑이 맞으므로 앱 실행 변수는 맨 앞에 둔다.
+        mapper.cloudRuntimeEnvironment(context.applicationPort()).forEach((name, value) -> environment
+            .append("      ").append(name).append(": \"").append(value).append("\"\n"));
         for (CloudComposeServiceRenderer renderer : serviceRenderers) {
             if (!renderer.isEnabled(context)) {
                 continue;

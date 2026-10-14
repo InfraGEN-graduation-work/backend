@@ -22,6 +22,16 @@ class SpringBootApplicationEnvMapperTest {
     private final SpringBootApplicationEnvMapper mapper = new SpringBootApplicationEnvMapper();
 
     @Test
+    @DisplayName("CLOUD 실행 변수를 만들지 않아 Spring 산출물이 바뀌지 않는다")
+    void cloudRuntimeEnvironment_returnsEmpty() {
+        // when
+        var environment = mapper.cloudRuntimeEnvironment(8080);
+
+        // then
+        assertTrue(environment.isEmpty());
+    }
+
+    @Test
     @DisplayName("Spring Boot 앱 타입을 지원한다")
     void supportsSpringBoot() {
         assertEquals(ComponentType.SPRING_BOOT, mapper.getApplicationType());

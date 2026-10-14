@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -29,14 +30,19 @@ import java.util.concurrent.ConcurrentHashMap;
 public class StompAuthChannelInterceptor implements ChannelInterceptor {
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
-    private static final Pattern OPERATIONS_DESTINATION =
-            Pattern.compile("^/app/projects/(\\d+)/operations$");
-    private static final Pattern OPERATIONS_TOPIC_DESTINATION =
-            Pattern.compile("^/topic/projects/(\\d+)/operations$");
-    private static final Pattern ROOM_RESYNC_DESTINATION =
-            Pattern.compile("^/topic/projects/(\\d+)/resync$");
-    private static final Pattern OPERATION_RESULT_DESTINATION =
-            Pattern.compile("^/user/queue/projects/(\\d+)/operation-results$");
+    // 명령별로 허용하는 destination. 경로를 추가하거나 막을 때는 이 목록만 바꾼다.
+    private static final Map<StompCommand, List<Pattern>> ALLOWED_DESTINATIONS = Map.of(
+            StompCommand.SEND, List.of(
+                    Pattern.compile("^/app/projects/(\\d+)/operations$"),
+                    Pattern.compile("^/app/projects/(\\d+)/cursors$")
+            ),
+            StompCommand.SUBSCRIBE, List.of(
+                    Pattern.compile("^/topic/projects/(\\d+)/operations$"),
+                    Pattern.compile("^/topic/projects/(\\d+)/resync$"),
+                    Pattern.compile("^/user/queue/projects/(\\d+)/operation-results$"),
+                    Pattern.compile("^/topic/projects/(\\d+)/cursors$")
+            )
+    );
 
     private final StompAccessTokenAuthenticator tokenAuthenticator;
     private final ProjectAccessService projectAccessService;
@@ -82,19 +88,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         Authentication refreshedAuthentication = tokenAuthenticator.authenticate(accessToken(authentication));
         sessionAuthentications.put(accessor.getSessionId(), refreshedAuthentication);
         accessor.setUser(refreshedAuthentication);
-        boolean allowedDestination = switch (accessor.getCommand()) {
-            case SEND -> matches(OPERATIONS_DESTINATION, destination);
-            case SUBSCRIBE -> matches(OPERATIONS_TOPIC_DESTINATION, destination)
-                    || matches(ROOM_RESYNC_DESTINATION, destination)
-                    || matches(OPERATION_RESULT_DESTINATION, destination);
-            default -> false;
-        };
-
-        if (!allowedDestination) {
-            throw new IllegalArgumentException("지원하지 않는 STOMP destination입니다.");
-        }
-
-        Long projectId = extractProjectId(destination);
+        Long projectId = extractProjectId(accessor.getCommand(), destination);
         CustomUserDetails userDetails = getUserDetails(accessor);
 
         // SEND 쓰기 권한은 operation service에서 검사하고 사용자 전용 오류 응답으로 반환한다.
@@ -104,23 +98,17 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         }
     }
 
-    private boolean matches(Pattern pattern, String destination) {
-        return destination != null && pattern.matcher(destination).matches();
-    }
-
-    private Long extractProjectId(String destination) {
-        Pattern pattern = matches(OPERATIONS_DESTINATION, destination)
-                ? OPERATIONS_DESTINATION
-                : matches(OPERATIONS_TOPIC_DESTINATION, destination)
-                        ? OPERATIONS_TOPIC_DESTINATION
-                        : matches(ROOM_RESYNC_DESTINATION, destination)
-                                ? ROOM_RESYNC_DESTINATION
-                                : OPERATION_RESULT_DESTINATION;
-        Matcher matcher = pattern.matcher(destination);
-        if (!matcher.matches()) {
-            throw new IllegalArgumentException("지원하지 않는 STOMP destination입니다.");
+    // 명령에 허용된 destination이 아니면 거부하고, 허용되면 경로의 project ID를 돌려준다.
+    private Long extractProjectId(StompCommand command, String destination) {
+        if (destination != null) {
+            for (Pattern pattern : ALLOWED_DESTINATIONS.getOrDefault(command, List.of())) {
+                Matcher matcher = pattern.matcher(destination);
+                if (matcher.matches()) {
+                    return Long.valueOf(matcher.group(1));
+                }
+            }
         }
-        return Long.valueOf(matcher.group(1));
+        throw new IllegalArgumentException("지원하지 않는 STOMP destination입니다.");
     }
 
     private CustomUserDetails getUserDetails(StompHeaderAccessor accessor) {

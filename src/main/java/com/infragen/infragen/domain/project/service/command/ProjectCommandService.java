@@ -80,6 +80,10 @@ public class ProjectCommandService {
         return ProjectConverter.toCreateProjectResDTO(savedProject);
     }
 
+    /**
+     * 프로젝트 graph 전체를 교체한다. OWNER와 EDITOR가 호출할 수 있다.
+     * 이름·설명은 OWNER의 요청만 반영하고, EDITOR의 요청은 기존 값을 유지한다.
+     */
     @Transactional
     public ProjectResDTO.ProjectDetailResDTO updateProject(
         Long projectId,
@@ -89,7 +93,7 @@ public class ProjectCommandService {
         log.info("프로젝트 수정 요청: id={}, memberId={}", projectId, memberId);
 
         // version state보다 project를 먼저 잠가 metadata·삭제와 잠금 순서를 맞춘다.
-        projectRepository.findByIdForUpdate(projectId)
+        Project lockedProject = projectRepository.findByIdForUpdate(projectId)
                 .orElseThrow(() -> new ProjectException(ProjectErrorCode.PROJECT_NOT_FOUND));
         Project project = projectQueryService.getWriteableProject(projectId, memberId);
 
@@ -98,8 +102,11 @@ public class ProjectCommandService {
                 request.baseVersion()
         );
 
-        // 프로젝트 메타정보 수정
-        project.updateInfo(request.title(), request.description());
+        // 이름·설명은 OWNER 전용이다(updateMetadata와 동일). EDITOR가 보낸 값은 무시하고 기존 값을 보존한다.
+        // 잠근 엔티티로 판정해 소유권 이전과 직렬화한다.
+        if (memberId.equals(lockedProject.getMember().getId())) {
+            project.updateInfo(request.title(), request.description());
+        }
 
         // 외래키 제약조건 고려하여 기존 자식 데이터 일괄 삭제 (Edge 선삭제 -> Node 후삭제)
         projectEdgeRepository.deleteByProjectId(projectId);

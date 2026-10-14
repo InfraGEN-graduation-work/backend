@@ -8,20 +8,21 @@ public class CloudDeployWarningRenderer {
     /**
      * provider 입력과 외부 runtime 파일이 필요한 비실행 scaffold 경고를 생성한다.
      *
+     * @param requiredAppFiles 사용자가 직접 준비해야 하는 앱 파일 문구
      * @return CLOUD_DEPLOY 경고 문서
      */
-    public IaCFileDTO.FileContentResDTO render() {
+    public IaCFileDTO.FileContentResDTO render(String requiredAppFiles) {
         String content = """
             # CLOUD_DEPLOY 계획 전용 scaffold 안내
 
             - `apply_ready=false`
-            - 이 산출물은 사용자가 cloud 입력, 외부 `.env`, `app.jar`, provider 자격증명을
+            - 이 산출물은 사용자가 cloud 입력, 외부 `.env`, %s, provider 자격증명을
               별도로 제공하기 전까지 실행할 수 없습니다.
             - provider별 plan 전에 `terraform init -backend=false`, `terraform fmt`,
               `terraform validate`를 실행해 주세요.
             - DB 비밀번호, JWT secret, runtime 자격증명 또는 이를 포함한 tfvars를 커밋하지 마세요.
             - 이 프로젝트는 `terraform apply`나 cloud account 조회를 실행하지 않습니다.
-            """;
+            """.formatted(requiredAppFiles);
 
         return IaCFileDTO.FileContentResDTO.builder()
             .fileName("CLOUD_DEPLOY_WARNING.md")

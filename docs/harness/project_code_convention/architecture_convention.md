@@ -126,7 +126,7 @@ Generator는 parsing 결과를 재검증하지 않고 출력 형식의 renderer�
 8. STOMP 협업 controller(`CollaborationOperationMessageController`, `CollaborationCursorMessageController`, `CollaborationSnapshotController`)와 `HealthCheckController`는 Docs interface를 구현하지 않는다. 나머지 REST controller는 `*ControllerDocs`를 구현한다.
 9. `GeneralExceptionAdvice`의 `ResponseEntity`는 global 예외 변환 경계의 구현이며, 일반 controller의 정상 응답 규칙과 다르다.
 10. PUT·metadata 변경은 version을 올리지만 operation 행 없이 같은 version의 snapshot만 저장한다. 재접속 delta 구간의 연속성 검사(`(afterVersion, serverVersion]`의 log 개수 비교)는 snapshot보다 오래된 요청이 full 경로로 간다는 전제에 의존하므로, snapshot 보존 정책을 바꾸면 이 전제를 다시 확인한다.
-11. DB·Redis 노드의 사용자 이름과 비밀번호에 금지 문자(큰따옴표, 백슬래시, 달러 기호, 줄바꿈, NUL)가 있으면 parser가 `EnvValueValidator`로 파싱 단계에서 `PARSING400_33`으로 거부한다. 프로젝트 저장 경로는 검사하지 않는다. 생성 단계에서는 `ComposeYamlSupport.escapeEnvValue`가 마지막 방어선으로 `GENERATION400_13`, `GENERATION400_14`로 거부한다. 이스케이프 규칙은 Compose 전용이라 Node.js가 값을 다르게 읽기 때문이다. 이 메서드는 LOCAL `.env` 생성에서만 쓰이며, CLOUD Compose의 `${...}` 참조는 거치지 않는다.
+11. DB·Redis 노드의 사용자 이름과 비밀번호에 금지 문자(큰따옴표, 백슬래시, 달러 기호, 줄바꿈 `\n`·`\r`, NUL)가 있으면 parser가 `EnvValueValidator`로 파싱 단계에서 `PARSING400_33`으로 거부한다. 프로젝트 저장 경로는 검사하지 않는다. 생성 단계에서는 마지막 방어선으로 `ComposeYamlSupport.formatEnvFile`이 줄바꿈 `\n`·`\r`과 NUL을 `GENERATION400_13`으로 거부한다. `ComposeYamlSupport.escapeEnvValue`는 큰따옴표, 백슬래시, 달러 기호를 `GENERATION400_14`로 거부하며, 이스케이프하지 않고 거부하는 이유는 이스케이프 규칙이 Compose 전용이라 Node.js가 값을 다르게 읽기 때문이다. `escapeEnvValue`만 직접 호출하면 줄바꿈과 NUL은 검사되지 않는다. 두 메서드는 LOCAL `.env` 생성에서만 쓰이며, CLOUD Compose의 `${...}` 참조는 거치지 않는다.
 
 ## 새 기능 추가 시 확인 순서
 

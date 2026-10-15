@@ -52,4 +52,4 @@ InfraGEN은 사용자가 웹 캔버스에서 인프라 노드와 연결 관계�
   - `package.json`의 `start` 스크립트는 `exec node server.js`처럼 `exec`로 시작해야 한다. 그래야 `docker stop`의 종료 신호(SIGTERM)가 앱에 전달된다. 앱이 `process.on("SIGTERM", ...)`로 신호를 받아 정리하는 코드를 가져야 정리 작업이 실행된다.
   - CLOUD_DEPLOY의 Compose는 앱 컨테이너에 그래프에 입력한 포트를 `PORT` 환경변수로 전달한다. 앱은 `process.env.PORT`로 listen해야 포트 연결이 맞는다. LOCAL_DEV는 호스트에서 실행하므로 `PORT`를 전달하지 않고, 앱이 직접 맞춘다.
   - CLOUD_DEPLOY에서는 `cloud/` 폴더에 `package.json`, `package-lock.json`과 앱 파일을 둔다. 생성된 `.dockerignore`가 하위 폴더를 포함해 `.env`, `.env.*`, `.git`, `node_modules`를 이미지에서 제외한다.
-- **공통**: `.env` 값(비밀번호, 사용자 이름 등)에 큰따옴표, 백슬래시, 달러 기호를 쓸 수 없다. 생성 시 `GENERATION400_14`로 거부된다. 이 제한은 Spring 프로젝트에도 똑같이 적용된다.
+- **공통**: `.env` 값(비밀번호, 사용자 이름 등)에 큰따옴표, 백슬래시, 달러 기호를 쓸 수 없다. DB·Redis 노드의 사용자 이름과 비밀번호는 줄바꿈과 NUL도 쓸 수 없고, 생성 요청의 파싱 단계에서 `PARSING400_33`으로 거부된다. 프로젝트 저장 시점에는 검사하지 않는다. 생성 단계의 `GENERATION400_13`, `GENERATION400_14` 검사는 마지막 방어선으로 남는다. 이 제한은 Spring 프로젝트에도 똑같이 적용된다.

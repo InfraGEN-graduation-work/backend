@@ -163,6 +163,11 @@ public enum ParsingErrorCode implements BaseErrorCode {
             HttpStatus.BAD_REQUEST,
             "Node.js 버전은 숫자 형식이어야 합니다.",
             "PARSING400_32"
+    ),
+    UNSUPPORTED_ENV_VALUE_CHARACTER(
+            HttpStatus.BAD_REQUEST,
+            "환경변수로 쓰이는 사용자 이름과 비밀번호에 큰따옴표, 백슬래시, 달러 기호, 줄바꿈은 사용할 수 없습니다.",
+            "PARSING400_33"
     );
 
     private final HttpStatus httpStatus;

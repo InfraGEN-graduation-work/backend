@@ -7,6 +7,7 @@ import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.RedisComponent;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
+import com.infragen.infragen.domain.parsing.validator.EnvValueValidator;
 import com.infragen.infragen.global.enums.ComponentType;
 
 import tools.jackson.databind.JsonNode;
@@ -32,6 +33,7 @@ public class RedisParser implements ComponentParser {
         if (password == null || password.isBlank()) {
             throw new ParsingException(ParsingErrorCode.MISSING_REDIS_PASSWORD);
         }
+        EnvValueValidator.validate(password);
 
         float posX = node.getPositionX() != null ? node.getPositionX() : 0f;
         float posY = node.getPositionY() != null ? node.getPositionY() : 0f;

@@ -9,12 +9,6 @@ import org.springframework.http.HttpStatus;
 @AllArgsConstructor
 public enum ParsingErrorCode implements BaseErrorCode {
 
-    INVALID_NGINX_PROPERTIES(HttpStatus.BAD_REQUEST,
-            "NGINX imageVersion 또는 containerName이 잘못되었습니다. 단일 앱 프록시만 지원합니다.", "PARSING400_34"),
-    INVALID_NGINX_CONNECTION(HttpStatus.BAD_REQUEST,
-            "NGINX는 단일 앱 그래프에서 APPLICATION → NGINX로 하나만 연결해야 합니다.", "PARSING400_35"),
-    INVALID_NGINX_PORT(HttpStatus.BAD_REQUEST,
-            "NGINX 포트는 정수 1 ~ 65535여야 합니다.", "PARSING400_33"),
     EMPTY_NODES(
             HttpStatus.BAD_REQUEST,
             "node가 없습니다.",
@@ -169,6 +163,18 @@ public enum ParsingErrorCode implements BaseErrorCode {
             HttpStatus.BAD_REQUEST,
             "Node.js 버전은 숫자 형식이어야 합니다.",
             "PARSING400_32"
+    ),
+    INVALID_NGINX_PROPERTIES(HttpStatus.BAD_REQUEST,
+            "NGINX imageVersion 또는 containerName이 잘못되었습니다. 단일 앱 프록시만 지원합니다.",
+                    "PARSING400_33"
+    ),
+    INVALID_NGINX_CONNECTION(HttpStatus.BAD_REQUEST,
+            "NGINX는 단일 앱 그래프에서 APPLICATION → NGINX로 하나만 연결해야 합니다.",
+                    "PARSING400_34"
+    ),
+    INVALID_NGINX_PORT(HttpStatus.BAD_REQUEST,
+            "NGINX 포트는 정수 1 ~ 65535여야 합니다.",
+                    "PARSING400_35"
     );
 
     private final HttpStatus httpStatus;

@@ -489,6 +489,66 @@ class NginxGenerationContractTest {
         );
     }
 
+    @Test
+    @DisplayName("Node.js → NGINX는 LOCAL_DEV에서 호스트 앱으로 프록시한다")
+    void generate_NodeJsNginxLocal_ProxiesToHostApplication() {
+        // given
+        ParsingResultDTO parsed = parsingService.parsing(nodeJsRequest(), 1L);
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = localGenerator.generate(parsed);
+
+        // then
+        assertAll(
+            () -> assertTrue(file(bundle, "local/nginx/default.conf")
+                .contains("proxy_pass http://host.docker.internal:3000;")),
+            () -> assertTrue(file(bundle, "local/docker-compose.yml").contains("\"8081:80\"")),
+            () -> assertFalse(file(bundle, "local/docker-compose.yml").contains("  app:\n"))
+        );
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"AWS", "OCI"})
+    @DisplayName("Node.js → NGINX는 Cloud에서 앱 PORT와 프록시·Terraform 공개 포트를 맞춘다")
+    void generate_NodeJsNginxCloud_UsesProxyPublicPort(String provider) {
+        // given
+        ParsingResultDTO parsed = parsingService.parsing(nodeJsRequest(), 1L);
+        DeploymentTargetReqDTO.Target target = provider.equals("AWS")
+            ? new DeploymentTargetReqDTO.AwsDeploymentTarget(
+                "ap-northeast-2", "vpc", "subnet", "igw", "route", "sg", "instance",
+                "10.0.0.0/16", "10.0.1.0/24", "ami-xxxxxxxx", "t3.micro",
+                "203.0.113.10/32", "0.0.0.0/0")
+            : new DeploymentTargetReqDTO.OciDeploymentTarget(
+                "ap-chuncheon-1", "vcn", "subnet", "igw", "route", "security", "instance", "app",
+                "ocid1.compartment.oc1..example", "AD-1", "ocid1.image.oc1..example",
+                "VM.Standard.E4.Flex", "10.0.0.0/16", "10.0.1.0/24",
+                "203.0.113.10/32", "0.0.0.0/0", "ssh-rsa TEST_ONLY");
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = cloudGenerator.generate(parsed, target);
+
+        // then
+        String compose = file(bundle, "cloud/docker-compose.cloud.yml");
+        assertAll(
+            () -> assertTrue(file(bundle, "cloud/Dockerfile").contains("FROM node:22-slim")),
+            () -> assertTrue(file(bundle, "cloud/nginx/default.conf").contains("proxy_pass http://app:3000;")),
+            () -> assertTrue(compose.contains("      PORT: \"3000\"\n")),
+            () -> assertTrue(compose.contains("\"8081:80\"")),
+            () -> assertFalse(compose.contains("${APP_PORT:-3000}:3000")),
+            () -> assertTrue(file(bundle, "cloud/" + provider.toLowerCase(java.util.Locale.ROOT)
+                + "/terraform/terraform.tfvars.example").contains("app_port = 8081"))
+        );
+    }
+
+    private static ParsingReqDTO nodeJsRequest() {
+        return new ParsingReqDTO(List.of(
+            new NodeDTO("application", "NODE_JS", 0f, 0f, Map.of(
+                "name", "app", "port", 3000, "nodeVersion", "22")),
+            new NodeDTO("proxy", "NGINX", 100f, 0f, Map.of(
+                "imageVersion", "nginx:stable", "port", 8081))
+        ), List.of(edge("application", "proxy")));
+    }
+
     static ParsingReqDTO request(int appPort, int nginxPort) {
         return new ParsingReqDTO(List.of(
             new NodeDTO("application", "SPRING_BOOT", 0f, 0f, Map.of(

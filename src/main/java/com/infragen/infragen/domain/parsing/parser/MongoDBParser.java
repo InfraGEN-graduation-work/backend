@@ -8,6 +8,7 @@ import com.infragen.infragen.domain.parsing.dto.response.MongoDBComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MongoDBEnvComponent;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
+import com.infragen.infragen.domain.parsing.validator.EnvValueValidator;
 import com.infragen.infragen.global.enums.ComponentType;
 
 import tools.jackson.databind.JsonNode;
@@ -43,12 +44,14 @@ public class MongoDBParser implements ComponentParser {
         if (password == null || password.length() < 8) {
             throw new ParsingException(ParsingErrorCode.INVALID_DB_PASSWORD);
         }
+        EnvValueValidator.validate(password);
         if (imageVersion == null || imageVersion.isBlank()) {
             throw new ParsingException(ParsingErrorCode.MISSING_MONGODB_IMAGE_VERSION);
         }
         if (username == null || username.isBlank()) {
             throw new ParsingException(ParsingErrorCode.MISSING_MONGODB_USERNAME);
         }
+        EnvValueValidator.validate(username);
 
         float posX = node.getPositionX() != null ? node.getPositionX() : 0f;
         float posY = node.getPositionY() != null ? node.getPositionY() : 0f;

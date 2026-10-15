@@ -208,6 +208,48 @@ class MongoDBParserTest {
         assertEquals("MongoDB 사용자 이름이 누락되었습니다.", exception.getMessage());
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"a\"b", "a\\b", "a$b", "a\nb", "a\rb", "a\0b"})
+    @DisplayName("username 금지 문자 — UNSUPPORTED_ENV_VALUE_CHARACTER")
+    void parse_UsernameWithForbiddenCharacter_ThrowsParsingException(String value) {
+        // given
+        Map<String, Object> properties = validProperties();
+        env(properties).put("username", value);
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals(
+            ParsingErrorCode.UNSUPPORTED_ENV_VALUE_CHARACTER,
+            exception.getCode()
+        );
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"abcd\"efgh", "abcd\\efgh", "abcd$efgh", "abcd\nefgh", "abcd\refgh", "abcd\0efgh"})
+    @DisplayName("password 금지 문자 — UNSUPPORTED_ENV_VALUE_CHARACTER")
+    void parse_PasswordWithForbiddenCharacter_ThrowsParsingException(String value) {
+        // given
+        Map<String, Object> properties = validProperties();
+        env(properties).put("password", value);
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals(
+            ParsingErrorCode.UNSUPPORTED_ENV_VALUE_CHARACTER,
+            exception.getCode()
+        );
+    }
+
     private BaseComponent parse(Map<String, Object> properties) {
         NodeDTO node = new NodeDTO(
             "node-1",

@@ -9,6 +9,8 @@ import java.util.Map;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.infragen.infragen.domain.parsing.dto.request.NodeDTO;
 import com.infragen.infragen.domain.parsing.dto.response.RedisComponent;
@@ -76,6 +78,27 @@ class RedisParserTest {
 
         // then
         assertEquals(ParsingErrorCode.MISSING_REDIS_PASSWORD, exception.getCode());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"a\"b", "a\\b", "a$b", "a\nb", "a\rb", "a\0b"})
+    @DisplayName("password 금지 문자 — UNSUPPORTED_ENV_VALUE_CHARACTER")
+    void parse_PasswordWithForbiddenCharacter_ThrowsParsingException(String value) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("password", value);
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals(
+            ParsingErrorCode.UNSUPPORTED_ENV_VALUE_CHARACTER,
+            exception.getCode()
+        );
     }
 
     private RedisComponent parse(Map<String, Object> properties) {

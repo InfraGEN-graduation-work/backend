@@ -105,7 +105,7 @@ class NodeJsGenerationContractTest {
         assertEquals("cloud/docker-compose.cloud.yml", bundle.files().get(5).fileName());
         assertTrue(fileContent(bundle, "cloud/Dockerfile").contains("FROM node:22-slim"));
         assertTrue(fileContent(bundle, "cloud/Dockerfile").contains("CMD [\"npm\", \"start\"]"));
-        assertTrue(fileContent(bundle, "cloud/.dockerignore").contains(".env"));
+        assertTrue(fileContent(bundle, "cloud/.dockerignore").contains("**/.env"));
         String warning = fileContent(bundle, "cloud/CLOUD_DEPLOY_WARNING.md");
         assertTrue(warning.contains("`package.json`, `package-lock.json`, 앱 파일"));
         assertFalse(warning.contains("app.jar"));

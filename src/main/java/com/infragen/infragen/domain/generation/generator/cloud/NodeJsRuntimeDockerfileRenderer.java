@@ -26,10 +26,10 @@ public class NodeJsRuntimeDockerfileRenderer implements RuntimeDockerfileRendere
     private static final Pattern NODE_VERSION = Pattern.compile("\\d+");
 
     private static final String DOCKERIGNORE = """
-        .env
-        .env.*
-        .git
-        node_modules
+        **/.env
+        **/.env.*
+        **/.git
+        **/node_modules
         aws
         oci
         Dockerfile

@@ -24,6 +24,9 @@ public interface RuntimeDockerfileRenderer {
     /**
      * 컴파일이 끝난 산출물만 복사하는 runtime-only Dockerfile을 생성한다.
      *
+     * <p>{@code Dockerfile} 하나만 만든다. 생성 결과에 넣을 파일 목록은 {@link #renderFiles}로 만든다.
+     * 이 메서드를 직접 호출하면 {@code .dockerignore}처럼 구현체가 함께 만드는 부속 파일이 빠진다.
+     *
      * @param context 선택된 애플리케이션 정보를 담은 CLOUD_DEPLOY 컨텍스트
      * @return {@code Dockerfile} 파일
      */

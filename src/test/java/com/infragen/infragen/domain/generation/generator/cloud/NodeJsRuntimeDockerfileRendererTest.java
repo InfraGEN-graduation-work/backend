@@ -76,7 +76,7 @@ class NodeJsRuntimeDockerfileRendererTest {
     }
 
     @Test
-    @DisplayName("renderFiles는 Dockerfile 다음에 .dockerignore를 두고 .env와 node_modules를 제외한다")
+    @DisplayName("renderFiles는 Dockerfile 다음에 .dockerignore를 두고 하위 폴더의 .env와 node_modules까지 제외한다")
     void renderFiles_nodeJsApplication_returnsDockerfileAndDockerignore() {
         // given
         CloudDeployContext context = context(nodeJsComponent("22", 3000));
@@ -90,8 +90,12 @@ class NodeJsRuntimeDockerfileRendererTest {
             () -> assertEquals(2, files.size()),
             () -> assertEquals("Dockerfile", files.get(0).fileName()),
             () -> assertEquals(".dockerignore", files.get(1).fileName()),
-            () -> assertTrue(dockerignoreLines.contains(".env")),
-            () -> assertTrue(dockerignoreLines.contains("node_modules"))
+            () -> assertTrue(dockerignoreLines.contains("**/.env")),
+            () -> assertTrue(dockerignoreLines.contains("**/.env.*")),
+            () -> assertTrue(dockerignoreLines.contains("**/.git")),
+            () -> assertTrue(dockerignoreLines.contains("**/node_modules")),
+            () -> assertTrue(dockerignoreLines.containsAll(List.of(
+                "aws", "oci", "Dockerfile", ".dockerignore", "docker-compose.cloud.yml", "CLOUD_DEPLOY_WARNING.md")))
         );
     }
 

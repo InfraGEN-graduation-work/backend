@@ -168,6 +168,86 @@ class MySQLParserTest {
         );
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"a\"b", "a\\b", "a$b", "a\nb", "a\rb", "a\0b"})
+    @DisplayName("username 금지 문자 — UNSUPPORTED_ENV_VALUE_CHARACTER")
+    void parse_UsernameWithForbiddenCharacter_ThrowsParsingException(String value) {
+        // given
+        Map<String, Object> properties = validProperties();
+        env(properties).put("username", value);
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals(
+            ParsingErrorCode.UNSUPPORTED_ENV_VALUE_CHARACTER,
+            exception.getCode()
+        );
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"abcd\"efgh", "abcd\\efgh", "abcd$efgh", "abcd\nefgh", "abcd\refgh", "abcd\0efgh"})
+    @DisplayName("rootPassword 금지 문자 — UNSUPPORTED_ENV_VALUE_CHARACTER")
+    void parse_RootPasswordWithForbiddenCharacter_ThrowsParsingException(String value) {
+        // given
+        Map<String, Object> properties = validProperties();
+        env(properties).put("rootPassword", value);
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals(
+            ParsingErrorCode.UNSUPPORTED_ENV_VALUE_CHARACTER,
+            exception.getCode()
+        );
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"a\"b", "a\\b", "a$b", "a\nb", "a\rb", "a\0b"})
+    @DisplayName("userPassword 금지 문자 — UNSUPPORTED_ENV_VALUE_CHARACTER")
+    void parse_UserPasswordWithForbiddenCharacter_ThrowsParsingException(String value) {
+        // given
+        Map<String, Object> properties = validProperties();
+        env(properties).put("userPassword", value);
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals(
+            ParsingErrorCode.UNSUPPORTED_ENV_VALUE_CHARACTER,
+            exception.getCode()
+        );
+    }
+
+    @Test
+    @DisplayName("rootPassword 길이 부족과 금지 문자 겹침 — INVALID_DB_PASSWORD 우선")
+    void parse_ShortRootPasswordWithForbiddenCharacter_ThrowsInvalidDbPassword() {
+        // given
+        Map<String, Object> properties = validProperties();
+        env(properties).put("rootPassword", "a$b");
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.INVALID_DB_PASSWORD, exception.getCode());
+    }
+
     private BaseComponent parse(Map<String, Object> properties) {
         NodeDTO node = new NodeDTO(
             "node-1",

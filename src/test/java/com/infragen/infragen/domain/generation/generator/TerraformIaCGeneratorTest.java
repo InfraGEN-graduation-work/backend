@@ -807,7 +807,7 @@ class TerraformIaCGeneratorTest {
             () -> assertEquals("cloud/CLOUD_DEPLOY_WARNING.md", bundle.files().get(6).fileName()),
             () -> assertTrue(fileContent(bundle, "Dockerfile").contains("FROM node:22-slim")),
             () -> assertTrue(fileContent(bundle, "Dockerfile").contains("EXPOSE 3000")),
-            () -> assertTrue(fileContent(bundle, ".dockerignore").contains(".env")),
+            () -> assertTrue(fileContent(bundle, ".dockerignore").lines().toList().contains("**/.env")),
             () -> assertTrue(fileContent(bundle, "docker-compose.cloud.yml").contains("${APP_PORT:-3000}:3000")),
             () -> assertTrue(fileContent(bundle, "docker-compose.cloud.yml").contains("MYSQL_HOST: mysql")),
             () -> assertTrue(fileContent(bundle, "docker-compose.cloud.yml").contains("      PORT: \"3000\"\n")),

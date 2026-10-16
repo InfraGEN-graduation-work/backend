@@ -24,6 +24,7 @@ import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.generation.generator.application.NodeJsApplicationEnvMapper;
 import com.infragen.infragen.domain.generation.generator.application.SpringBootApplicationEnvMapper;
+import com.infragen.infragen.domain.generation.generator.cloud.CaddyCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployFileAssembler;
 import com.infragen.infragen.domain.generation.generator.cloud.SpringBootRuntimeDockerfileRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudComposeRenderer;
@@ -36,6 +37,7 @@ import com.infragen.infragen.domain.generation.generator.cloud.OciTerraformRende
 import com.infragen.infragen.domain.generation.generator.cloud.PostgresCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.RedisCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
+import com.infragen.infragen.domain.parsing.dto.response.CaddyComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MongoDBComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.NodeJsComponent;
@@ -93,7 +95,8 @@ class TerraformIaCGeneratorTest {
             new MysqlCloudComposeServiceRenderer(),
             new PostgresCloudComposeServiceRenderer(),
             new RedisCloudComposeServiceRenderer(),
-            new MongoCloudComposeServiceRenderer()
+            new MongoCloudComposeServiceRenderer(),
+            new CaddyCloudComposeServiceRenderer()
         ), List.of(new SpringBootApplicationEnvMapper(), new NodeJsApplicationEnvMapper())),
         List.of(new SpringBootRuntimeDockerfileRenderer(), new NodeJsRuntimeDockerfileRenderer()),
         List.of(new AwsTerraformRenderer(), new OciTerraformRenderer())
@@ -249,6 +252,28 @@ class TerraformIaCGeneratorTest {
         // given
         IaCFileDTO.BundleResDTO awsBundle = generator.generate(validParsingResult(), awsTarget());
         IaCFileDTO.BundleResDTO ociBundle = generator.generate(validParsingResult(), ociTarget());
+        writeTerraformFiles(awsBundle);
+        writeTerraformFiles(ociBundle);
+
+        // when
+        validateTerraformModule(terraformValidationDirectory.resolve("cloud/aws/terraform"));
+        validateTerraformModule(terraformValidationDirectory.resolve("cloud/oci/terraform"));
+
+        // then
+        assertAll(
+            () -> assertTrue(Files.exists(
+                terraformValidationDirectory.resolve("cloud/aws/terraform/.terraform.lock.hcl"))),
+            () -> assertTrue(Files.exists(
+                terraformValidationDirectory.resolve("cloud/oci/terraform/.terraform.lock.hcl")))
+        );
+    }
+
+    @Test
+    @DisplayName("Caddy 포함 CLOUD_DEPLOY — AWS·OCI Terraform 산출물이 CLI 정적 검증을 통과")
+    void generate_CaddyCloudDeploy_TerraformFilesPassCliValidation() throws Exception {
+        // given
+        IaCFileDTO.BundleResDTO awsBundle = generator.generate(caddyParsingResult(), awsTarget());
+        IaCFileDTO.BundleResDTO ociBundle = generator.generate(caddyParsingResult(), ociTarget());
         writeTerraformFiles(awsBundle);
         writeTerraformFiles(ociBundle);
 
@@ -679,6 +704,200 @@ class TerraformIaCGeneratorTest {
     }
 
     @Test
+    @DisplayName("Caddy 포함 — Compose service, 루트 볼륨, Caddyfile을 함께 만든다")
+    void generate_ConnectedCaddy_RendersServiceVolumeAndCaddyfile() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        parsingResult.setComponents(List.of(parsingResult.getComponents().get(0), caddyComponent("example.com")));
+        parsingResult.setEdges(List.of(edgeFromApplication("caddy-1")));
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
+
+        // then
+        assertAll(
+            () -> assertEquals("""
+                # CLOUD_DEPLOY 부트스트랩입니다. 민감한 값은 외부 .env 파일에서 주입해 주세요.
+                services:
+                  app:
+                    build:
+                      context: .
+                      dockerfile: Dockerfile
+                    image: infragen-runtime:plan-only
+                    ports:
+                      - "${APP_PORT:-9090}:9090"
+                    env_file:
+                      - .env
+
+                  caddy:
+                    image: caddy:2.8
+                    ports:
+                      - "80:80"
+                      - "443:443"
+                    volumes:
+                      - ./caddy:/etc/caddy
+                      - caddy_data:/data
+                    depends_on:
+                      - app
+
+                volumes:
+                  caddy_data:
+                """, fileContent(bundle, "docker-compose.cloud.yml")),
+            () -> assertEquals("""
+                example.com {
+                    reverse_proxy app:9090
+                }
+                """, fileContent(bundle, "caddy/Caddyfile"))
+        );
+    }
+
+    @Test
+    @DisplayName("Caddy 포함 AWS — 앱 CIDR로 80/443 ingress를 앱 포트 규칙 뒤에 추가한다")
+    void generate_CaddyWithAws_AddsPublicPortIngress() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        parsingResult.setComponents(List.of(parsingResult.getComponents().get(0), caddyComponent("example.com")));
+        parsingResult.setEdges(List.of(edgeFromApplication("caddy-1")));
+
+        // when
+        String main = fileContent(generator.generate(parsingResult, awsTarget()), "aws/terraform/main.tf");
+
+        // then
+        assertAll(
+            () -> assertTrue(main.contains("""
+                  ingress {
+                    description = "애플리케이션"
+                    from_port   = var.app_port
+                    to_port     = var.app_port
+                    protocol    = "tcp"
+                    cidr_blocks = [var.aws_app_cidr]
+                  }
+
+                  ingress {
+                    description = "웹 서버 공개 포트 80"
+                    from_port   = 80
+                    to_port     = 80
+                    protocol    = "tcp"
+                    cidr_blocks = [var.aws_app_cidr]
+                  }
+
+                  ingress {
+                    description = "웹 서버 공개 포트 443"
+                    from_port   = 443
+                    to_port     = 443
+                    protocol    = "tcp"
+                    cidr_blocks = [var.aws_app_cidr]
+                  }
+
+                  egress {
+                """))
+        );
+    }
+
+    @Test
+    @DisplayName("Caddy 포함 OCI — 앱 CIDR로 80/443 ingress rule을 앱 포트 규칙 뒤에 추가한다")
+    void generate_CaddyWithOci_AddsPublicPortIngress() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        parsingResult.setComponents(List.of(parsingResult.getComponents().get(0), caddyComponent("example.com")));
+        parsingResult.setEdges(List.of(edgeFromApplication("caddy-1")));
+
+        // when
+        String main = fileContent(generator.generate(parsingResult, ociTarget()), "oci/terraform/main.tf");
+
+        // then
+        assertTrue(main.contains("""
+                tcp_options {
+                  min = var.app_port
+                  max = var.app_port
+                }
+              }
+
+              ingress_security_rules {
+                protocol = "6"
+                source   = var.oci_app_cidr
+                tcp_options {
+                  min = 80
+                  max = 80
+                }
+              }
+
+              ingress_security_rules {
+                protocol = "6"
+                source   = var.oci_app_cidr
+                tcp_options {
+                  min = 443
+                  max = 443
+                }
+              }
+            }
+            """));
+    }
+
+    @Test
+    @DisplayName("Caddy가 없으면 AWS와 OCI 모두 80/443 ingress를 만들지 않는다")
+    void generate_WithoutCaddy_DoesNotOpenPublicPorts() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+
+        // when
+        String awsMain = fileContent(generator.generate(parsingResult, awsTarget()), "aws/terraform/main.tf");
+        String ociMain = fileContent(generator.generate(parsingResult, ociTarget()), "oci/terraform/main.tf");
+
+        // then
+        assertAll(
+            () -> assertFalse(awsMain.contains("웹 서버 공개 포트")),
+            () -> assertFalse(awsMain.contains("from_port   = 80")),
+            () -> assertFalse(ociMain.contains("min = 80"))
+        );
+    }
+
+    @Test
+    @DisplayName("Caddy 포함 — 사용자 안내 파일을 Caddyfile 다음, 경고 문서 앞에 추가한다")
+    void generate_Caddy_AddsGuideFileBetweenCaddyfileAndWarning() {
+        // given
+        ParsingResultDTO parsingResult = caddyParsingResult();
+
+        // when
+        List<String> fileNames = generator.generate(parsingResult, awsTarget()).files().stream()
+            .map(IaCFileDTO.FileContentResDTO::fileName)
+            .toList();
+
+        // then
+        int caddyfileIndex = fileNames.indexOf("cloud/caddy/Caddyfile");
+        assertAll(
+            () -> assertEquals(caddyfileIndex + 1, fileNames.indexOf("cloud/CADDY_GUIDE.md")),
+            () -> assertEquals(caddyfileIndex + 2, fileNames.indexOf("cloud/CLOUD_DEPLOY_WARNING.md"))
+        );
+    }
+
+    @Test
+    @DisplayName("Caddy가 없으면 안내 파일을 만들지 않는다")
+    void generate_WithoutCaddy_DoesNotAddGuideFile() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
+
+        // then
+        assertTrue(bundle.files().stream().noneMatch(file -> file.fileName().endsWith("CADDY_GUIDE.md")));
+    }
+
+    @Test
+    @DisplayName("Caddy가 없으면 Caddyfile을 만들지 않는다")
+    void generate_WithoutCaddy_DoesNotRenderCaddyfile() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
+
+        // then
+        assertTrue(bundle.files().stream().noneMatch(file -> file.fileName().endsWith("Caddyfile")));
+    }
+
+    @Test
     @DisplayName("renderer 주입 순서가 달라도 ComponentType 순서로 같은 Cloud Compose를 만든다")
     void render_ReversedRendererOrder_RendersSameCloudCompose() {
         // given
@@ -892,6 +1111,25 @@ class TerraformIaCGeneratorTest {
             .build();
     }
 
+    private static CaddyComponent caddyComponent(String domain) {
+        return CaddyComponent.builder()
+            .id("caddy-1")
+            .posX(300f)
+            .posY(100f)
+            .imageVersion("caddy:2.8")
+            .containerName("caddy")
+            .domain(domain)
+            .volumeName("caddy_data")
+            .build();
+    }
+
+    private static EdgeDTO edgeFromApplication(String targetNodeId) {
+        EdgeDTO edge = new EdgeDTO();
+        edge.setSourceNodeId("node-1");
+        edge.setTargetNodeId(targetNodeId);
+        return edge;
+    }
+
     private static EdgeDTO edgeToApplication(String sourceNodeId) {
         EdgeDTO edge = new EdgeDTO();
         edge.setSourceNodeId(sourceNodeId);
@@ -909,6 +1147,13 @@ class TerraformIaCGeneratorTest {
             .port(5432)
             .volumeName("pg_data")
             .build();
+    }
+
+    private static ParsingResultDTO caddyParsingResult() {
+        ParsingResultDTO parsingResult = validParsingResult();
+        parsingResult.setComponents(List.of(parsingResult.getComponents().get(0), caddyComponent("example.com")));
+        parsingResult.setEdges(List.of(edgeFromApplication("caddy-1")));
+        return parsingResult;
     }
 
     private static ParsingResultDTO validParsingResult() {

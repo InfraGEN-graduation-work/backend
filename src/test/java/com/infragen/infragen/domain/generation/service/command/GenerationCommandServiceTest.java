@@ -34,6 +34,7 @@ import com.infragen.infragen.domain.generation.validator.DeploymentTargetValidat
 import com.infragen.infragen.domain.parsing.dto.request.ParsingReqDTO;
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
 import com.infragen.infragen.domain.parsing.dto.request.NodeDTO;
+import com.infragen.infragen.domain.parsing.dto.response.CaddyComponent;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
@@ -172,6 +173,78 @@ class GenerationCommandServiceTest {
         verify(projectHistoryCommandService).saveGeneratedHistory(projectId, memberId, files);
         verify(parsingService).parsing(any(ParsingReqDTO.class), eq(projectId));
         verify(iaCGenerationService).generate(parsingResult, OutputFormat.TERRAFORM, deploymentTarget);
+    }
+
+    @Test
+    @DisplayName("Local 단독 요청에 웹 서버가 있으면 — 생성과 이력 저장 없이 거부")
+    void generate_LocalOnlyWithWebServer_ThrowsBeforeGeneration() {
+        // given
+        Long projectId = 1L;
+        Long memberId = 2L;
+        ParsingResultDTO parsingResult = parsingResultWithCaddy();
+
+        when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(null);
+        when(parsingService.parsing(any(ParsingReqDTO.class), eq(projectId))).thenReturn(parsingResult);
+
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> generationCommandService.generate(projectId, localRequest(), memberId)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.UNSUPPORTED_LOCAL_COMPONENT, exception.getCode());
+        verifyNoInteractions(iaCGenerationService);
+        verifyNoInteractions(projectHistoryCommandService);
+    }
+
+    @Test
+    @DisplayName("includeLocalSpec 클라우드 요청에 웹 서버가 있어도 — 거부하지 않고 Cloud와 Local 산출물을 함께 반환")
+    void generate_CloudWithLocalSpecAndWebServer_GeneratesBothBundles() {
+        // given
+        Long projectId = 1L;
+        Long memberId = 2L;
+        DeploymentTargetReqDTO.Target deploymentTarget = awsTarget();
+        GenerateReqDTO.Request request = new GenerateReqDTO.Request(
+            null,
+            null,
+            DeploymentOption.AWS,
+            true,
+            deploymentTarget
+        );
+        ParsingResultDTO parsingResult = parsingResultWithCaddy();
+        IaCFileDTO.FileContentResDTO cloudFile = IaCFileDTO.FileContentResDTO.builder()
+            .fileName("cloud/caddy/Caddyfile")
+            .content(":80 {\n    reverse_proxy app:8080\n}\n")
+            .build();
+        IaCFileDTO.FileContentResDTO localFile = IaCFileDTO.FileContentResDTO.builder()
+            .fileName("local/docker-compose.yml")
+            .content("services:\n")
+            .build();
+        List<IaCFileDTO.FileContentResDTO> files = List.of(cloudFile, localFile);
+
+        when(projectQueryService.getWriteableProject(projectId, memberId)).thenReturn(null);
+        when(parsingService.parsing(any(ParsingReqDTO.class), eq(projectId))).thenReturn(parsingResult);
+        when(iaCGenerationService.generate(parsingResult, OutputFormat.TERRAFORM, deploymentTarget))
+            .thenReturn(IaCFileDTO.BundleResDTO.builder().files(List.of(cloudFile)).build());
+        when(iaCGenerationService.generate(parsingResult, OutputFormat.DOCKER_COMPOSE))
+            .thenReturn(IaCFileDTO.BundleResDTO.builder().files(List.of(localFile)).build());
+        when(projectHistoryCommandService.saveGeneratedHistory(projectId, memberId, files)).thenReturn(44L);
+
+        // when
+        GenerateResDTO.GenerateResultResDTO result = generationCommandService.generate(
+            projectId,
+            request,
+            memberId
+        );
+
+        // then
+        assertAll(
+            () -> assertEquals(44L, result.historyId()),
+            () -> assertEquals(2, result.files().size())
+        );
+        verify(iaCGenerationService).generate(parsingResult, OutputFormat.TERRAFORM, deploymentTarget);
+        verify(iaCGenerationService).generate(parsingResult, OutputFormat.DOCKER_COMPOSE);
     }
 
     @Test
@@ -447,6 +520,16 @@ class GenerationCommandServiceTest {
         verify(parsingService).parsing(any(ParsingReqDTO.class), eq(projectId));
         verify(iaCGenerationService).generate(parsingResult, OutputFormat.DOCKER_COMPOSE);
         verifyNoInteractions(projectHistoryCommandService);
+    }
+
+    private ParsingResultDTO parsingResultWithCaddy() {
+        ParsingResultDTO parsingResult = new ParsingResultDTO();
+        parsingResult.setComponents(List.of(CaddyComponent.builder()
+            .id("caddy-1")
+            .imageVersion("caddy:2.8")
+            .containerName("caddy")
+            .build()));
+        return parsingResult;
     }
 
     private GenerateReqDTO.Request localRequest() {

@@ -24,6 +24,7 @@ import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.service.ParsingService;
 import com.infragen.infragen.domain.project.service.command.ProjectHistoryCommandService;
 import com.infragen.infragen.domain.project.service.query.ProjectQueryService;
+import com.infragen.infragen.global.enums.ComponentType.ComponentCategory;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -68,6 +69,7 @@ public class GenerationCommandService {
         DeploymentOption deploymentOption = request.deploymentOption();
 
         if (deploymentOption == DeploymentOption.LOCAL) {
+            rejectWebServerForLocalOnly(parsingResult);
             return iaCGenerationService.generate(parsingResult, OutputFormat.DOCKER_COMPOSE);
         }
 
@@ -90,6 +92,16 @@ public class GenerationCommandService {
         return IaCFileDTO.BundleResDTO.builder()
             .files(List.copyOf(files))
             .build();
+    }
+
+    // Local 단독 요청은 renderer가 없는 웹 서버가 산출물에서 조용히 빠지므로 거부한다.
+    // 클라우드 요청의 includeLocalSpec은 웹 서버를 클라우드 산출물에만 담으므로 여기서 거부하지 않는다.
+    private void rejectWebServerForLocalOnly(ParsingResultDTO parsingResult) {
+        boolean hasWebServer = parsingResult.getComponents().stream()
+            .anyMatch(component -> component.getComponentType().getCategory() == ComponentCategory.WEB_SERVER);
+        if (hasWebServer) {
+            throw new IaCGenerationException(IaCGenerationErrorCode.UNSUPPORTED_LOCAL_COMPONENT);
+        }
     }
 
     private void validateRequest(GenerateReqDTO.Request request) {

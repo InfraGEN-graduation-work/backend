@@ -70,6 +70,11 @@ public enum IaCGenerationErrorCode implements BaseErrorCode {
         HttpStatus.BAD_REQUEST,
         "환경변수 값에 큰따옴표, 백슬래시, 달러 기호를 사용할 수 없습니다.",
         "GENERATION400_14"
+    ),
+    UNSUPPORTED_LOCAL_COMPONENT(
+        HttpStatus.BAD_REQUEST,
+        "Local 배포에서 지원하지 않는 컴포넌트입니다. 웹 서버는 Cloud 배포에서만 사용할 수 있습니다.",
+        "GENERATION400_15"
     );
 
     private final HttpStatus httpStatus;

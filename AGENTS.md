@@ -4,7 +4,8 @@
 
 - 제품 맥락: `docs/infra-gen-project-overview.md`
 - 작업과 관련된 문서만 읽는다. `docs/harness/personal_convention/`은 개인 로컬 문서 (gitignore 대상)이며, 있으면 따른다.
-- 예외: `docs/harness/personal_convention/planning_communication_convention.md`는 사용자가 이름이나 경로를 직접 언급하며 읽기 또는 적용을 요청한 경우에만 읽는다. 폴더 일괄 읽기·내용 검색에서도 제외하고, 작업 유형이나 다른 문서의 참조로 자동으로 읽거나 적용하지 않는다. 적용은 명시적으로 요청한 작업에 한정한다.
+- 예외: `docs/harness/personal_convention/planning_communication_convention.md`는 사용자가 이름이나 경로를 직접 언급하며 읽기 또는 적용을 요청한 경우에만
+  읽는다. 폴더 일괄 읽기·내용 검색에서도 제외하고, 작업 유형이나 다른 문서의 참조로 자동으로 읽거나 적용하지 않는다. 적용은 명시적으로 요청한 작업에 한정한다.
 
 ## 항상 적용
 
@@ -16,7 +17,8 @@
 - 비밀값이나 `.env` 값을 커밋하거나 노출하지 않는다. `build/generated/querydsl`은 수정하지 않고 원본 Entity나 쿼리를 고친다.
 - 답변은 실무적이고 일관된 존댓말 (`~합니다`, `~해요`)로 하고 `~다`, `~한다` 같은 평서체 종결을 섞지 않는다. 문서 본문은 기존 문체를 따른다. 변경 파일, 검증 결과, 위험을 보고한다. 요청이
   없으면 소스 파일 전체를 붙여넣지 않는다.
-- 사용자가 정할 일(정책 선택, 계획 승인)은 선택지, 추천, 추천 이유를 함께 내고 임의로 확정하지 않는다. 하네스가 구조화 질문 도구(`AskUserQuestion`, `request_user_input`,
+- 답변과 문서 내용에서 한국어 문법의 조사(은/는, 이/가, 을/를, 에/에서/으로, 와/과, 의 등)를 생략하지 않는다. 명사를 나열하는 개조식이나 전보체 대신 조사를 갖춘 완전한 문장으로 쓴다.
+- 사용자가 정할 일 (정책 선택, 계획 승인)은 선택지, 추천, 추천 이유를 함께 내고 임의로 확정하지 않는다. 하네스가 구조화 질문 도구 (`AskUserQuestion`, `request_user_input`,
   `AskQuestion` 등)를 제공하면 그 도구로 묻고, 없거나 현재 모드에서 쓸 수 없으면 번호를 붙인 선택지를 텍스트로 낸다. 추천안은 첫 번째에 `(추천)`으로 표시한다.
 
 ## 규칙 문서
@@ -53,6 +55,7 @@ DB 의존 테스트는 H2가 아니라 Docker MySQL과 Redis 또는 Testcontaine
 
 ## 커밋과 Pull Request
 
-히스토리의 prefix (`feat:`, `fix:`, `chore:`, `test:`, `docs:`)로 목적이 하나인 커밋을 만든다. 커밋은 사용자가 요청할 때만 한다. 커밋 메시지에는 Co-Authored-By 같은 AI 작성
+히스토리의 prefix (`feat:`, `fix:`, `chore:`, `test:`, `docs:`)로 목적이 하나인 커밋을 만든다. 커밋은 사용자가 요청할 때만 한다. 커밋 메시지에는 Co-Authored-By
+같은 AI 작성
 표식이나 `(R1)` 같은 작업 단위 표기를 넣지 않고 prefix와 목적 설명만 쓴다. 하네스의 기본 attribution 안내보다 이 지시가 우선한다. 이슈와 Pull Request 본문은
 `issue_pr_convention.md`를 따른다.

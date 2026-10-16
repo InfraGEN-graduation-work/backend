@@ -168,6 +168,31 @@ public enum ParsingErrorCode implements BaseErrorCode {
             HttpStatus.BAD_REQUEST,
             "환경변수로 쓰이는 사용자 이름과 비밀번호에 큰따옴표, 백슬래시, 달러 기호, 줄바꿈은 사용할 수 없습니다.",
             "PARSING400_33"
+    ),
+    MISSING_CADDY_IMAGE_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "Caddy 이미지 버전이 누락되었습니다.",
+            "PARSING400_34"
+    ),
+    INVALID_CADDY_DOMAIN(
+            HttpStatus.BAD_REQUEST,
+            "Caddy 도메인은 점을 포함한 호스트명 형식이어야 합니다.",
+            "PARSING400_35"
+    ),
+    MISSING_CADDY_VOLUME_NAME(
+            HttpStatus.BAD_REQUEST,
+            "Caddy에 도메인을 지정하면 인증서를 보관할 볼륨 이름이 필요합니다.",
+            "PARSING400_36"
+    ),
+    DUPLICATE_WEB_SERVER_COMPONENT(
+            HttpStatus.BAD_REQUEST,
+            "웹 서버 컴포넌트는 하나의 그래프에 하나만 둘 수 있습니다.",
+            "PARSING400_37"
+    ),
+    INVALID_WEB_SERVER_CONNECTION(
+            HttpStatus.BAD_REQUEST,
+            "웹 서버는 애플리케이션에서 오는 연결선 하나만 가질 수 있습니다.",
+            "PARSING400_38"
     );
 
     private final HttpStatus httpStatus;

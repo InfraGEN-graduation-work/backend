@@ -48,7 +48,7 @@ Collaboration
 - `auth`: 일반·소셜 로그인, 회원가입 위임, JWT 발급, refresh token·blacklist. 협력: `member` Service, `KakaoOAuthClient`, `JwtUtil`, `RedisUtil`
 - `member`: 회원 생성·조회와 회원 Entity/Repository. 협력: `auth` Service, `MemberConverter`
 - `project`: 프로젝트 graph, history, generated file, 협업자와 초대의 저장·조회·삭제. 협력: `member` 소유권 조회
-- `parsing`: raw graph의 component type, port, edge, cycle, 의존 타입 중복, 같은 타입 DB·캐시 노드 중복 검증과 내부 component 변환
+- `parsing`: raw graph의 component type, port, edge, cycle, 의존 타입 중복, 같은 타입 DB·캐시 노드 중복, 웹 서버 개수와 연결 검증과 내부 component 변환
 - `generation`: 출력 형식별 generator 선택, IaC 산출물 생성, 생성 history 저장 흐름. 협력: `parsing`, `project`
 - `collaboration`: project별 operation 계약, 권한 연결, serverVersion, materialized graph, snapshot/replay, 저장하지 않는 커서 공유(연결별 표시 상태와 종료 시 숨김). 협력: `project`, `member`, STOMP infrastructure
 - `global`: 인증 filter, 공통 응답/예외, Redis·Jackson·RestClient 등 infrastructure. domain 업무 규칙은 소유하지 않는다.
@@ -68,16 +68,16 @@ Collaboration
 
 ## 주요 인터페이스와 확장 지점
 
-- `ComponentParser` (`MySQLParser`, `PostgreSQLParser`, `MongoDBParser`, `RedisParser`, `SpringBootParser`, `NodeJsParser`): component별 node property 검증과 `BaseComponent` 구현체 변환
+- `ComponentParser` (`MySQLParser`, `PostgreSQLParser`, `MongoDBParser`, `RedisParser`, `SpringBootParser`, `NodeJsParser`, `CaddyParser`): component별 node property 검증과 `BaseComponent` 구현체 변환. `requiresPort()`가 false이면 `ParsingService`가 포트 범위와 중복 검사를 건너뛴다(Caddy는 포트를 입력받지 않는다).
 - `IaCGenerator` (`LocalIaCGenerator`: `DockerComposeIaCGenerator`, `TargetAwareIaCGenerator`: `TerraformIaCGenerator`): `ParsingResultDTO`를 `OutputFormat`별 file bundle로 변환
 - `ComposeServiceRenderer` (MySQL, PostgreSQL, MongoDB, Redis): LOCAL_DEV dependency의 Compose service block 생성, 컨테이너 실행 변수(DB 비밀번호 등)를 앱 연결 여부와 무관하게 `.env`에 등록
 - `HostAppEnvContributor` (MySQL, PostgreSQL, MongoDB, Redis): 호스트 실행 앱의 `.env`용 타입별 중립 변수와 DB 접속 정보(`DatabaseConnection`, 관계형 여부 포함) 제공. `DockerComposeIaCGenerator`는 앱별로 접속 정보를 모아 앱 타입별 `ApplicationEnvMapper`에 넘기고, 단일 DB 판단은 매퍼가 한다.
 - `ApplicationEnvMapper` (Spring Boot, Node.js): 앱 타입별로 DB 접속 정보를 프레임워크 변수로 바꾼다. 입력은 `SequencedMap<ComponentType, DatabaseConnection>`이고 키는 그 연결을 낸 노드의 종류다(같은 타입 DB 중복은 parsing이 거부하므로 앱마다 종류당 하나). 관계형 DB는 하나일 때만 `SPRING_DATASOURCE_*`로, 비관계형 DB는 앱 매퍼 안의 종류별 규칙표(Spring은 `MONGODB` → `SPRING_MONGODB_*`)로 매핑한다. 규칙표에 없는 비관계형 종류는 `INVALID_COMPONENT_STATE`로 거부하고, 관계형 DB가 둘 이상이면 안내 주석을 만든다. LOCAL_DEV generator와 CLOUD_DEPLOY renderer가 함께 쓴다. Node.js 매퍼는 프레임워크 변수가 없어 `databaseEnvironment`가 빈 결과를 돌려주며, 등록되어 있어야 "매퍼 없음" 경고가 나지 않는다. 컨테이너 앱이 그래프 포트로 listen하도록 CLOUD Compose에만 넘길 실행 변수는 기본 메서드 `cloudRuntimeEnvironment(port)`가 정하고(기본값 빈 결과), Node.js만 `PORT`를 반환한다. `CloudComposeRenderer`가 environment 맨 앞에 출력한다.
-- `CloudComposeServiceRenderer` (MySQL, PostgreSQL, MongoDB, Redis): CLOUD_DEPLOY Compose bootstrap의 dependency block 생성, 앱 컨테이너용 타입별 중립 변수와 DB 접속 정보(`DatabaseConnection`, 평문 값) 제공. `CloudComposeRenderer`는 이를 `ComponentType` 순서로 모아 앱 타입별 `ApplicationEnvMapper`에 넘기고, 매퍼가 돌려준 값은 YAML 출력 시 따옴표로 감싼다.
+- `CloudComposeServiceRenderer` (MySQL, PostgreSQL, MongoDB, Redis, Caddy): CLOUD_DEPLOY Compose bootstrap의 service block 생성, 앱 컨테이너용 타입별 중립 변수와 DB 접속 정보(`DatabaseConnection`, 평문 값) 제공. `CloudComposeRenderer`는 이를 `ComponentType` 순서로 모아 앱 타입별 `ApplicationEnvMapper`에 넘기고, 매퍼가 돌려준 값은 YAML 출력 시 따옴표로 감싼다. 기본 메서드 `volumeName(context)`는 루트 `volumes:`에 선언할 볼륨 이름을, `publicPorts(context)`는 호스트에 공개할 포트(Terraform ingress 대상)를, `additionalFiles(context)`는 산출물에 더할 설정·안내 파일을 알려 준다. Caddy renderer는 앱 의존 인프라가 아니라 앱 앞단 웹 서버라 `isDependency`가 false이고 앱 환경변수가 없다.
 - `RuntimeDockerfileRenderer` (`SpringBootRuntimeDockerfileRenderer`, `NodeJsRuntimeDockerfileRenderer`): CLOUD_DEPLOY runtime Dockerfile을 앱 타입별로 생성한다. `TerraformIaCGenerator`가 `context.applicationType()`으로 구현을 고르고, 없으면 `INVALID_COMPONENT_STATE`로 거부한다. 사용자가 빌드 컨텍스트에 준비할 앱 파일 문구는 구현체의 `requiredAppFiles()`가 정하고 `CloudDeployWarningRenderer`는 그 문구를 받아 끼우기만 한다(앱 타입 분기 없음). Dockerfile과 함께 빌드 컨텍스트에 둘 파일(예: Node.js의 `.dockerignore`)이 있으면 `renderFiles`를 재정의한다. 기본 구현은 `render` 결과 하나만 돌려준다.
 - `OAuth2UserInfo` (`KakaoUserInfoDTO`): provider별 사용자 응답을 공통 social identity로 제공
 - `BaseErrorCode` / `BaseSuccessCode` (domain·general enum): 공통 HTTP status, code, message 계약
-- `VolumeComponent` (`MySQLComponent`, `PostgreSQLComponent`, `MongoDBComponent`, `RedisComponent`): volume 정보를 제공하는 component marker
+- `VolumeComponent` (`MySQLComponent`, `PostgreSQLComponent`, `MongoDBComponent`, `RedisComponent`, `CaddyComponent`): volume 정보를 제공하는 component marker
 - `ApplicationComponent` (`SpringBootComponent`, `NodeJsComponent`): 앱 타입 DTO의 공통 상위 클래스. renderer가 앱 타입을 구분하지 않고 쓰는 값(`getPort()`)만 두고 타입 전용 속성은 하위 DTO가 가진다.
 
 사용 규칙:
@@ -92,7 +92,7 @@ Collaboration
 
 Parsing은 그래프 정합성을 판단하지만 Compose나 Terraform 문법을 생성하지 않는다.
 
-- `ValidateGraphStructure`: node id, component type, edge endpoint, dependency 방향, cycle, 애플리케이션별 같은 타입 의존 중복 검증, 그래프 전체 같은 타입 DB·캐시 노드 중복 검증(`PARSING400_29`)
+- `ValidateGraphStructure`: node id, component type, edge endpoint, dependency 방향, cycle, 애플리케이션별 같은 타입 의존 중복 검증, 그래프 전체 같은 타입 DB·캐시 노드 중복 검증(`PARSING400_29`), 웹 서버 카테고리 노드 하나와 앱에서 오는 연결선 하나 검증(`PARSING400_37`, `PARSING400_38`)
 - `ComponentParser`: component별 property와 필수값 검증, component DTO 생성. DB·Redis parser는 사용자 이름과 비밀번호의 `.env` 금지 문자를 `EnvValueValidator`로 검증한다.
 - `ParsingService`: parser registry, port range·중복 검증, 결과 조립
 - `ParsingResultConverter`: 생성 결과에서 component를 type/class 기준으로 추출
@@ -100,7 +100,7 @@ Parsing은 그래프 정합성을 판단하지만 Compose나 Terraform 문법을
 Generator는 parsing 결과를 재검증하지 않고 출력 형식의 renderer와 assembler를 조정한다.
 
 - LOCAL_DEV `DockerComposeIaCGenerator`: application은 Compose에서 제외하고 dependency만 렌더링한다. application 연결 정보는 `HostAppEnvContributor`가 제공한 값을 generator가 호스트 `.env`에 추가한다.
-- CLOUD_DEPLOY `TerraformIaCGenerator`: AWS·OCI Terraform, runtime Dockerfile, cloud Compose, plan-only warning을 조립한다.
+- CLOUD_DEPLOY `TerraformIaCGenerator`: AWS·OCI Terraform, runtime Dockerfile, cloud Compose, plan-only warning을 조립한다. service가 알려 주는 추가 파일(Caddy는 `caddy/Caddyfile`과 사용자 안내 `CADDY_GUIDE.md`)을 `CloudComposeRenderer.additionalFiles`로 받아 산출 파일에 더하고, `CloudComposeRenderer.publicPorts`로 받은 공개 포트를 Terraform renderer에 넘겨 80/443 ingress를 앱 CIDR 변수로 연다. generator는 특정 웹 서버를 알지 않는다.
 - `ComposeGenerationContext`, `CloudDeployContext`: renderer가 공유할 parsing 결과와 생성 session 상태를 제공한다. `CloudDeployContext`는 앱을 `ApplicationComponent`로 들고, 앱 타입 전용 값은 앱 타입별 renderer가 `application()`의 하위 DTO로 읽는다.
 - `CloudDeployFileAssembler`: renderer 결과를 API 응답용 bundle로 감싼다.
 
@@ -117,7 +117,7 @@ Generator는 parsing 결과를 재검증하지 않고 출력 형식의 renderer�
 다음은 현재 코드의 사실이며, 목표 계약으로 추정해 바꾸지 않는다.
 
 1. Parsing component DTO, Project 저장 request, `ProjectNode` Entity는 문자열 `nodeId`를 쓰고 `nodeName`은 표시용이다. Project node response는 canvas `nodeId`와 내부 DB `Long id`를 함께 제공하고, edge response endpoint는 문자열 nodeId다.
-2. `ComponentType`에는 NGINX, Apache도 있지만 parser·generator는 MySQL, PostgreSQL, MongoDB, Redis, Spring Boot, Node.js만 구현돼 있다. 애플리케이션의 관계형 DB 의존이 둘 이상이면 LOCAL_DEV와 CLOUD_DEPLOY 모두 앱 타입별 DataSource 변수 대신 Compose 안내 주석을 만든다.
+2. `ComponentType`에는 NGINX, Apache도 있지만 parser·generator는 MySQL, PostgreSQL, MongoDB, Redis, Spring Boot, Node.js, Caddy만 구현돼 있다. 애플리케이션의 관계형 DB 의존이 둘 이상이면 LOCAL_DEV와 CLOUD_DEPLOY 모두 앱 타입별 DataSource 변수 대신 Compose 안내 주석을 만든다.
 3. Parsing component DTO(`BaseComponent` 상속)는 HTTP 응답으로 노출되지 않는 내부 전달 객체라 `dto_convention.md`의 `ResDTO` 내부 record 구조를 따르지 않는다.
 4. Project graph 수정은 patch merge가 아니라 기존 edge·node를 삭제한 뒤 전체 graph를 교체한다.
 5. LOCAL_DEV는 Spring Boot와 Node.js 앱을 호스트에서 실행하고 의존 인프라만 Compose service로 생성한다. Node.js 앱은 `.env`를 자동으로 읽지 않으므로 앱이 직접 로드한다(`node --env-file` 또는 dotenv).
@@ -127,6 +127,7 @@ Generator는 parsing 결과를 재검증하지 않고 출력 형식의 renderer�
 9. `GeneralExceptionAdvice`의 `ResponseEntity`는 global 예외 변환 경계의 구현이며, 일반 controller의 정상 응답 규칙과 다르다.
 10. PUT·metadata 변경은 version을 올리지만 operation 행 없이 같은 version의 snapshot만 저장한다. 재접속 delta 구간의 연속성 검사(`(afterVersion, serverVersion]`의 log 개수 비교)는 snapshot보다 오래된 요청이 full 경로로 간다는 전제에 의존하므로, snapshot 보존 정책을 바꾸면 이 전제를 다시 확인한다.
 11. DB·Redis 노드의 사용자 이름과 비밀번호에 금지 문자(큰따옴표, 백슬래시, 달러 기호, 줄바꿈 `\n`·`\r`, NUL)가 있으면 parser가 `EnvValueValidator`로 파싱 단계에서 `PARSING400_33`으로 거부한다. 프로젝트 저장 경로는 검사하지 않는다. 생성 단계에서는 마지막 방어선으로 `ComposeYamlSupport.formatEnvFile`이 줄바꿈 `\n`·`\r`과 NUL을 `GENERATION400_13`으로 거부한다. `ComposeYamlSupport.escapeEnvValue`는 큰따옴표, 백슬래시, 달러 기호를 `GENERATION400_14`로 거부하며, 이스케이프하지 않고 거부하는 이유는 이스케이프 규칙이 Compose 전용이라 Node.js가 값을 다르게 읽기 때문이다. `escapeEnvValue`만 직접 호출하면 줄바꿈과 NUL은 검사되지 않는다. 두 메서드는 LOCAL `.env` 생성에서만 쓰이며, CLOUD Compose의 `${...}` 참조는 거치지 않는다.
+12. Caddy 웹 서버는 CLOUD_DEPLOY에서만 지원한다. Local 단독 생성 요청에 웹 서버 카테고리 노드가 있으면 `GenerationCommandService`가 `GENERATION400_15`로 거부하고, 클라우드 요청의 `includeLocalSpec`에서는 `DockerComposeIaCGenerator`가 renderer 없는 노드를 `log.warn` 후 건너뛰어 웹 서버가 Local compose에서만 빠진다. 웹 서버 그래프 규칙(노드 하나, 앱에서 오는 연결선 하나)과 Local 거부는 `WEB_SERVER` 카테고리 기준이라 NGINX 등 다른 웹 서버에도 같이 적용된다. Caddy는 호스트 포트를 입력받지 않고 80/443으로 고정하며, 도메인이 있으면 볼륨 이름이 필요하다. `CloudDeployContext`는 앱 의존 인프라만 edge로 고르고, 웹 서버는 `component(type, class)`로 타입만 보고 찾는다. 앱과의 연결 검증은 parsing 단계의 책임이다.
 
 ## 새 기능 추가 시 확인 순서
 

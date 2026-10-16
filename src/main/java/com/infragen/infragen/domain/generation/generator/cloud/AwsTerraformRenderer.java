@@ -22,11 +22,12 @@ public class AwsTerraformRenderer implements CloudTerraformRenderer {
     @Override
     public List<IaCFileDTO.FileContentResDTO> render(
         CloudDeployContext context,
-        DeploymentTargetReqDTO.Target deploymentTarget
+        DeploymentTargetReqDTO.Target deploymentTarget,
+        List<Integer> publicPorts
     ) {
         DeploymentTargetReqDTO.AwsDeploymentTarget target = requireTarget(deploymentTarget);
         return List.of(
-            file("aws/terraform/main.tf", mainTerraform()),
+            file("aws/terraform/main.tf", mainTerraform(publicPorts)),
             file("aws/terraform/variables.tf", variablesTerraform(context.applicationPort())),
             file("aws/terraform/terraform.tfvars.example", tfvarsExample(
                 context.applicationPort(), target))
@@ -49,7 +50,7 @@ public class AwsTerraformRenderer implements CloudTerraformRenderer {
             .build();
     }
 
-    private String mainTerraform() {
+    private String mainTerraform(List<Integer> publicPorts) {
         return """
             # InfraGEN CLOUD_DEPLOY 계획 전용 scaffold입니다. apply_ready=false 상태입니다.
             terraform {
@@ -129,6 +130,7 @@ public class AwsTerraformRenderer implements CloudTerraformRenderer {
                 cidr_blocks = [var.aws_app_cidr]
               }
 
+            """ + publicIngress(publicPorts) + """
               egress {
                 from_port   = 0
                 to_port     = 0
@@ -168,6 +170,24 @@ public class AwsTerraformRenderer implements CloudTerraformRenderer {
               allocation_id = aws_eip.app.id
             }
             """;
+    }
+
+    // 앱 포트와 같은 CIDR로 공개 포트를 연다. 새 변수나 전체 개방 기본값을 만들지 않는다.
+    private String publicIngress(List<Integer> publicPorts) {
+        StringBuilder ingress = new StringBuilder();
+        for (int port : publicPorts) {
+            ingress.append("""
+                  ingress {
+                    description = "웹 서버 공개 포트 %d"
+                    from_port   = %d
+                    to_port     = %d
+                    protocol    = "tcp"
+                    cidr_blocks = [var.aws_app_cidr]
+                  }
+
+                """.formatted(port, port, port));
+        }
+        return ingress.toString();
     }
 
     private String variablesTerraform(int applicationPort) {

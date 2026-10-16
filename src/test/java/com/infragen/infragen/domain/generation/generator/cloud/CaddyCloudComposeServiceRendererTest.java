@@ -91,6 +91,19 @@ class CaddyCloudComposeServiceRendererTest {
     }
 
     @Test
+    @DisplayName("HTTP와 HTTPS 포트를 호스트에 공개하는 포트로 알려 준다")
+    void publicPorts_ReturnsHttpAndHttpsPorts() {
+        // given
+        CloudDeployContext context = context("caddy_data", true);
+
+        // when
+        List<Integer> ports = renderer.publicPorts(context);
+
+        // then
+        assertEquals(List.of(80, 443), ports);
+    }
+
+    @Test
     @DisplayName("Caddy가 있을 때만 활성화하고 앱 의존이나 앱 환경변수에는 관여하지 않는다")
     void isEnabled_OnlyWhenCaddyExists_AndNeverAppDependency() {
         // given

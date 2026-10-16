@@ -1,13 +1,12 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
-import java.util.LinkedHashMap;
-import java.util.Optional;
-import java.util.SequencedMap;
-
-import org.springframework.stereotype.Component;
-
 import com.infragen.infragen.domain.parsing.dto.response.CaddyComponent;
 import com.infragen.infragen.global.enums.ComponentType;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Optional;
+import java.util.SequencedMap;
+import org.springframework.stereotype.Component;
 
 /**
  * 그래프의 Caddy를 CLOUD_DEPLOY Compose service로 렌더링한다.
@@ -18,7 +17,13 @@ import com.infragen.infragen.global.enums.ComponentType;
 @Component
 public class CaddyCloudComposeServiceRenderer implements CloudComposeServiceRenderer {
 
-    /** @return 이 renderer가 담당하는 Caddy component type */
+    // HTTP 챌린지와 자동 HTTPS가 80/443을 쓰므로 호스트 포트는 입력받지 않고 고정한다.
+    private static final int HTTP_PORT = 80;
+    private static final int HTTPS_PORT = 443;
+
+    /**
+     * @return 이 renderer가 담당하는 Caddy component type
+     */
     @Override
     public ComponentType getSupportedType() {
         return ComponentType.CADDY;
@@ -29,13 +34,17 @@ public class CaddyCloudComposeServiceRenderer implements CloudComposeServiceRend
         return "caddy";
     }
 
-    /** 그래프에 Caddy가 있을 때만 Cloud Compose에 포함한다. 앱 연결 규칙은 parsing 단계에서 검증한다. */
+    /**
+     * 그래프에 Caddy가 있을 때만 Cloud Compose에 포함한다. 앱 연결 규칙은 parsing 단계에서 검증한다.
+     */
     @Override
     public boolean isEnabled(CloudDeployContext context) {
         return caddy(context).isPresent();
     }
 
-    /** @return 항상 false. 앱이 Caddy를 쓰는 것이 아니라 Caddy가 앱을 프록시한다. */
+    /**
+     * @return 항상 false. 앱이 Caddy를 쓰는 것이 아니라 Caddy가 앱을 프록시한다.
+     */
     @Override
     public boolean isDependency(CloudDeployContext context) {
         return false;
@@ -46,15 +55,15 @@ public class CaddyCloudComposeServiceRenderer implements CloudComposeServiceRend
         CaddyComponent caddy = caddy(context).orElseThrow();
         // Caddyfile은 파일이 아닌 디렉터리를 마운트한다. 편집기가 파일을 교체하면 컨테이너가 변경을 못 읽을 수 있다.
         StringBuilder block = new StringBuilder("""
-
-              caddy:
-                image: %s
-                ports:
-                  - "80:80"
-                  - "443:443"
-                volumes:
-                  - ./caddy:/etc/caddy
-            """.formatted(caddy.getImageVersion()));
+                
+                  caddy:
+                    image: %s
+                    ports:
+                      - "%d:%d"
+                      - "%d:%d"
+                    volumes:
+                      - ./caddy:/etc/caddy
+                """.formatted(caddy.getImageVersion(), HTTP_PORT, HTTP_PORT, HTTPS_PORT, HTTPS_PORT));
         String volumeName = caddy.getVolumeName();
         if (volumeName != null && !volumeName.isBlank()) {
             block.append("      - ").append(volumeName.trim()).append(":/data\n");
@@ -63,7 +72,17 @@ public class CaddyCloudComposeServiceRenderer implements CloudComposeServiceRend
         return block.toString();
     }
 
-    /** @return 앱 컨테이너에 넘길 환경변수가 없으므로 빈 값 */
+    /**
+     * @return 호스트에 공개하는 HTTP·HTTPS 포트. Terraform이 이 포트의 ingress를 연다.
+     */
+    @Override
+    public List<Integer> publicPorts(CloudDeployContext context) {
+        return List.of(HTTP_PORT, HTTPS_PORT);
+    }
+
+    /**
+     * @return 앱 컨테이너에 넘길 환경변수가 없으므로 빈 값
+     */
     @Override
     public SequencedMap<String, String> applicationEnvironment() {
         return new LinkedHashMap<>();

@@ -110,6 +110,24 @@ public class CloudComposeRenderer {
                 .build();
     }
 
+    /**
+     * Compose에 포함되는 service가 호스트에 공개하는 포트를 모은다.
+     *
+     * <p>Terraform ingress가 Compose의 공개 포트와 어긋나지 않도록 같은 renderer 목록에서 가져온다.
+     *
+     * @param context CLOUD_DEPLOY renderer가 공유하는 파싱 결과
+     * @return 중복 없이 service 순서대로 모은 포트. 공개 포트가 없으면 빈 목록
+     */
+    public List<Integer> publicPorts(CloudDeployContext context) {
+        Set<Integer> ports = new LinkedHashSet<>();
+        for (CloudComposeServiceRenderer renderer : serviceRenderers) {
+            if (renderer.isEnabled(context)) {
+                ports.addAll(renderer.publicPorts(context));
+            }
+        }
+        return List.copyOf(ports);
+    }
+
     private void appendRootVolumes(StringBuilder content, CloudDeployContext context) {
         Set<String> volumeNames = new LinkedHashSet<>();
 

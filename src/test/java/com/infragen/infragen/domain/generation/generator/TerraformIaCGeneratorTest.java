@@ -269,6 +269,28 @@ class TerraformIaCGeneratorTest {
     }
 
     @Test
+    @DisplayName("Caddy 포함 CLOUD_DEPLOY — AWS·OCI Terraform 산출물이 CLI 정적 검증을 통과")
+    void generate_CaddyCloudDeploy_TerraformFilesPassCliValidation() throws Exception {
+        // given
+        IaCFileDTO.BundleResDTO awsBundle = generator.generate(caddyParsingResult(), awsTarget());
+        IaCFileDTO.BundleResDTO ociBundle = generator.generate(caddyParsingResult(), ociTarget());
+        writeTerraformFiles(awsBundle);
+        writeTerraformFiles(ociBundle);
+
+        // when
+        validateTerraformModule(terraformValidationDirectory.resolve("cloud/aws/terraform"));
+        validateTerraformModule(terraformValidationDirectory.resolve("cloud/oci/terraform"));
+
+        // then
+        assertAll(
+            () -> assertTrue(Files.exists(
+                terraformValidationDirectory.resolve("cloud/aws/terraform/.terraform.lock.hcl"))),
+            () -> assertTrue(Files.exists(
+                terraformValidationDirectory.resolve("cloud/oci/terraform/.terraform.lock.hcl")))
+        );
+    }
+
+    @Test
     @DisplayName("MySQL만 선택 — MySQL과 연결된 depends_on만 생성")
     void generate_MysqlOnly_RendersSelectedServiceAndDependency() {
         // given
@@ -730,6 +752,107 @@ class TerraformIaCGeneratorTest {
     }
 
     @Test
+    @DisplayName("Caddy 포함 AWS — 앱 CIDR로 80/443 ingress를 앱 포트 규칙 뒤에 추가한다")
+    void generate_CaddyWithAws_AddsPublicPortIngress() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        parsingResult.setComponents(List.of(parsingResult.getComponents().get(0), caddyComponent("example.com")));
+        parsingResult.setEdges(List.of(edgeFromApplication("caddy-1")));
+
+        // when
+        String main = fileContent(generator.generate(parsingResult, awsTarget()), "aws/terraform/main.tf");
+
+        // then
+        assertAll(
+            () -> assertTrue(main.contains("""
+                  ingress {
+                    description = "애플리케이션"
+                    from_port   = var.app_port
+                    to_port     = var.app_port
+                    protocol    = "tcp"
+                    cidr_blocks = [var.aws_app_cidr]
+                  }
+
+                  ingress {
+                    description = "웹 서버 공개 포트 80"
+                    from_port   = 80
+                    to_port     = 80
+                    protocol    = "tcp"
+                    cidr_blocks = [var.aws_app_cidr]
+                  }
+
+                  ingress {
+                    description = "웹 서버 공개 포트 443"
+                    from_port   = 443
+                    to_port     = 443
+                    protocol    = "tcp"
+                    cidr_blocks = [var.aws_app_cidr]
+                  }
+
+                  egress {
+                """))
+        );
+    }
+
+    @Test
+    @DisplayName("Caddy 포함 OCI — 앱 CIDR로 80/443 ingress rule을 앱 포트 규칙 뒤에 추가한다")
+    void generate_CaddyWithOci_AddsPublicPortIngress() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        parsingResult.setComponents(List.of(parsingResult.getComponents().get(0), caddyComponent("example.com")));
+        parsingResult.setEdges(List.of(edgeFromApplication("caddy-1")));
+
+        // when
+        String main = fileContent(generator.generate(parsingResult, ociTarget()), "oci/terraform/main.tf");
+
+        // then
+        assertTrue(main.contains("""
+                tcp_options {
+                  min = var.app_port
+                  max = var.app_port
+                }
+              }
+
+              ingress_security_rules {
+                protocol = "6"
+                source   = var.oci_app_cidr
+                tcp_options {
+                  min = 80
+                  max = 80
+                }
+              }
+
+              ingress_security_rules {
+                protocol = "6"
+                source   = var.oci_app_cidr
+                tcp_options {
+                  min = 443
+                  max = 443
+                }
+              }
+            }
+            """));
+    }
+
+    @Test
+    @DisplayName("Caddy가 없으면 AWS와 OCI 모두 80/443 ingress를 만들지 않는다")
+    void generate_WithoutCaddy_DoesNotOpenPublicPorts() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+
+        // when
+        String awsMain = fileContent(generator.generate(parsingResult, awsTarget()), "aws/terraform/main.tf");
+        String ociMain = fileContent(generator.generate(parsingResult, ociTarget()), "oci/terraform/main.tf");
+
+        // then
+        assertAll(
+            () -> assertFalse(awsMain.contains("웹 서버 공개 포트")),
+            () -> assertFalse(awsMain.contains("from_port   = 80")),
+            () -> assertFalse(ociMain.contains("min = 80"))
+        );
+    }
+
+    @Test
     @DisplayName("Caddy가 없으면 Caddyfile을 만들지 않는다")
     void generate_WithoutCaddy_DoesNotRenderCaddyfile() {
         // given
@@ -992,6 +1115,13 @@ class TerraformIaCGeneratorTest {
             .port(5432)
             .volumeName("pg_data")
             .build();
+    }
+
+    private static ParsingResultDTO caddyParsingResult() {
+        ParsingResultDTO parsingResult = validParsingResult();
+        parsingResult.setComponents(List.of(parsingResult.getComponents().get(0), caddyComponent("example.com")));
+        parsingResult.setEdges(List.of(edgeFromApplication("caddy-1")));
+        return parsingResult;
     }
 
     private static ParsingResultDTO validParsingResult() {

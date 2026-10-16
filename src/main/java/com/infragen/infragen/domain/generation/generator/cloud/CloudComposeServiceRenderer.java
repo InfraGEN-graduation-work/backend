@@ -4,6 +4,7 @@ import com.infragen.infragen.domain.generation.generator.application.DatabaseCon
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.VolumeComponent;
 import com.infragen.infragen.global.enums.ComponentType;
+import java.util.List;
 import java.util.Optional;
 import java.util.SequencedMap;
 
@@ -51,6 +52,17 @@ public interface CloudComposeServiceRenderer {
      */
     default Optional<DatabaseConnection> databaseConnection() {
         return Optional.empty();
+    }
+
+    /**
+     * 이 service가 호스트에 공개하는 TCP 포트를 돌려준다. Terraform ingress가 이 포트를 열어야 외부에서 접근할 수 있다.
+     *
+     * <p>앱 포트는 포함하지 않는다. 앱 포트는 Terraform renderer가 별도로 연다. {@link #isEnabled}가 {@code true}일 때만 호출한다.
+     *
+     * @return 공개할 포트 목록. 공개하는 포트가 없으면 빈 목록
+     */
+    default List<Integer> publicPorts(CloudDeployContext context) {
+        return List.of();
     }
 
     /**

@@ -15,11 +15,13 @@ import org.junit.jupiter.api.Test;
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
 import com.infragen.infragen.domain.parsing.dto.request.NodeDTO;
 import com.infragen.infragen.domain.parsing.dto.request.ParsingReqDTO;
+import com.infragen.infragen.domain.parsing.dto.response.CaddyComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MongoDBComponent;
 import com.infragen.infragen.domain.parsing.dto.response.NodeJsComponent;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
+import com.infragen.infragen.domain.parsing.parser.CaddyParser;
 import com.infragen.infragen.domain.parsing.parser.MongoDBParser;
 import com.infragen.infragen.domain.parsing.parser.MySQLParser;
 import com.infragen.infragen.domain.parsing.parser.NodeJsParser;
@@ -38,7 +40,7 @@ class ParsingServiceTest {
         parsingService = new ParsingService(
             new ObjectMapper(),
             new ValidateGraphStructure(),
-            List.of(new SpringBootParser(), new NodeJsParser(), new MySQLParser(), new MongoDBParser())
+            List.of(new SpringBootParser(), new NodeJsParser(), new MySQLParser(), new MongoDBParser(), new CaddyParser())
         );
     }
 
@@ -195,6 +197,45 @@ class ParsingServiceTest {
     }
 
     @Test
+    @DisplayName("Caddy 노드 — 포트 없이 CaddyComponent로 변환하고 포트 검사에서 제외")
+    void parsing_CaddyNode_ReturnsCaddyComponentWithoutPort() {
+        // given
+        ParsingReqDTO request = new ParsingReqDTO(
+            List.of(springBootNode("app-1", 8080), caddyNode("caddy-1")),
+            List.of(edge("app-1", "caddy-1"))
+        );
+
+        // when
+        ParsingResultDTO result = parsingService.parsing(request, 1L);
+
+        // then
+        CaddyComponent caddy = (CaddyComponent) result.getComponents().stream()
+            .filter(component -> component instanceof CaddyComponent)
+            .findFirst()
+            .orElseThrow();
+        assertEquals("example.com", caddy.getDomain());
+    }
+
+    @Test
+    @DisplayName("연결선 없는 Caddy — 웹 서버 연결 규칙으로 PARSING400_38")
+    void parsing_CaddyWithoutEdge_ThrowsInvalidCaddyConnection() {
+        // given
+        ParsingReqDTO request = new ParsingReqDTO(
+            List.of(springBootNode("app-1", 8080), caddyNode("caddy-1")),
+            List.of()
+        );
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parsingService.parsing(request, 1L)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.INVALID_WEB_SERVER_CONNECTION, exception.getCode());
+    }
+
+    @Test
     @DisplayName("Spring Boot과 Node.js가 같은 포트를 쓰면 DUPLICATE_PORT")
     void parsing_SpringBootAndNodeJsSamePort_ThrowsDuplicatePort() {
         // given
@@ -271,6 +312,16 @@ class ParsingServiceTest {
         properties.put("containerName", "node-app");
 
         return new NodeDTO(nodeId, "NODE_JS", 400f, 200f, properties);
+    }
+
+    private static NodeDTO caddyNode(String nodeId) {
+        Map<String, Object> properties = new HashMap<>();
+        properties.put("imageVersion", "caddy:2.8");
+        properties.put("containerName", "caddy");
+        properties.put("domain", "example.com");
+        properties.put("volumeName", "caddy_data");
+
+        return new NodeDTO(nodeId, "CADDY", 700f, 200f, properties);
     }
 
     private static NodeDTO springBootNode(String nodeId) {

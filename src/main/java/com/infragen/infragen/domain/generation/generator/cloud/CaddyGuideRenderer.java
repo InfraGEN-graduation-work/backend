@@ -30,11 +30,8 @@ public class CaddyGuideRenderer {
     }
 
     private String content(CaddyComponent caddy, int applicationPort) {
-        String domain = caddy.getDomain();
-        boolean hasDomain = domain != null && !domain.isBlank();
-        String volumeName = caddy.getVolumeName() == null ? "" : caddy.getVolumeName().trim();
-        String preparation = hasDomain
-            ? domainPreparation(domain.trim(), volumeName)
+        String preparation = caddy.hasDomain()
+            ? domainPreparation(caddy.getDomain(), caddy.getVolumeName())
             : httpOnlyPreparation();
 
         return """

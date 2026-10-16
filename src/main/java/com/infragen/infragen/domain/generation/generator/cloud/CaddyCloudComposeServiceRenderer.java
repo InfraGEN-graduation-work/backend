@@ -69,10 +69,7 @@ public class CaddyCloudComposeServiceRenderer implements CloudComposeServiceRend
                     volumes:
                       - ./caddy:/etc/caddy
                 """.formatted(caddy.getImageVersion(), HTTP_PORT, HTTP_PORT, HTTPS_PORT, HTTPS_PORT));
-        String volumeName = caddy.getVolumeName();
-        if (volumeName != null && !volumeName.isBlank()) {
-            block.append("      - ").append(volumeName.trim()).append(":/data\n");
-        }
+        volumeName(context).ifPresent(volumeName -> block.append("      - ").append(volumeName).append(":/data\n"));
         block.append("    depends_on:\n      - app\n");
         return block.toString();
     }

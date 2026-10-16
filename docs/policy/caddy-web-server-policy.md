@@ -14,7 +14,7 @@ Caddy 노드를 지원하면서 정한 정책과 그 이유를 기록한다. 구
 
 - `imageVersion`: 필수. Compose의 `image:`에 그대로 쓴다.
 - `containerName`: 선택. 파싱만 하고 CLOUD Compose에는 쓰지 않는다. 다른 CLOUD service와 같게 service 이름은 `caddy`로 고정한다.
-- `domain`: 선택. 비어 있으면 HTTP(80)만 서비스하고, 있으면 Caddy가 HTTPS 인증서를 자동 발급한다.
+- `domain`: 선택. 비어 있으면 HTTP(80)만 서비스하고, 있으면 Caddy가 HTTPS 인증서를 자동 발급한다. `domain`과 `volumeName`은 컴포넌트를 만들 때 앞뒤 공백을 제거해 이후 코드가 다시 정리하지 않는다.
 - `volumeName`: 도메인이 있으면 필수다. 인증서는 `/data`에 저장되는데, 컨테이너를 다시 만들 때마다 재발급하면 발급 한도에 걸릴 수 있어서 영속 볼륨이 필요하다.
 - 호스트 포트는 입력받지 않고 80/443으로 고정한다. 그래서 파서의 `requiresPort()`가 false이고 포트 범위(1024 이상)와 중복 검사를 거치지 않는다.
 - 비밀번호나 basic auth 같은 비밀값 속성은 받지 않는다. `.env`에 새 비밀값이 생기지 않아 `EnvValueValidator`를 쓰지 않는다.

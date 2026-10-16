@@ -89,6 +89,20 @@ class CaddyParserTest {
     }
 
     @Test
+    @DisplayName("볼륨 이름 앞뒤 공백 — 제거해서 저장")
+    void parse_VolumeNameWithSurroundingSpaces_TrimsVolumeName() {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("volumeName", "  caddy_data  ");
+
+        // when
+        CaddyComponent component = parse(properties);
+
+        // then
+        assertEquals("caddy_data", component.getVolumeName());
+    }
+
+    @Test
     @DisplayName("containerName 누락 — 빈 문자열로 파싱")
     void parse_MissingContainerName_ReturnsEmptyContainerName() {
         // given

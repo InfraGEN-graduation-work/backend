@@ -33,7 +33,6 @@ public class CaddyfileRenderer {
     }
 
     private String siteAddress(CaddyComponent caddy) {
-        String domain = caddy.getDomain();
-        return domain == null || domain.isBlank() ? HTTP_ONLY_ADDRESS : domain.trim();
+        return caddy.hasDomain() ? caddy.getDomain() : HTTP_ONLY_ADDRESS;
     }
 }

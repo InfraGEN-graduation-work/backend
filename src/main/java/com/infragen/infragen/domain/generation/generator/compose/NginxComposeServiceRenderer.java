@@ -3,6 +3,8 @@ package com.infragen.infragen.domain.generation.generator.compose;
 import java.util.List;
 import org.springframework.stereotype.Component;
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
+import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
+import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.generation.generator.nginx.NginxConfigRenderer;
 import com.infragen.infragen.domain.parsing.dto.response.ApplicationComponent;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
@@ -37,7 +39,7 @@ public class NginxComposeServiceRenderer implements ComposeServiceRenderer {
         BaseComponent component, ComposeGenerationContext context) {
         ApplicationComponent app = context.findIncomingDependencies(component.getNodeId()).stream()
             .filter(ApplicationComponent.class::isInstance).map(ApplicationComponent.class::cast)
-            .findFirst().orElseThrow();
+            .findFirst().orElseThrow(() -> new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE));
         return List.of(NginxConfigRenderer.render("host.docker.internal", app.getPort()));
     }
 }

@@ -203,6 +203,19 @@ class NginxGenerationContractTest {
         assertEquals(3, bundle.files().size());
     }
 
+    @Test
+    void generate_NginxAws_DescribesPublicProxyPort() {
+        // given
+        ParsingReqDTO request = request(9090, 80);
+        var target = cloudTargets().filter(candidate -> candidate.provider() == DeploymentOption.AWS)
+            .findFirst().orElseThrow();
+        // when
+        var bundle = cloudGenerator.generate(parsingService.parsing(request, 1L), target);
+        // then
+        assertTrue(file(bundle, "cloud/aws/terraform/variables.tf")
+            .contains("description = \"NGINX 외부 공개 포트\""));
+    }
+
     @ParameterizedTest
     @MethodSource("cloudTargets")
     void generate_NginxCloud_ExposesOnlyProxyAndOpensTerraformPort(DeploymentTargetReqDTO.Target target) {

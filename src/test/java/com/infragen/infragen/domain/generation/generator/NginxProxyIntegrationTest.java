@@ -27,6 +27,7 @@ import javax.tools.ToolProvider;
 
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,7 +36,8 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
 import com.infragen.infragen.domain.parsing.service.ParsingService;
 
-/** Docker 엔진과 이미지 다운로드가 필요한 명시적 실행용 테스트다. */
+/** RUN_NGINX_PROXY_INTEGRATION_TEST=true로 명시적으로 실행하며 Docker 엔진과 이미지 다운로드가 필요하다. */
+@EnabledIfEnvironmentVariable(named = "RUN_NGINX_PROXY_INTEGRATION_TEST", matches = "true")
 @ExtendWith(SpringExtension.class)
 @ContextConfiguration(classes = NginxGenerationContractTest.Config.class)
 class NginxProxyIntegrationTest {

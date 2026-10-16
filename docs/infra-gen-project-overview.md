@@ -39,7 +39,7 @@ InfraGEN은 사용자가 웹 캔버스에서 인프라 노드와 연결 관계�
 - 생성 이력: 프로젝트에서 생성된 결과의 버전과 메타데이터
 - 생성 파일: 생성 결과를 구성하는 파일과 내용
 
-지원 입력 노드는 `SPRING_BOOT`, `NODE_JS`, `MYSQL`, `POSTGRESQL`, `MONGODB`, `REDIS`다. 의존 인프라는 캔버스에 있을 때만 Compose service와 접속 정보에 반영한다. NGINX는 다른 팀원이 별도로 진행하며 아직 지원하지 않고, Apache는 지원하지 않기로 결정했다.
+지원 입력 노드는 `SPRING_BOOT`, `NODE_JS`, `MYSQL`, `POSTGRESQL`, `MONGODB`, `REDIS`, `CADDY`다. 의존 인프라는 캔버스에 있을 때만 Compose service와 접속 정보에 반영한다. `CADDY`는 앱 앞단의 리버스 프록시이며 CLOUD_DEPLOY에서만 지원한다. Local 단독 생성 요청에 웹 서버 노드가 있으면 거부하고, 클라우드 요청에 로컬 스펙을 함께 포함하면 웹 서버는 클라우드 산출물에만 들어간다. NGINX는 다른 팀원이 별도로 진행하며 아직 지원하지 않고, Apache는 지원하지 않기로 결정했다.
 
 ## 7. 앱 준비 사항
 
@@ -52,4 +52,19 @@ InfraGEN은 사용자가 웹 캔버스에서 인프라 노드와 연결 관계�
   - `package.json`의 `start` 스크립트는 `exec node server.js`처럼 `exec`로 시작해야 한다. 그래야 `docker stop`의 종료 신호(SIGTERM)가 앱에 전달된다. 앱이 `process.on("SIGTERM", ...)`로 신호를 받아 정리하는 코드를 가져야 정리 작업이 실행된다.
   - CLOUD_DEPLOY의 Compose는 앱 컨테이너에 그래프에 입력한 포트를 `PORT` 환경변수로 전달한다. 앱은 `process.env.PORT`로 listen해야 포트 연결이 맞는다. LOCAL_DEV는 호스트에서 실행하므로 `PORT`를 전달하지 않고, 앱이 직접 맞춘다.
   - CLOUD_DEPLOY에서는 `cloud/` 폴더에 `package.json`, `package-lock.json`과 앱 파일을 둔다. 생성된 `.dockerignore`가 하위 폴더를 포함해 `.env`, `.env.*`, `.git`, `node_modules`를 이미지에서 제외한다.
+- **Caddy** (CLOUD_DEPLOY 전용)
+  - 캔버스에서 앱 노드에서 Caddy 노드로 연결선을 긋는다. 요청이 흐르는 방향과 화살표가 반대이며, 방향이 틀리거나 연결이 없으면 생성 요청이 거부된다. Caddy는 하나만 둘 수 있다.
+  - 호스트 포트는 입력하지 않는다. 80/443으로 고정이다.
+  - 도메인을 입력하면 Caddy가 HTTPS 인증서를 자동 발급한다. 도메인의 DNS가 서버를 가리켜야 하고, 인증서를 보관할 볼륨 이름이 필요하다. 도메인이 없으면 HTTP(80)만 동작한다.
+  - 80/443은 Terraform에서 앱 CIDR 변수가 허용한 범위에만 열린다. 외부에 공개하려면 해당 CIDR을 지정해야 한다.
+  - 정책과 이유는 [Caddy 웹 서버 지원 정책](policy/caddy-web-server-policy.md)에 기록한다.
 - **공통**: `.env` 값(비밀번호, 사용자 이름 등)에 큰따옴표, 백슬래시, 달러 기호를 쓸 수 없다. DB·Redis 노드의 사용자 이름과 비밀번호는 줄바꿈과 NUL도 쓸 수 없고, 생성 요청의 파싱 단계에서 `PARSING400_33`으로 거부된다. 프로젝트 저장 시점에는 검사하지 않는다. 생성 단계의 `GENERATION400_13`, `GENERATION400_14` 검사는 마지막 방어선으로 남는다. 이 제한은 Spring 프로젝트에도 똑같이 적용된다.
+
+## 8. 정책 문서
+
+규칙과 그 이유는 `docs/policy/`에 기록한다.
+
+- [그래프 연결 정책](policy/graph-connection-policy.md): 연결 방향, 시작 우선순위, 의존 중복, 연결되지 않은 노드의 처리
+- [배포 옵션과 산출물 정책](policy/generation-output-policy.md): 배포 옵션 조합, LOCAL_DEV와 CLOUD_DEPLOY 산출물, plan-only 경계
+- [입력 검증 정책](policy/input-validation-policy.md): 포트, 필수값과 형식, 환경변수 금지 문자
+- [Caddy 웹 서버 지원 정책](policy/caddy-web-server-policy.md): 웹 서버 지원 범위와 규칙

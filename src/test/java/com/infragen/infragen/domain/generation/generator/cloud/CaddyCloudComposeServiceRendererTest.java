@@ -12,6 +12,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.CaddyComponent;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
@@ -101,6 +102,21 @@ class CaddyCloudComposeServiceRendererTest {
 
         // then
         assertEquals(List.of(80, 443), ports);
+    }
+
+    @Test
+    @DisplayName("추가 파일로 Caddyfile과 사용자 안내를 순서대로 알려 준다")
+    void additionalFiles_ReturnsCaddyfileAndGuideInOrder() {
+        // given
+        CloudDeployContext context = context("caddy_data", true);
+
+        // when
+        List<String> fileNames = renderer.additionalFiles(context).stream()
+            .map(IaCFileDTO.FileContentResDTO::fileName)
+            .toList();
+
+        // then
+        assertEquals(List.of("caddy/Caddyfile", "CADDY_GUIDE.md"), fileNames);
     }
 
     @Test

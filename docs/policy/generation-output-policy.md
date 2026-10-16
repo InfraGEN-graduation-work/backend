@@ -23,7 +23,7 @@ Generate 요청의 배포 옵션 조합과 옵션별 산출물 구성, 생성 �
   - 앱 타입별 `Dockerfile`(Node.js는 `.dockerignore`도 함께)
   - `docker-compose.cloud.yml`
   - `CLOUD_DEPLOY_WARNING.md`
-  - 웹 서버가 있으면 `caddy/Caddyfile`
+  - 웹 서버가 있으면 `caddy/Caddyfile`과 사용자 안내 `CADDY_GUIDE.md`
 - 애플리케이션은 하나만 지원한다. 둘 이상이면 `GENERATION400_10`으로 거부한다.
 - Compose에는 앱과 앱에 연결된 의존 인프라만 포함한다. 앱 service 이름은 `app`으로, 의존 인프라는 `mysql`, `redis`처럼 타입별 이름으로 고정한다.
 - 앱 컨테이너는 의존 인프라에 Compose service 이름으로 접속한다. 앱은 `${APP_PORT:-<앱 포트>}`로 호스트에 공개한다.

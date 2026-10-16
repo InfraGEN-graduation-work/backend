@@ -853,6 +853,38 @@ class TerraformIaCGeneratorTest {
     }
 
     @Test
+    @DisplayName("Caddy 포함 — 사용자 안내 파일을 Caddyfile 다음, 경고 문서 앞에 추가한다")
+    void generate_Caddy_AddsGuideFileBetweenCaddyfileAndWarning() {
+        // given
+        ParsingResultDTO parsingResult = caddyParsingResult();
+
+        // when
+        List<String> fileNames = generator.generate(parsingResult, awsTarget()).files().stream()
+            .map(IaCFileDTO.FileContentResDTO::fileName)
+            .toList();
+
+        // then
+        int caddyfileIndex = fileNames.indexOf("cloud/caddy/Caddyfile");
+        assertAll(
+            () -> assertEquals(caddyfileIndex + 1, fileNames.indexOf("cloud/CADDY_GUIDE.md")),
+            () -> assertEquals(caddyfileIndex + 2, fileNames.indexOf("cloud/CLOUD_DEPLOY_WARNING.md"))
+        );
+    }
+
+    @Test
+    @DisplayName("Caddy가 없으면 안내 파일을 만들지 않는다")
+    void generate_WithoutCaddy_DoesNotAddGuideFile() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
+
+        // then
+        assertTrue(bundle.files().stream().noneMatch(file -> file.fileName().endsWith("CADDY_GUIDE.md")));
+    }
+
+    @Test
     @DisplayName("Caddy가 없으면 Caddyfile을 만들지 않는다")
     void generate_WithoutCaddy_DoesNotRenderCaddyfile() {
         // given

@@ -1,11 +1,13 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
+import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
 import com.infragen.infragen.domain.parsing.dto.response.CaddyComponent;
 import com.infragen.infragen.global.enums.ComponentType;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.SequencedMap;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Component;
 
 /**
@@ -20,6 +22,9 @@ public class CaddyCloudComposeServiceRenderer implements CloudComposeServiceRend
     // HTTP 챌린지와 자동 HTTPS가 80/443을 쓰므로 호스트 포트는 입력받지 않고 고정한다.
     private static final int HTTP_PORT = 80;
     private static final int HTTPS_PORT = 443;
+
+    private final CaddyfileRenderer caddyfileRenderer = new CaddyfileRenderer();
+    private final CaddyGuideRenderer caddyGuideRenderer = new CaddyGuideRenderer();
 
     /**
      * @return 이 renderer가 담당하는 Caddy component type
@@ -70,6 +75,16 @@ public class CaddyCloudComposeServiceRenderer implements CloudComposeServiceRend
         }
         block.append("    depends_on:\n      - app\n");
         return block.toString();
+    }
+
+    /**
+     * @return Caddy 컨테이너가 읽는 {@code caddy/Caddyfile}과 사용자 안내 {@code CADDY_GUIDE.md}
+     */
+    @Override
+    public List<IaCFileDTO.FileContentResDTO> additionalFiles(CloudDeployContext context) {
+        return Stream.of(caddyfileRenderer.render(context), caddyGuideRenderer.render(context))
+            .flatMap(Optional::stream)
+            .toList();
     }
 
     /**

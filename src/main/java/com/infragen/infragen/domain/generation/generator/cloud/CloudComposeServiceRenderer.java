@@ -1,5 +1,6 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
+import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
 import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.VolumeComponent;
@@ -52,6 +53,17 @@ public interface CloudComposeServiceRenderer {
      */
     default Optional<DatabaseConnection> databaseConnection() {
         return Optional.empty();
+    }
+
+    /**
+     * 이 service가 산출물에 더할 파일을 돌려준다. 예를 들어 컨테이너가 읽는 설정 파일이나 사용자 안내 파일이다.
+     *
+     * <p>파일 이름은 {@code cloud/} 아래 상대 경로다. {@link #isEnabled}가 {@code true}일 때만 호출한다.
+     *
+     * @return 추가할 파일 목록. 더할 파일이 없으면 빈 목록
+     */
+    default List<IaCFileDTO.FileContentResDTO> additionalFiles(CloudDeployContext context) {
+        return List.of();
     }
 
     /**

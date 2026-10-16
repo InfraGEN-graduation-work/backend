@@ -128,6 +128,22 @@ public class CloudComposeRenderer {
         return List.copyOf(ports);
     }
 
+    /**
+     * Compose에 포함되는 service가 산출물에 더할 파일을 모은다.
+     *
+     * @param context CLOUD_DEPLOY renderer가 공유하는 파싱 결과
+     * @return service 순서대로 모은 파일. 더할 파일이 없으면 빈 목록
+     */
+    public List<IaCFileDTO.FileContentResDTO> additionalFiles(CloudDeployContext context) {
+        List<IaCFileDTO.FileContentResDTO> files = new ArrayList<>();
+        for (CloudComposeServiceRenderer renderer : serviceRenderers) {
+            if (renderer.isEnabled(context)) {
+                files.addAll(renderer.additionalFiles(context));
+            }
+        }
+        return List.copyOf(files);
+    }
+
     private void appendRootVolumes(StringBuilder content, CloudDeployContext context) {
         Set<String> volumeNames = new LinkedHashSet<>();
 

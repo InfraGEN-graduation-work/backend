@@ -21,6 +21,7 @@ public enum ComponentType {
     // 웹 서버
     NGINX(ComponentCategory.WEB_SERVER, 4),
     APACHE(ComponentCategory.WEB_SERVER, 4),
+    CADDY(ComponentCategory.WEB_SERVER, 4),
     ;
 
     private final ComponentCategory category;

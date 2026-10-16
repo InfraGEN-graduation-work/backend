@@ -1,12 +1,10 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
-import com.infragen.infragen.domain.generation.generator.application.ApplicationEnvMapper;
-import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
-import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
-import com.infragen.infragen.domain.parsing.dto.response.VolumeComponent;
+import com.infragen.infragen.domain.generation.generator.application.ApplicationEnvMapper;
+import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
 import com.infragen.infragen.global.enums.ComponentType;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -19,7 +17,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
 
-/** CLOUD_DEPLOY에서 애플리케이션과 선택된 의존 인프라의 Compose bootstrap을 생성한다. */
+/**
+ * CLOUD_DEPLOY에서 애플리케이션과 선택된 의존 인프라의 Compose bootstrap을 생성한다.
+ */
 @Component
 public class CloudComposeRenderer {
     private static final String ENV_SOURCE = "app environment";
@@ -28,53 +28,53 @@ public class CloudComposeRenderer {
     private final Map<ComponentType, ApplicationEnvMapper> applicationEnvMapperMap;
 
     /**
-     * 서비스 블록, {@code depends_on}, 앱 환경변수 출력 순서를 {@code ComponentType} 선언 순서로 고정한다.
-     * Spring 주입 순서에 따라 산출물이 달라지지 않게 하기 위해서다.
+     * 서비스 블록, {@code depends_on}, 앱 환경변수 출력 순서를 {@code ComponentType} 선언 순서로 고정한다. Spring 주입 순서에 따라 산출물이 달라지지 않게 하기
+     * 위해서다.
      */
     public CloudComposeRenderer(
-        List<CloudComposeServiceRenderer> serviceRenderers,
-        List<ApplicationEnvMapper> applicationEnvMappers
+            List<CloudComposeServiceRenderer> serviceRenderers,
+            List<ApplicationEnvMapper> applicationEnvMappers
     ) {
         this.serviceRenderers = serviceRenderers.stream()
-            .sorted(Comparator.comparing(CloudComposeServiceRenderer::getSupportedType))
-            .toList();
+                .sorted(Comparator.comparing(CloudComposeServiceRenderer::getSupportedType))
+                .toList();
         this.applicationEnvMapperMap = applicationEnvMappers.stream()
-            .collect(Collectors.toMap(
-                ApplicationEnvMapper::getApplicationType,
-                mapper -> mapper,
-                (existing, replacement) -> existing
-            ));
+                .collect(Collectors.toMap(
+                        ApplicationEnvMapper::getApplicationType,
+                        mapper -> mapper,
+                        (existing, replacement) -> existing
+                ));
     }
 
     /**
      * 그래프에 존재하는 지원 dependency와 애플리케이션 연결 관계만 Compose에 반영한다.
      *
      * @param context CLOUD_DEPLOY renderer가 공유하는 파싱 결과
-    * @return cloud Compose bootstrap 파일
+     * @return cloud Compose bootstrap 파일
      */
     public IaCFileDTO.FileContentResDTO render(CloudDeployContext context) {
         validateDependencyConfiguration(context);
         ApplicationEnvMapper mapper = applicationEnvMapper(context);
 
         StringBuilder content = new StringBuilder("""
-            # CLOUD_DEPLOY 부트스트랩입니다. 민감한 값은 외부 .env 파일에서 주입해 주세요.
-            """);
+                # CLOUD_DEPLOY 부트스트랩입니다. 민감한 값은 외부 .env 파일에서 주입해 주세요.
+                """);
         // 단일 DB 여부는 앱 매퍼가 판단하므로 연결된 모든 DB의 접속 정보를 한 번에 넘긴다.
         SequencedMap<ComponentType, DatabaseConnection> connections = databaseConnections(context);
         mapper.multipleDatabaseNotice(connections, ENV_SOURCE).ifPresent(content::append);
         content.append("""
-            services:
-              app:
-                build:
-                  context: .
-                  dockerfile: Dockerfile
-                image: infragen-runtime:plan-only
-                ports:
-            """);
+                services:
+                  app:
+                    build:
+                      context: .
+                      dockerfile: Dockerfile
+                    image: infragen-runtime:plan-only
+                    ports:
+                """);
         content.append(String.format(
-            "      - \"${APP_PORT:-%d}:%d\"%n",
-            context.applicationPort(),
-            context.applicationPort()
+                "      - \"${APP_PORT:-%d}:%d\"%n",
+                context.applicationPort(),
+                context.applicationPort()
         ));
         appendApplicationEnvironment(content, context, mapper, connections);
         content.append("    env_file:\n");
@@ -105,25 +105,18 @@ public class CloudComposeRenderer {
         appendRootVolumes(content, context);
 
         return IaCFileDTO.FileContentResDTO.builder()
-            .fileName("docker-compose.cloud.yml")
-            .content(content.toString())
-            .build();
+                .fileName("docker-compose.cloud.yml")
+                .content(content.toString())
+                .build();
     }
 
     private void appendRootVolumes(StringBuilder content, CloudDeployContext context) {
         Set<String> volumeNames = new LinkedHashSet<>();
 
-        // Compose에서 의존 인프라의 볼륨 이름을 수집한다.
-        for (BaseComponent dependency : context.dependencyComponents()) {
-            if (!(dependency instanceof VolumeComponent volumeComponent)) {
-                continue;
-            }
-
-            String volumeName = volumeComponent.getVolumeName();
-
-            // Compose에서 volume 이름이 비어있으면 오류가 발생하므로, 비어있지 않은 경우에만 추가한다.
-            if (volumeName != null && !volumeName.isBlank()) {
-                volumeNames.add(volumeName.trim());
+        // 사용하는 service가 알려 주는 볼륨 이름을 Compose 루트에 선언한다. service에만 있으면 Compose가 거부한다.
+        for (CloudComposeServiceRenderer renderer : serviceRenderers) {
+            if (renderer.isEnabled(context)) {
+                renderer.volumeName(context).ifPresent(volumeNames::add);
             }
         }
         if (volumeNames.isEmpty()) {
@@ -141,12 +134,12 @@ public class CloudComposeRenderer {
     private void validateDependencyConfiguration(CloudDeployContext context) {
         for (CloudComposeServiceRenderer renderer : serviceRenderers) {
             long matchingDependencyCount = context.dependencyComponents().stream()
-                .filter(component -> component.getComponentType() == renderer.getSupportedType())
-                .count();
+                    .filter(component -> component.getComponentType() == renderer.getSupportedType())
+                    .count();
 
             if (matchingDependencyCount > 1) {
                 throw new IaCGenerationException(
-                    IaCGenerationErrorCode.AMBIGUOUS_DEPENDENCY_CONFIGURATION);
+                        IaCGenerationErrorCode.AMBIGUOUS_DEPENDENCY_CONFIGURATION);
             }
         }
     }
@@ -165,17 +158,17 @@ public class CloudComposeRenderer {
         for (CloudComposeServiceRenderer renderer : serviceRenderers) {
             if (renderer.isEnabled(context)) {
                 renderer.databaseConnection()
-                    .ifPresent(connection -> connections.put(renderer.getSupportedType(), connection));
+                        .ifPresent(connection -> connections.put(renderer.getSupportedType(), connection));
             }
         }
         return connections;
     }
 
     private void appendApplicationEnvironment(
-        StringBuilder content,
-        CloudDeployContext context,
-        ApplicationEnvMapper mapper,
-        SequencedMap<ComponentType, DatabaseConnection> connections
+            StringBuilder content,
+            CloudDeployContext context,
+            ApplicationEnvMapper mapper,
+            SequencedMap<ComponentType, DatabaseConnection> connections
     ) {
         Map<String, String> databaseEnvironment = mapper.databaseEnvironment(connections);
         boolean databaseEnvironmentPut = false;
@@ -183,7 +176,7 @@ public class CloudComposeRenderer {
         StringBuilder environment = new StringBuilder();
         // 앱이 그래프 포트로 listen해야 포트 매핑이 맞으므로 앱 실행 변수는 맨 앞에 둔다.
         mapper.cloudRuntimeEnvironment(context.applicationPort()).forEach((name, value) -> environment
-            .append("      ").append(name).append(": \"").append(value).append("\"\n"));
+                .append("      ").append(name).append(": \"").append(value).append("\"\n"));
         for (CloudComposeServiceRenderer renderer : serviceRenderers) {
             if (!renderer.isEnabled(context)) {
                 continue;
@@ -192,11 +185,11 @@ public class CloudComposeRenderer {
             if (!databaseEnvironmentPut && renderer.databaseConnection().isPresent()) {
                 // 앱 매퍼 값은 평문이라 YAML 스칼라로 출력할 때 따옴표를 감싼다.
                 databaseEnvironment.forEach((name, value) -> environment
-                    .append("      ").append(name).append(": \"").append(value).append("\"\n"));
+                        .append("      ").append(name).append(": \"").append(value).append("\"\n"));
                 databaseEnvironmentPut = true;
             }
             renderer.applicationEnvironment().forEach((name, value) -> environment
-                .append("      ").append(name).append(": ").append(value).append('\n'));
+                    .append("      ").append(name).append(": ").append(value).append('\n'));
         }
         if (environment.isEmpty()) {
             return;

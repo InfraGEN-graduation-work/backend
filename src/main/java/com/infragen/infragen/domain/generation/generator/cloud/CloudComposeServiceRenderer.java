@@ -1,6 +1,8 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
 import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
+import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
+import com.infragen.infragen.domain.parsing.dto.response.VolumeComponent;
 import com.infragen.infragen.global.enums.ComponentType;
 import java.util.Optional;
 import java.util.SequencedMap;
@@ -49,5 +51,21 @@ public interface CloudComposeServiceRenderer {
      */
     default Optional<DatabaseConnection> databaseConnection() {
         return Optional.empty();
+    }
+
+    /**
+     * 이 service가 쓰는 named volume 이름을 돌려준다. Compose 루트 {@code volumes:}에 선언할 이름이다.
+     *
+     * <p>이 renderer가 담당하는 타입의 component가 {@link VolumeComponent}이고 볼륨 이름이 비어 있지 않을 때만 값을 돌려준다.
+     * 이름이 비면 Compose가 거부하므로 선언하지 않는다. {@link #isEnabled}가 {@code true}일 때만 호출한다.
+     *
+     * @return 앞뒤 공백을 제거한 볼륨 이름. 볼륨이 없으면 빈 값
+     */
+    default Optional<String> volumeName(CloudDeployContext context) {
+        return context.component(getSupportedType(), BaseComponent.class)
+            .filter(VolumeComponent.class::isInstance)
+            .map(component -> ((VolumeComponent) component).getVolumeName())
+            .filter(volumeName -> volumeName != null && !volumeName.isBlank())
+            .map(String::trim);
     }
 }

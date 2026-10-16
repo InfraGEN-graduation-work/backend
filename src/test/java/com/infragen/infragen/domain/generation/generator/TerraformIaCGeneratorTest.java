@@ -24,6 +24,7 @@ import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.generation.generator.application.NodeJsApplicationEnvMapper;
 import com.infragen.infragen.domain.generation.generator.application.SpringBootApplicationEnvMapper;
+import com.infragen.infragen.domain.generation.generator.cloud.CaddyCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployFileAssembler;
 import com.infragen.infragen.domain.generation.generator.cloud.SpringBootRuntimeDockerfileRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudComposeRenderer;
@@ -36,6 +37,7 @@ import com.infragen.infragen.domain.generation.generator.cloud.OciTerraformRende
 import com.infragen.infragen.domain.generation.generator.cloud.PostgresCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.RedisCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
+import com.infragen.infragen.domain.parsing.dto.response.CaddyComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MongoDBComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.NodeJsComponent;
@@ -93,7 +95,8 @@ class TerraformIaCGeneratorTest {
             new MysqlCloudComposeServiceRenderer(),
             new PostgresCloudComposeServiceRenderer(),
             new RedisCloudComposeServiceRenderer(),
-            new MongoCloudComposeServiceRenderer()
+            new MongoCloudComposeServiceRenderer(),
+            new CaddyCloudComposeServiceRenderer()
         ), List.of(new SpringBootApplicationEnvMapper(), new NodeJsApplicationEnvMapper())),
         List.of(new SpringBootRuntimeDockerfileRenderer(), new NodeJsRuntimeDockerfileRenderer()),
         List.of(new AwsTerraformRenderer(), new OciTerraformRenderer())
@@ -679,6 +682,67 @@ class TerraformIaCGeneratorTest {
     }
 
     @Test
+    @DisplayName("Caddy 포함 — Compose service, 루트 볼륨, Caddyfile을 함께 만든다")
+    void generate_ConnectedCaddy_RendersServiceVolumeAndCaddyfile() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        parsingResult.setComponents(List.of(parsingResult.getComponents().get(0), caddyComponent("example.com")));
+        parsingResult.setEdges(List.of(edgeFromApplication("caddy-1")));
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
+
+        // then
+        assertAll(
+            () -> assertEquals("""
+                # CLOUD_DEPLOY 부트스트랩입니다. 민감한 값은 외부 .env 파일에서 주입해 주세요.
+                services:
+                  app:
+                    build:
+                      context: .
+                      dockerfile: Dockerfile
+                    image: infragen-runtime:plan-only
+                    ports:
+                      - "${APP_PORT:-9090}:9090"
+                    env_file:
+                      - .env
+
+                  caddy:
+                    image: caddy:2.8
+                    ports:
+                      - "80:80"
+                      - "443:443"
+                    volumes:
+                      - ./caddy:/etc/caddy
+                      - caddy_data:/data
+                    depends_on:
+                      - app
+
+                volumes:
+                  caddy_data:
+                """, fileContent(bundle, "docker-compose.cloud.yml")),
+            () -> assertEquals("""
+                example.com {
+                    reverse_proxy app:9090
+                }
+                """, fileContent(bundle, "caddy/Caddyfile"))
+        );
+    }
+
+    @Test
+    @DisplayName("Caddy가 없으면 Caddyfile을 만들지 않는다")
+    void generate_WithoutCaddy_DoesNotRenderCaddyfile() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
+
+        // then
+        assertTrue(bundle.files().stream().noneMatch(file -> file.fileName().endsWith("Caddyfile")));
+    }
+
+    @Test
     @DisplayName("renderer 주입 순서가 달라도 ComponentType 순서로 같은 Cloud Compose를 만든다")
     void render_ReversedRendererOrder_RendersSameCloudCompose() {
         // given
@@ -890,6 +954,25 @@ class TerraformIaCGeneratorTest {
             .volumeName("redis_data")
             .password("redis-password")
             .build();
+    }
+
+    private static CaddyComponent caddyComponent(String domain) {
+        return CaddyComponent.builder()
+            .id("caddy-1")
+            .posX(300f)
+            .posY(100f)
+            .imageVersion("caddy:2.8")
+            .containerName("caddy")
+            .domain(domain)
+            .volumeName("caddy_data")
+            .build();
+    }
+
+    private static EdgeDTO edgeFromApplication(String targetNodeId) {
+        EdgeDTO edge = new EdgeDTO();
+        edge.setSourceNodeId("node-1");
+        edge.setTargetNodeId(targetNodeId);
+        return edge;
     }
 
     private static EdgeDTO edgeToApplication(String sourceNodeId) {

@@ -15,6 +15,7 @@ import com.infragen.infragen.domain.generation.enums.DeploymentOption;
 import com.infragen.infragen.domain.generation.enums.OutputFormat;
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
+import com.infragen.infragen.domain.generation.generator.cloud.CaddyfileRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudComposeRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployContext;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployFileAssembler;
@@ -34,6 +35,7 @@ public class TerraformIaCGenerator implements TargetAwareIaCGenerator {
         terraformRendererMap;
     private final Map<ComponentType, RuntimeDockerfileRenderer> runtimeDockerfileRendererMap;
     private final CloudComposeRenderer cloudComposeRenderer;
+    private final CaddyfileRenderer caddyfileRenderer = new CaddyfileRenderer();
     private final CloudDeployWarningRenderer cloudDeployWarningRenderer =
         new CloudDeployWarningRenderer();
     private final CloudDeployFileAssembler cloudDeployFileAssembler =
@@ -107,10 +109,9 @@ public class TerraformIaCGenerator implements TargetAwareIaCGenerator {
 
         RuntimeDockerfileRenderer dockerfileRenderer = runtimeDockerfileRenderer(context);
         files.addAll(dockerfileRenderer.renderFiles(context));
-        files.addAll(List.of(
-            cloudComposeRenderer.render(context),
-            cloudDeployWarningRenderer.render(dockerfileRenderer.requiredAppFiles())
-        ));
+        files.add(cloudComposeRenderer.render(context));
+        caddyfileRenderer.render(context).ifPresent(files::add);
+        files.add(cloudDeployWarningRenderer.render(dockerfileRenderer.requiredAppFiles()));
 
         return cloudDeployFileAssembler.assemble(files);
     }

@@ -92,7 +92,7 @@ Collaboration
 
 Parsing은 그래프 정합성을 판단하지만 Compose나 Terraform 문법을 생성하지 않는다.
 
-- `ValidateGraphStructure`: node id, component type, edge endpoint, dependency 방향, cycle, 애플리케이션별 같은 타입 의존 중복 검증, 그래프 전체 같은 타입 DB·캐시 노드 중복 검증(`PARSING400_29`), 웹 서버 카테고리 노드 하나와 앱에서 오는 연결선 하나 검증(`PARSING400_37`, `PARSING400_38`)
+- `ValidateGraphStructure`: node id, component type, edge endpoint, dependency 방향, cycle, 애플리케이션별 같은 타입 의존 중복 검증, 그래프 전체 같은 타입 DB·캐시 노드 중복 검증(`PARSING400_29`), 웹 서버 카테고리 노드 하나와 앱에서 오는 연결선 하나 검증(`PARSING400_40`, `PARSING400_41`)
 - `ComponentParser`: component별 property와 필수값 검증, component DTO 생성. DB·Redis parser는 사용자 이름과 비밀번호의 `.env` 금지 문자를 `EnvValueValidator`로 검증한다.
 - `ParsingService`: parser registry, port range·중복 검증, 결과 조립
 - `ParsingResultConverter`: 생성 결과에서 component를 type/class 기준으로 추출
@@ -117,7 +117,7 @@ Generator는 parsing 결과를 재검증하지 않고 출력 형식의 renderer�
 다음은 현재 코드의 사실이며, 목표 계약으로 추정해 바꾸지 않는다.
 
 1. Parsing component DTO, Project 저장 request, `ProjectNode` Entity는 문자열 `nodeId`를 쓰고 `nodeName`은 표시용이다. Project node response는 canvas `nodeId`와 내부 DB `Long id`를 함께 제공하고, edge response endpoint는 문자열 nodeId다.
-2. `ComponentType`에는 NGINX, Apache도 있지만 parser·generator는 MySQL, PostgreSQL, MongoDB, Redis, Spring Boot, Node.js, Caddy만 구현돼 있다. 애플리케이션의 관계형 DB 의존이 둘 이상이면 LOCAL_DEV와 CLOUD_DEPLOY 모두 앱 타입별 DataSource 변수 대신 Compose 안내 주석을 만든다.
+2. parser·generator는 MySQL, PostgreSQL, MongoDB, Redis, Spring Boot, Node.js와 웹 서버 NGINX(LOCAL_DEV, CLOUD_DEPLOY), Caddy(CLOUD_DEPLOY 전용)를 지원한다. Apache는 enum에만 있다. 애플리케이션의 관계형 DB 의존이 둘 이상이면 LOCAL_DEV와 CLOUD_DEPLOY 모두 앱 타입별 DataSource 변수 대신 Compose 안내 주석을 만든다.
 3. Parsing component DTO(`BaseComponent` 상속)는 HTTP 응답으로 노출되지 않는 내부 전달 객체라 `dto_convention.md`의 `ResDTO` 내부 record 구조를 따르지 않는다.
 4. Project graph 수정은 patch merge가 아니라 기존 edge·node를 삭제한 뒤 전체 graph를 교체한다.
 5. LOCAL_DEV는 Spring Boot와 Node.js 앱을 호스트에서 실행하고 의존 인프라만 Compose service로 생성한다. Node.js 앱은 `.env`를 자동으로 읽지 않으므로 앱이 직접 로드한다(`node --env-file` 또는 dotenv).

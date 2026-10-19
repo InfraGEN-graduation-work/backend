@@ -71,9 +71,14 @@ public class ParsingService {
             int port = 0;
 
             if (parser.requiresPort()) {
+                if (type == ComponentType.NGINX && (!props.path("port").isIntegralNumber()
+                    || !props.path("port").canConvertToInt())) {
+                    throw new ParsingException(ParsingErrorCode.INVALID_NGINX_PORT);
+                }
                 port = props.path("port").asInt();
-                if (port < 1024 || port > 65535) {
-                    throw new ParsingException(ParsingErrorCode.INVALID_PORT_RANGE);
+                if (port < (type == ComponentType.NGINX ? 1 : 1024) || port > 65535) {
+                    throw new ParsingException(type == ComponentType.NGINX
+                        ? ParsingErrorCode.INVALID_NGINX_PORT : ParsingErrorCode.INVALID_PORT_RANGE);
                 }
                 if (usedPorts.contains(port)) {
                     throw new ParsingException(ParsingErrorCode.DUPLICATE_PORT);

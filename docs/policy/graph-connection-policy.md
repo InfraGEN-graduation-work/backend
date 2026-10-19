@@ -25,7 +25,7 @@
 
 ## 웹 서버
 
-- 웹 서버(`WEB_SERVER` 카테고리) 노드는 그래프에 하나만 둘 수 있고(`PARSING400_37`), 앱에서 오는 연결선 하나만 가져야 한다(`PARSING400_38`). 상세와 이유는 [caddy-web-server-policy.md](caddy-web-server-policy.md)를 따른다.
+- 웹 서버(`WEB_SERVER` 카테고리) 노드는 그래프에 하나만 둘 수 있고(`PARSING400_40`), 앱에서 오는 연결선 하나만 가져야 한다(`PARSING400_41`). 상세와 이유는 [caddy-web-server-policy.md](caddy-web-server-policy.md)를 따른다.
 
 ## 연결되지 않은 노드의 처리
 

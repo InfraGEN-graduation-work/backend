@@ -1,5 +1,7 @@
 package com.infragen.infragen.domain.generation.generator.compose;
 
+import java.util.List;
+import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.global.enums.ComponentType;
 
@@ -8,4 +10,9 @@ public interface ComposeServiceRenderer {
     ComponentType getSupportedType();
 
     String render(BaseComponent component, ComposeGenerationContext context);
+
+    default List<IaCFileDTO.FileContentResDTO> additionalFiles(
+        BaseComponent component, ComposeGenerationContext context) {
+        return List.of();
+    }
 }

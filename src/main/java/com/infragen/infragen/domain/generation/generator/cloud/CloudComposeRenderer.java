@@ -63,19 +63,21 @@ public class CloudComposeRenderer {
         SequencedMap<ComponentType, DatabaseConnection> connections = databaseConnections(context);
         mapper.multipleDatabaseNotice(connections, ENV_SOURCE).ifPresent(content::append);
         content.append("""
-                services:
-                  app:
-                    build:
-                      context: .
-                      dockerfile: Dockerfile
-                    image: infragen-runtime:plan-only
-                    ports:
-                """);
-        content.append(String.format(
-                "      - \"${APP_PORT:-%d}:%d\"%n",
+            services:
+              app:
+                build:
+                  context: .
+                  dockerfile: Dockerfile
+                image: infragen-runtime:plan-only
+            """);
+        if (context.nginx().isEmpty()) {
+            content.append("    ports:\n");
+            content.append(String.format(
+                "      - \"${APP_PORT:-%d}:%d\"\n",
                 context.applicationPort(),
                 context.applicationPort()
-        ));
+            ));
+        }
         appendApplicationEnvironment(content, context, mapper, connections);
         content.append("    env_file:\n");
         content.append("      - .env\n");

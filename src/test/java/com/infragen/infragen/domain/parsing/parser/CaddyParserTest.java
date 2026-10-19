@@ -132,7 +132,7 @@ class CaddyParserTest {
     }
 
     @Test
-    @DisplayName("이미지 버전 누락 — PARSING400_34")
+    @DisplayName("이미지 버전 누락 — PARSING400_37")
     void parse_MissingImageVersion_Throws() {
         // given
         Map<String, Object> properties = validProperties();
@@ -151,7 +151,7 @@ class CaddyParserTest {
         "example.com/path", "{evil}.com", "example.com {", "example.com\nrespond", "*.example.com", "https://example.com",
         "한글.com"
     })
-    @DisplayName("호스트명 형식이 아닌 도메인 — PARSING400_35")
+    @DisplayName("호스트명 형식이 아닌 도메인 — PARSING400_38")
     void parse_InvalidDomain_Throws(String domain) {
         // given
         Map<String, Object> properties = validProperties();
@@ -165,7 +165,7 @@ class CaddyParserTest {
     }
 
     @Test
-    @DisplayName("도메인이 있는데 볼륨 이름 누락 — PARSING400_36")
+    @DisplayName("도메인이 있는데 볼륨 이름 누락 — PARSING400_39")
     void parse_DomainWithoutVolume_Throws() {
         // given
         Map<String, Object> properties = validProperties();

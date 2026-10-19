@@ -217,7 +217,7 @@ class ParsingServiceTest {
     }
 
     @Test
-    @DisplayName("연결선 없는 Caddy — 웹 서버 연결 규칙으로 PARSING400_38")
+    @DisplayName("연결선 없는 Caddy — 웹 서버 연결 규칙으로 PARSING400_41")
     void parsing_CaddyWithoutEdge_ThrowsInvalidCaddyConnection() {
         // given
         ParsingReqDTO request = new ParsingReqDTO(

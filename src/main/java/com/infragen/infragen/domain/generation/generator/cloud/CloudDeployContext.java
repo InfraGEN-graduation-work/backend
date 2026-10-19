@@ -6,11 +6,14 @@ import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
 import com.infragen.infragen.domain.parsing.dto.response.ApplicationComponent;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
+import com.infragen.infragen.domain.parsing.dto.response.NginxComponent;
 import com.infragen.infragen.global.enums.ComponentType;
 import com.infragen.infragen.global.enums.ComponentType.ComponentCategory;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * CLOUD_DEPLOY renderer가 공유하는 파싱 결과의 실행 정보를 제공한다.
@@ -85,9 +88,22 @@ public final class CloudDeployContext {
         return application.getPort();
     }
 
-    /**
-     * @return 선택된 애플리케이션으로 연결된 non-application component 목록
-     */
+    public Optional<NginxComponent> nginx() {
+        Set<String> outgoing = edges.stream()
+            .filter(edge -> edge != null && application.getNodeId().equals(edge.getSourceNodeId()))
+            .map(EdgeDTO::getTargetNodeId).collect(Collectors.toSet());
+        return components.stream()
+            .filter(NginxComponent.class::isInstance)
+            .map(NginxComponent.class::cast)
+            .filter(component -> outgoing.contains(component.getNodeId())).findFirst();
+    }
+
+    public int publicPort() {
+        return nginx().map(NginxComponent::getPort)
+            .orElseGet(this::applicationPort);
+    }
+
+    /** @return 선택된 애플리케이션으로 연결된 non-application component 목록 */
     public List<BaseComponent> dependencyComponents() {
         Set<String> incomingDependencyNodeIds = incomingDependencyNodeIds();
         return components.stream()

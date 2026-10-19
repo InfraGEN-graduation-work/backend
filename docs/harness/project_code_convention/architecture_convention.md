@@ -117,7 +117,7 @@ Generator는 parsing 결과를 재검증하지 않고 출력 형식의 renderer�
 다음은 현재 코드의 사실이며, 목표 계약으로 추정해 바꾸지 않는다.
 
 1. Parsing component DTO, Project 저장 request, `ProjectNode` Entity는 문자열 `nodeId`를 쓰고 `nodeName`은 표시용이다. Project node response는 canvas `nodeId`와 내부 DB `Long id`를 함께 제공하고, edge response endpoint는 문자열 nodeId다.
-2. `ComponentType`에는 NGINX, Apache도 있지만 parser·generator는 MySQL, PostgreSQL, MongoDB, Redis, Spring Boot, Node.js만 구현돼 있다. 애플리케이션의 관계형 DB 의존이 둘 이상이면 LOCAL_DEV와 CLOUD_DEPLOY 모두 앱 타입별 DataSource 변수 대신 Compose 안내 주석을 만든다.
+2. parser·generator는 MySQL, PostgreSQL, MongoDB, Redis, Spring Boot, Node.js와 단일 앱 리버스 프록시용 NGINX를 지원한다. Apache는 enum에만 있다. 애플리케이션의 관계형 DB 의존이 둘 이상이면 LOCAL_DEV와 CLOUD_DEPLOY 모두 앱 타입별 DataSource 변수 대신 Compose 안내 주석을 만든다.
 3. Parsing component DTO(`BaseComponent` 상속)는 HTTP 응답으로 노출되지 않는 내부 전달 객체라 `dto_convention.md`의 `ResDTO` 내부 record 구조를 따르지 않는다.
 4. Project graph 수정은 patch merge가 아니라 기존 edge·node를 삭제한 뒤 전체 graph를 교체한다.
 5. LOCAL_DEV는 Spring Boot와 Node.js 앱을 호스트에서 실행하고 의존 인프라만 Compose service로 생성한다. Node.js 앱은 `.env`를 자동으로 읽지 않으므로 앱이 직접 로드한다(`node --env-file` 또는 dotenv).

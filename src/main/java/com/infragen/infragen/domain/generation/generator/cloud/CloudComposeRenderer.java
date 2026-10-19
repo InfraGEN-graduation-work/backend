@@ -69,13 +69,15 @@ public class CloudComposeRenderer {
                   context: .
                   dockerfile: Dockerfile
                 image: infragen-runtime:plan-only
-                ports:
             """);
-        content.append(String.format(
-            "      - \"${APP_PORT:-%d}:%d\"%n",
-            context.applicationPort(),
-            context.applicationPort()
-        ));
+        if (context.nginx().isEmpty()) {
+            content.append("    ports:\n");
+            content.append(String.format(
+                "      - \"${APP_PORT:-%d}:%d\"\n",
+                context.applicationPort(),
+                context.applicationPort()
+            ));
+        }
         appendApplicationEnvironment(content, context, mapper, connections);
         content.append("    env_file:\n");
         content.append("      - .env\n");
@@ -135,6 +137,11 @@ public class CloudComposeRenderer {
         for (String volumeName : volumeNames) {
             content.append("  ").append(volumeName).append(":\n");
         }
+    }
+
+    public List<IaCFileDTO.FileContentResDTO> additionalFiles(CloudDeployContext context) {
+        return serviceRenderers.stream().filter(renderer -> renderer.isEnabled(context))
+            .flatMap(renderer -> renderer.additionalFiles(context).stream()).toList();
     }
 
     // 의존 인프라가 중복으로 존재하는 경우, Compose에서 어떤 의존 인프라를 선택해야 하는지 모호해지므로 오류를 발생시킨다.

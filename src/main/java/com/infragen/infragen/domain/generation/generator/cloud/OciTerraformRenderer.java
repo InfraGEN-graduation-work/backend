@@ -27,9 +27,11 @@ public class OciTerraformRenderer implements CloudTerraformRenderer {
         DeploymentTargetReqDTO.OciDeploymentTarget target = requireTarget(deploymentTarget);
         return List.of(
             file("oci/terraform/main.tf", mainTerraform()),
-            file("oci/terraform/variables.tf", variablesTerraform(context.applicationPort())),
+            file("oci/terraform/variables.tf", variablesTerraform(context.publicPort())
+                .replace("파싱된 그래프의 Spring Boot 애플리케이션 포트", context.nginx().isPresent()
+                    ? "NGINX 외부 공개 포트" : "파싱된 그래프의 Spring Boot 애플리케이션 포트")),
             file("oci/terraform/terraform.tfvars.example", tfvarsExample(
-                context.applicationPort(), target))
+                context.publicPort(), target))
         );
     }
 

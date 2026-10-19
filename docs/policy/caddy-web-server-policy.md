@@ -6,8 +6,8 @@ Caddy 노드를 지원하면서 정한 정책과 그 이유를 기록한다. 구
 
 - Caddy는 앱 앞단에서 앱 하나를 프록시하는 리버스 프록시다.
 - CLOUD_DEPLOY 산출물에서만 지원한다. 도메인이 있을 때 HTTPS 인증서를 자동 발급하는 것이 Caddy를 쓰는 핵심 이유이고, 로컬에서 웹 서버를 띄울 이유는 약하기 때문이다.
-- Local 단독 생성(`deploymentOption`이 `LOCAL`)에 웹 서버 노드가 있으면 `GENERATION400_15`로 거부한다. 거부하지 않으면 사용자가 배치한 노드가 에러 없이 산출물에서 빠진다.
-- 클라우드 요청에서 `includeLocalSpec`을 켜면 거부하지 않는다. 웹 서버는 클라우드 산출물에만 들어가고 Local compose에서는 빠진다. 클라우드와 로컬을 함께 요청한 사용자가 막히지 않게 하려는 결정이다.
+- Local 단독 생성(`deploymentOption`이 `LOCAL`)에 Local Compose renderer가 없는 노드(Caddy)가 있으면 `GENERATION400_15`로 거부한다. 거부하지 않으면 사용자가 배치한 노드가 에러 없이 산출물에서 빠진다. 거부 기준은 웹 서버 카테고리가 아니라 renderer 유무라서, Local을 지원하는 NGINX는 거부하지 않는다.
+- 클라우드 요청에서 `includeLocalSpec`을 켜면 거부하지 않는다. Caddy는 클라우드 산출물에만 들어가고 Local compose에서는 빠진다. 클라우드와 로컬을 함께 요청한 사용자가 막히지 않게 하려는 결정이다.
 - 앱은 하나만 지원한다. 앱이 여럿이면 어느 앱을 프록시할지 정할 수 없고, CLOUD_DEPLOY가 이미 앱 하나만 허용한다.
 
 ## 노드 속성
@@ -44,15 +44,15 @@ Caddy 노드를 지원하면서 정한 정책과 그 이유를 기록한다. 구
 
 - HTTP/3(443/udp)은 열지 않는다. 경로별 라우팅, basic auth, 압축, 접근 로그 같은 Caddyfile 세부 기능도 지원하지 않는다.
 - 80/443은 앱 CIDR이 허용한 범위에만 열린다. 외부에 공개하려면 사용자가 해당 CIDR을 지정해야 한다.
-- 앱 service의 포트 매핑은 Caddy가 있어도 그대로라서 앱 포트가 호스트에 계속 공개된다.
+- 앱 service의 포트 매핑은 Caddy가 있어도 그대로라서 앱 포트가 호스트에 계속 공개된다. NGINX는 앱 포트를 닫고 NGINX 포트만 공개하므로 두 웹 서버의 공개 정책이 다르다. 통일 여부는 아직 정하지 않았다.
 - `imageVersion`과 `volumeName`은 다른 컴포넌트와 같게 별도 검증 없이 Compose YAML에 들어간다.
 - 생성기는 Caddy가 앱에 연결됐는지 다시 확인하지 않는다. 연결 검증은 parsing 단계의 책임이며, 그래프가 이 단계를 통과해야 한다는 전제를 둔다.
 - 산출물은 plan-only scaffold다. 실제 Caddy 컨테이너 기동과 Caddyfile 문법 검증, `terraform apply`는 수행하지 않는다. Terraform 산출물은 `terraform validate`까지만 확인한다.
-- 프론트에서 Local 단독을 선택한 채 웹 서버 노드를 배치하면 생성 시점에야 거부된다.
+- 프론트에서 Local 단독을 선택한 채 Caddy 노드를 배치하면 생성 시점에야 거부된다.
 
 ## 정책을 바꿀 때 확인할 곳
 
-- 지원 출력 경로를 바꾸면 `GenerationCommandService`의 Local 단독 거부와 `IaCGenerationErrorCode`의 `UNSUPPORTED_LOCAL_COMPONENT`를 함께 본다.
+- 지원 출력 경로를 바꾸면 `GenerationCommandService`의 Local 단독 거부(`IaCGenerationService.supportsLocal`, `LocalIaCGenerator.supports`)와 `IaCGenerationErrorCode`의 `UNSUPPORTED_LOCAL_COMPONENT`를 함께 본다.
 - 노드 속성과 검증을 바꾸면 `CaddyParser`, `CaddyComponent`, `ParsingErrorCode`를 함께 본다.
 - 그래프 규칙을 바꾸면 `ValidateGraphStructure`의 `validateWebServerPlacement`를 본다.
 - 산출물을 바꾸면 `CaddyCloudComposeServiceRenderer`(Compose service, 공개 포트, 추가 파일 목록), `CaddyfileRenderer`, `CaddyGuideRenderer`, `AwsTerraformRenderer`, `OciTerraformRenderer`를 함께 본다.

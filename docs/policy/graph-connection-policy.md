@@ -26,6 +26,7 @@
 ## 웹 서버
 
 - 웹 서버(`WEB_SERVER` 카테고리) 노드는 그래프에 하나만 둘 수 있고(`PARSING400_40`), 앱에서 오는 연결선 하나만 가져야 한다(`PARSING400_41`). 상세와 이유는 [caddy-web-server-policy.md](caddy-web-server-policy.md)를 따른다.
+- NGINX는 이 카테고리 규칙에 더해 자체 연결·이름 검사(`PARSING400_34`, `PARSING400_35`)를 먼저 적용받는다. 두 검사는 통합하지 않고 공존한다. NGINX 그래프는 NGINX의 에러 코드를 먼저 받고, Caddy와 NGINX를 함께 두면 웹 서버 개수 규칙(`PARSING400_40`)으로 거부된다(`ValidateGraphStructureTest`).
 
 ## 연결되지 않은 노드의 처리
 

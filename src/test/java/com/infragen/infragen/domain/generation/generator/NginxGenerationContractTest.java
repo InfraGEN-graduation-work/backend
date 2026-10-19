@@ -203,17 +203,21 @@ class NginxGenerationContractTest {
         assertEquals(3, bundle.files().size());
     }
 
-    @Test
-    void generate_NginxAws_DescribesPublicProxyPort() {
+    @ParameterizedTest
+    @MethodSource("cloudTargets")
+    void generate_NginxCloud_DescribesAppPortNeutrally(DeploymentTargetReqDTO.Target target) {
         // given
         ParsingReqDTO request = request(9090, 80);
-        var target = cloudTargets().filter(candidate -> candidate.provider() == DeploymentOption.AWS)
-            .findFirst().orElseThrow();
+        String provider = target.provider().name().toLowerCase(java.util.Locale.ROOT);
         // when
         var bundle = cloudGenerator.generate(parsingService.parsing(request, 1L), target);
         // then
-        assertTrue(file(bundle, "cloud/aws/terraform/variables.tf")
-            .contains("description = \"NGINX 외부 공개 포트\""));
+        String variables = file(bundle, "cloud/" + provider + "/terraform/variables.tf");
+        assertAll(
+            () -> assertTrue(variables.contains("default     = 80")),
+            () -> assertTrue(variables.contains(
+                "description = \"외부에서 접속하는 포트 (방화벽 규칙이 허용하는 포트)\""))
+        );
     }
 
     @ParameterizedTest

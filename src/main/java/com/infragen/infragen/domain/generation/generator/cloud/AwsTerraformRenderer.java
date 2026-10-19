@@ -28,9 +28,7 @@ public class AwsTerraformRenderer implements CloudTerraformRenderer {
         DeploymentTargetReqDTO.AwsDeploymentTarget target = requireTarget(deploymentTarget);
         return List.of(
             file("aws/terraform/main.tf", mainTerraform(publicPorts)),
-            file("aws/terraform/variables.tf", variablesTerraform(context.publicPort())
-                .replace("파싱된 그래프의 애플리케이션 포트", context.nginx().isPresent()
-                    ? "NGINX 외부 공개 포트" : "파싱된 그래프의 애플리케이션 포트")),
+            file("aws/terraform/variables.tf", variablesTerraform(context.publicPort())),
             file("aws/terraform/terraform.tfvars.example", tfvarsExample(
                 context.publicPort(), target))
         );
@@ -265,7 +263,7 @@ public class AwsTerraformRenderer implements CloudTerraformRenderer {
 
             variable "app_port" {
               type        = number
-              description = "파싱된 그래프의 애플리케이션 포트"
+              description = "외부에서 접속하는 포트 (방화벽 규칙이 허용하는 포트)"
               default     = %d
             }
             """.formatted(applicationPort);

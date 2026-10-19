@@ -28,9 +28,7 @@ public class OciTerraformRenderer implements CloudTerraformRenderer {
         DeploymentTargetReqDTO.OciDeploymentTarget target = requireTarget(deploymentTarget);
         return List.of(
             file("oci/terraform/main.tf", mainTerraform(publicPorts)),
-            file("oci/terraform/variables.tf", variablesTerraform(context.publicPort())
-                .replace("파싱된 그래프의 Spring Boot 애플리케이션 포트", context.nginx().isPresent()
-                    ? "NGINX 외부 공개 포트" : "파싱된 그래프의 Spring Boot 애플리케이션 포트")),
+            file("oci/terraform/variables.tf", variablesTerraform(context.publicPort())),
             file("oci/terraform/terraform.tfvars.example", tfvarsExample(
                 context.publicPort(), target))
         );
@@ -272,7 +270,7 @@ public class OciTerraformRenderer implements CloudTerraformRenderer {
 
             variable "app_port" {
               type        = number
-              description = "파싱된 그래프의 애플리케이션 포트"
+              description = "외부에서 접속하는 포트 (방화벽 규칙이 허용하는 포트)"
               default     = %d
             }
             """.formatted(applicationPort);

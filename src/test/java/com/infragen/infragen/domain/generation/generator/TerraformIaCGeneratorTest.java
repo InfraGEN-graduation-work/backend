@@ -169,6 +169,8 @@ class TerraformIaCGeneratorTest {
             () -> assertTrue(fileContent(first, "aws/terraform/terraform.tfvars.example")
                 .contains("aws_ami_id = \"ami-xxxxxxxx\"")),
             () -> assertTrue(fileContent(first, "aws/terraform/variables.tf").contains("default     = 9090")),
+            () -> assertTrue(fileContent(first, "aws/terraform/variables.tf")
+                .contains("description = \"외부에서 접속하는 포트 (방화벽 규칙이 허용하는 포트)\"")),
             () -> assertTrue(fileContent(first, "docker-compose.cloud.yml")
                 .contains("${APP_PORT:-9090}:9090")),
             () -> assertFalse(fileContent(first, "docker-compose.cloud.yml").contains("mysql:")),

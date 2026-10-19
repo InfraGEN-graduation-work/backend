@@ -65,6 +65,13 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
             ));
     }
 
+    // 앱은 호스트에서 실행하므로 Compose에 담지 않아도 지원으로 본다. 나머지는 Compose renderer가 있어야 담긴다.
+    @Override
+    public boolean supports(ComponentType componentType) {
+        return componentType.getCategory() == ComponentCategory.APPLICATION
+            || rendererMap.containsKey(componentType);
+    }
+
     // Docker Compose 파일을 생성하기 위한 OutputFormat을 반환
     @Override
     public OutputFormat getOutputFormat() {

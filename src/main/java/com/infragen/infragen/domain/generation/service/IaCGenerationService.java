@@ -12,6 +12,7 @@ import com.infragen.infragen.domain.generation.generator.LocalIaCGenerator;
 import com.infragen.infragen.domain.generation.generator.TargetAwareIaCGenerator;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
+import com.infragen.infragen.global.enums.ComponentType;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -58,6 +59,22 @@ public class IaCGenerationService {
             throw new IaCGenerationException(IaCGenerationErrorCode.UNSUPPORTED_OUTPUT_FORMAT);
         }
         return generator.generate(parsingResult);
+    }
+
+    /**
+     * Local generator가 해당 타입을 산출물에 담는지 확인한다.
+     *
+     * @param outputFormat 확인할 Local 출력 형식
+     * @param componentType 확인할 component type
+     * @return 산출물에 담을 수 있으면 {@code true}
+     * @throws IaCGenerationException 지원하는 Local generator가 없을 때
+     */
+    public boolean supportsLocal(OutputFormat outputFormat, ComponentType componentType) {
+        LocalIaCGenerator generator = localGeneratorMap.get(outputFormat);
+        if (generator == null) {
+            throw new IaCGenerationException(IaCGenerationErrorCode.UNSUPPORTED_OUTPUT_FORMAT);
+        }
+        return generator.supports(componentType);
     }
 
     /**

@@ -38,6 +38,7 @@ import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLEnvComponent;
 import com.infragen.infragen.domain.parsing.dto.response.RedisComponent;
 import com.infragen.infragen.domain.parsing.dto.response.SpringBootComponent;
+import com.infragen.infragen.global.enums.ComponentType;
 
 @DisplayName("Docker Compose IaC 생성기")
 class DockerComposeIaCGeneratorTest {
@@ -152,6 +153,16 @@ class DockerComposeIaCGeneratorTest {
     @DisplayName("OutputFormat — DOCKER_COMPOSE")
     void getOutputFormat_ReturnsDockerCompose() {
         assertEquals(OutputFormat.DOCKER_COMPOSE, generator.getOutputFormat());
+    }
+
+    @Test
+    @DisplayName("supports — 앱과 Compose renderer가 있는 타입만 지원")
+    void supports_RendererPresence_DecidesSupport() {
+        assertAll(
+            () -> assertTrue(generator.supports(ComponentType.SPRING_BOOT)),
+            () -> assertTrue(generator.supports(ComponentType.MYSQL)),
+            () -> assertFalse(generator.supports(ComponentType.CADDY))
+        );
     }
 
     @Test

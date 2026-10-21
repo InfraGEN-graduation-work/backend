@@ -205,6 +205,16 @@ public enum ParsingErrorCode implements BaseErrorCode {
             HttpStatus.BAD_REQUEST,
             "웹 서버는 애플리케이션에서 오는 연결선 하나만 가질 수 있습니다.",
             "PARSING400_41"
+    ),
+    INVALID_CADDY_IMAGE_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "Caddy 이미지 버전은 영문, 숫자, 점, 언더바, 슬래시, 콜론, 골뱅이, 하이픈만 사용할 수 있습니다.",
+            "PARSING400_42"
+    ),
+    INVALID_CADDY_VOLUME_NAME(
+            HttpStatus.BAD_REQUEST,
+            "Caddy 볼륨 이름은 영문 또는 숫자로 시작하고 영문, 숫자, 언더바, 점, 하이픈만 사용할 수 있습니다.",
+            "PARSING400_43"
     );
 
     private final HttpStatus httpStatus;

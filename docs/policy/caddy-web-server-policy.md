@@ -12,7 +12,7 @@ Caddy 노드를 지원하면서 정한 정책과 그 이유를 기록한다. 구
 
 ## 노드 속성
 
-- `imageVersion`: 필수. Compose의 `image:`에 그대로 쓴다.
+- `imageVersion`: 필수. 앞뒤 공백을 제거하고 Compose의 `image:`에 쓴다.
 - `containerName`: 선택. 파싱만 하고 CLOUD Compose에는 쓰지 않는다. 다른 CLOUD service와 같게 service 이름은 `caddy`로 고정한다.
 - `domain`: 선택. 비어 있으면 HTTP(80)만 서비스하고, 있으면 Caddy가 HTTPS 인증서를 자동 발급한다. `domain`과 `volumeName`은 컴포넌트를 만들 때 앞뒤 공백을 제거해 이후 코드가 다시 정리하지 않는다.
 - `volumeName`: 도메인이 있으면 필수다. 인증서는 `/data`에 저장되는데, 컨테이너를 다시 만들 때마다 재발급하면 발급 한도에 걸릴 수 있어서 영속 볼륨이 필요하다.
@@ -21,9 +21,10 @@ Caddy 노드를 지원하면서 정한 정책과 그 이유를 기록한다. 구
 
 ## 입력 검증
 
-- 이미지 버전 누락은 `PARSING400_37`로 거부한다.
+- 이미지 버전 누락은 `PARSING400_37`로 거부한다. 형식은 `[a-zA-Z0-9][a-zA-Z0-9._/:@-]*`만 허용하고 위반하면 `PARSING400_42`로 거부한다. 값이 `image:` 줄에 그대로 들어가므로 줄바꿈, 공백, `${...}`로 Compose 구조가 바뀌는 것을 막는다. NGINX와 같은 규칙이다.
 - 도메인은 점을 포함한 호스트명만 허용하고 위반하면 `PARSING400_38`로 거부한다. 도메인이 Caddyfile의 사이트 주소로 그대로 들어가므로 공백, 중괄호, 줄바꿈처럼 설정을 바꿀 수 있는 문자를 막아야 한다. 마지막 라벨이 영문자로 시작해야 하므로 IP와 `localhost`도 거부하고, 한글 도메인은 퓨니코드로 입력해야 한다.
 - 도메인이 있는데 볼륨 이름이 없으면 `PARSING400_39`으로 거부한다.
+- 볼륨 이름은 값이 있으면 도메인 유무와 상관없이 `[a-zA-Z0-9][a-zA-Z0-9_.-]*`만 허용하고 위반하면 `PARSING400_43`으로 거부한다. 도메인이 없어도 이름이 있으면 마운트와 루트 `volumes:` 키에 들어가기 때문이다. 콜론이 있으면 마운트 대상이 바뀌므로 인코딩이 아니라 거부한다.
 
 ## 그래프 규칙
 
@@ -46,7 +47,7 @@ Caddy 노드를 지원하면서 정한 정책과 그 이유를 기록한다. 구
 - 80/443은 앱 CIDR이 허용한 범위에만 열린다. 외부에 공개하려면 사용자가 해당 CIDR을 지정해야 한다.
 - 생성기는 앱 포트가 Caddy의 80/443과 같은지 확인하지 않는다. 앱, DB, 캐시의 포트는 1024 이상이어야 하는 파싱 검증(`PARSING400_5`)이 충돌을 막으며, 이 하한을 낮추면 Compose 호스트 포트와 Terraform ingress가 겹칠 수 있으므로 함께 확인해야 한다.
 - 앱 service의 포트 매핑은 Caddy가 있어도 그대로라서 앱 포트가 호스트에 계속 공개된다. NGINX는 앱 포트를 닫고 NGINX 포트만 공개하므로 두 웹 서버의 공개 정책이 다르다. 통일 여부는 아직 정하지 않았다.
-- `imageVersion`과 `volumeName`은 다른 컴포넌트와 같게 별도 검증 없이 Compose YAML에 들어간다.
+- MySQL, PostgreSQL, MongoDB, Redis의 `imageVersion`과 `volumeName`은 아직 형식 검증 없이 Compose YAML에 들어간다. Caddy와 NGINX만 검증하며, 나머지는 후속 이슈로 남겼다.
 - 생성기는 Caddy가 앱에 연결됐는지 다시 확인하지 않는다. 연결 검증은 parsing 단계의 책임이며, 그래프가 이 단계를 통과해야 한다는 전제를 둔다.
 - 산출물은 plan-only scaffold다. 실제 Caddy 컨테이너 기동과 Caddyfile 문법 검증, `terraform apply`는 수행하지 않는다. Terraform 산출물은 `terraform validate`까지만 확인한다.
 - 프론트에서 Local 단독을 선택한 채 Caddy 노드를 배치하면 생성 시점에야 거부된다.

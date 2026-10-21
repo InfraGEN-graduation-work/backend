@@ -165,6 +165,97 @@ class CaddyParserTest {
     }
 
     @Test
+    @DisplayName("이미지 버전 앞뒤 공백 — 제거해서 저장")
+    void parse_ImageVersionWithSurroundingSpaces_TrimsImageVersion() {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("imageVersion", " caddy:2.8 ");
+
+        // when
+        CaddyComponent component = parse(properties);
+
+        // then
+        assertEquals("caddy:2.8", component.getImageVersion());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"caddy", "caddy:2.8-alpine", "ghcr.io/org/caddy:2", "caddy@sha256:abc123"})
+    @DisplayName("이미지 참조 형식 — 파싱 성공")
+    void parse_ValidImageVersion_ReturnsComponent(String imageVersion) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("imageVersion", imageVersion);
+
+        // when
+        CaddyComponent component = parse(properties);
+
+        // then
+        assertEquals(imageVersion, component.getImageVersion());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "caddy:2\n    privileged: true", "caddy 2", "${IMAGE}", "-caddy", "caddy:2\"", "caddy#2"
+    })
+    @DisplayName("YAML 구조를 바꿀 수 있는 이미지 버전 — PARSING400_42")
+    void parse_InvalidImageVersion_Throws(String imageVersion) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("imageVersion", imageVersion);
+
+        // when
+        ParsingException exception = assertThrows(ParsingException.class, () -> parse(properties));
+
+        // then
+        assertEquals(ParsingErrorCode.INVALID_CADDY_IMAGE_VERSION, exception.getCode());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"caddy_data", "caddy-data.1", "Data1"})
+    @DisplayName("Docker 볼륨 이름 규칙 — 파싱 성공")
+    void parse_ValidVolumeName_ReturnsComponent(String volumeName) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("volumeName", volumeName);
+
+        // when
+        CaddyComponent component = parse(properties);
+
+        // then
+        assertEquals(volumeName, component.getVolumeName());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"caddy@data", "certs:/etc", "caddy data", "caddy\ndata", "_data", ".data", "-data", "${VOL}"})
+    @DisplayName("볼륨 이름 규칙을 어긴 값 — PARSING400_43")
+    void parse_InvalidVolumeName_Throws(String volumeName) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("volumeName", volumeName);
+
+        // when
+        ParsingException exception = assertThrows(ParsingException.class, () -> parse(properties));
+
+        // then
+        assertEquals(ParsingErrorCode.INVALID_CADDY_VOLUME_NAME, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("도메인이 없어도 볼륨 이름이 있으면 형식을 검사 — PARSING400_43")
+    void parse_WithoutDomainInvalidVolumeName_Throws() {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("domain", "");
+        properties.put("volumeName", "caddy@data");
+
+        // when
+        ParsingException exception = assertThrows(ParsingException.class, () -> parse(properties));
+
+        // then
+        assertEquals(ParsingErrorCode.INVALID_CADDY_VOLUME_NAME, exception.getCode());
+    }
+
+    @Test
     @DisplayName("도메인이 있는데 볼륨 이름 누락 — PARSING400_39")
     void parse_DomainWithoutVolume_Throws() {
         // given

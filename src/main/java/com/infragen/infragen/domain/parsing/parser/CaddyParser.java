@@ -19,6 +19,7 @@ import tools.jackson.databind.JsonNode;
  * <p>호스트 포트는 80/443으로 고정이라 포트를 받지 않고, 그래서 {@code ParsingService}의 포트 범위와 중복 검사를 거치지 않는다.
  * {@code domain}은 Caddyfile의 사이트 주소로 그대로 들어가므로 공백, 중괄호, 줄바꿈처럼 설정을 바꿀 수 있는 문자를
  * 막으려고 점을 포함한 호스트명 형식만 허용한다. 도메인이 있으면 자동 HTTPS 인증서를 보관할 볼륨이 필요하다.
+ * {@code imageVersion}과 {@code volumeName}도 Compose YAML에 그대로 들어가므로 형식을 검증해 거부한다.
  */
 @Component
 public class CaddyParser implements ComponentParser {
@@ -26,6 +27,12 @@ public class CaddyParser implements ComponentParser {
     // 점으로 구분한 라벨의 연속이며 마지막 라벨은 영문자로 시작해야 한다. 숫자로 끝나는 IP와 점이 없는 localhost를 거부한다.
     private static final Pattern DOMAIN_PATTERN = Pattern.compile(
         "(?=.{1,253}$)([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?");
+
+    // Compose YAML의 image 값에 그대로 들어가므로 줄바꿈, 공백, ${...} 변수 참조를 막는다. NginxParser와 같은 규칙이다.
+    private static final Pattern IMAGE_VERSION_PATTERN = Pattern.compile("[a-zA-Z0-9][a-zA-Z0-9._/:@-]*");
+
+    // Docker 볼륨 이름 규칙이다. 마운트 줄과 루트 volumes 키에 들어가므로 콜론, 공백, 줄바꿈이 구조를 바꾸지 못하게 한다.
+    private static final Pattern VOLUME_NAME_PATTERN = Pattern.compile("[a-zA-Z0-9][a-zA-Z0-9_.-]*");
 
     @Override
     public ComponentType getSupportedType() {
@@ -48,15 +55,24 @@ public class CaddyParser implements ComponentParser {
             throw new ParsingException(ParsingErrorCode.MISSING_CADDY_IMAGE_VERSION);
         }
 
+        String resolvedImageVersion = imageVersion.trim();
+        if (!IMAGE_VERSION_PATTERN.matcher(resolvedImageVersion).matches()) {
+            throw new ParsingException(ParsingErrorCode.INVALID_CADDY_IMAGE_VERSION);
+        }
+
         String resolvedDomain = domain == null ? "" : domain.trim();
-        String resolvedVolumeName = volumeName == null ? "" : volumeName;
+        String resolvedVolumeName = volumeName == null ? "" : volumeName.trim();
         if (!resolvedDomain.isEmpty()) {
             if (!DOMAIN_PATTERN.matcher(resolvedDomain).matches()) {
                 throw new ParsingException(ParsingErrorCode.INVALID_CADDY_DOMAIN);
             }
-            if (resolvedVolumeName.isBlank()) {
+            if (resolvedVolumeName.isEmpty()) {
                 throw new ParsingException(ParsingErrorCode.MISSING_CADDY_VOLUME_NAME);
             }
+        }
+        // 볼륨은 도메인이 없어도 이름이 있으면 마운트되므로 도메인 유무와 상관없이 형식을 검사한다.
+        if (!resolvedVolumeName.isEmpty() && !VOLUME_NAME_PATTERN.matcher(resolvedVolumeName).matches()) {
+            throw new ParsingException(ParsingErrorCode.INVALID_CADDY_VOLUME_NAME);
         }
 
         float posX = node.getPositionX() != null ? node.getPositionX() : 0f;
@@ -66,7 +82,7 @@ public class CaddyParser implements ComponentParser {
             .id(node.getNodeId())
             .posX(posX)
             .posY(posY)
-            .imageVersion(imageVersion)
+            .imageVersion(resolvedImageVersion)
             .containerName(containerName != null ? containerName : "")
             .domain(resolvedDomain)
             .volumeName(resolvedVolumeName)

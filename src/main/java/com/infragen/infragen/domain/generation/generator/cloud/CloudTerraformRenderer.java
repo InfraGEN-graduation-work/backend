@@ -17,10 +17,15 @@ public interface CloudTerraformRenderer {
      *
      * @param context 파싱된 runtime graph 실행 정보
      * @param deploymentTarget provider별 배포 대상 입력
+     * @param publicPorts 앱 포트 외에 호스트에 공개할 TCP 포트. ingress로 연다.
+     * @param applicationPortIngress 앱 포트(또는 NGINX 포트) ingress와 {@code app_port} 변수를 만들지 여부. 앞단 웹 서버가
+     *                               앱 포트를 닫는 경우 {@code false}라서 ingress와 변수를 만들지 않는다.
      * @return provider Terraform 파일 목록
      */
     List<IaCFileDTO.FileContentResDTO> render(
         CloudDeployContext context,
-        DeploymentTargetReqDTO.Target deploymentTarget
+        DeploymentTargetReqDTO.Target deploymentTarget,
+        List<Integer> publicPorts,
+        boolean applicationPortIngress
     );
 }

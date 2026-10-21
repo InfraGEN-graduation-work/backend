@@ -143,6 +143,28 @@ public final class CloudDeployContext {
                 .anyMatch(component -> component.getComponentType() == componentType);
     }
 
+    /**
+     * 그래프에서 지정한 component type과 DTO 타입에 해당하는 항목을 edge와 무관하게 찾는다.
+     *
+     * <p>앱의 의존 인프라가 아닌 component(예: 앱 앞단 웹 서버)를 찾을 때 쓴다. 앱 연결 여부는 확인하지 않는다.
+     * 연결 규칙은 parsing 단계에서 검증한다.
+     *
+     * @param componentType  찾을 component type
+     * @param componentClass 반환할 DTO 타입
+     * @param <T>            반환 component 타입
+     * @return 일치하는 component 또는 없으면 빈 값
+     */
+    public <T extends BaseComponent> Optional<T> component(
+            ComponentType componentType,
+            Class<T> componentClass
+    ) {
+        return components.stream()
+                .filter(component -> component.getComponentType() == componentType)
+                .filter(componentClass::isInstance)
+                .map(componentClass::cast)
+                .findFirst();
+    }
+
     private Set<String> incomingDependencyNodeIds() {
         if (application.getNodeId() == null) {
             return Set.of();

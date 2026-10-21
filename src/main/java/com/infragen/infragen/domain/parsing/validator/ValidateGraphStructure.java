@@ -52,6 +52,7 @@ public class ValidateGraphStructure {
 
         if (edges == null || edges.isEmpty()) {
             validateInfrastructureTypeUniqueness(nodes, nodeTypeMap);
+            validateWebServerPlacement(nodeTypeMap, List.of());
             return;
         }
 
@@ -131,6 +132,42 @@ public class ValidateGraphStructure {
 
         // 앱 단위 중복(PARSING400_25)과 순환 같은 구조 오류가 먼저 걸리도록 마지막에 수행한다.
         validateInfrastructureTypeUniqueness(nodes, nodeTypeMap);
+        validateWebServerPlacement(nodeTypeMap, edges);
+    }
+
+    // 웹 서버는 앱 앞단에서 앱 하나를 프록시하므로 노드 하나와 앱에서 오는 연결선 하나만 허용한다.
+    // 그렇지 않으면 생성 단계에서 어느 앱을 프록시할지 정할 수 없고, 연결 없는 웹 서버는 산출물에 조용히 들어가거나 빠진다.
+    // 방향(앱 → 웹 서버)은 위의 우선순위 검사가 이미 보장한다.
+    private void validateWebServerPlacement(Map<String, ComponentType> nodeTypeMap, List<EdgeDTO> edges) {
+        List<String> webServerNodeIds = nodeTypeMap.entrySet().stream()
+                .filter(entry -> entry.getValue().getCategory() == ComponentCategory.WEB_SERVER)
+                .map(Map.Entry::getKey)
+                .toList();
+        if (webServerNodeIds.isEmpty()) {
+            return;
+        }
+        if (webServerNodeIds.size() > 1) {
+            throw new ParsingException(ParsingErrorCode.DUPLICATE_WEB_SERVER_COMPONENT);
+        }
+
+        String webServerNodeId = webServerNodeIds.getFirst();
+        // 같은 연결선이 중복돼도 하나로 센다. 위의 방향 검사와 같은 기준이다.
+        Set<String> webServerEdgeKeys = new HashSet<>();
+        EdgeDTO webServerEdge = null;
+        for (EdgeDTO edge : edges) {
+            if (webServerNodeId.equals(edge.getSourceNodeId()) || webServerNodeId.equals(edge.getTargetNodeId())) {
+                if (webServerEdgeKeys.add(edge.getSourceNodeId() + "->" + edge.getTargetNodeId())) {
+                    webServerEdge = edge;
+                }
+            }
+        }
+
+        boolean fromApplication = webServerEdgeKeys.size() == 1
+                && webServerNodeId.equals(webServerEdge.getTargetNodeId())
+                && nodeTypeMap.get(webServerEdge.getSourceNodeId()).getCategory() == ComponentCategory.APPLICATION;
+        if (!fromApplication) {
+            throw new ParsingException(ParsingErrorCode.INVALID_WEB_SERVER_CONNECTION);
+        }
     }
 
     // LOCAL_DEV .env는 타입별 고정 변수(MYSQL_* 등)를 쓰므로 같은 타입 노드가 둘이면 마지막 노드 값만 남는다.

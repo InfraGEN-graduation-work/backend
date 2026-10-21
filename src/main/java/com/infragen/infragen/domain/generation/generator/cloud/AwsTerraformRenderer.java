@@ -22,16 +22,16 @@ public class AwsTerraformRenderer implements CloudTerraformRenderer {
     @Override
     public List<IaCFileDTO.FileContentResDTO> render(
         CloudDeployContext context,
-        DeploymentTargetReqDTO.Target deploymentTarget
+        DeploymentTargetReqDTO.Target deploymentTarget,
+        List<Integer> publicPorts,
+        boolean applicationPortIngress
     ) {
         DeploymentTargetReqDTO.AwsDeploymentTarget target = requireTarget(deploymentTarget);
         return List.of(
-            file("aws/terraform/main.tf", mainTerraform()),
-            file("aws/terraform/variables.tf", variablesTerraform(context.publicPort())
-                .replace("파싱된 그래프의 애플리케이션 포트", context.nginx().isPresent()
-                    ? "NGINX 외부 공개 포트" : "파싱된 그래프의 애플리케이션 포트")),
+            file("aws/terraform/main.tf", mainTerraform(publicPorts, applicationPortIngress)),
+            file("aws/terraform/variables.tf", variablesTerraform(context.publicPort(), applicationPortIngress)),
             file("aws/terraform/terraform.tfvars.example", tfvarsExample(
-                context.publicPort(), target))
+                context.publicPort(), applicationPortIngress, target))
         );
     }
 
@@ -51,7 +51,7 @@ public class AwsTerraformRenderer implements CloudTerraformRenderer {
             .build();
     }
 
-    private String mainTerraform() {
+    private String mainTerraform(List<Integer> publicPorts, boolean applicationPortIngress) {
         return """
             # InfraGEN CLOUD_DEPLOY 계획 전용 scaffold입니다. apply_ready=false 상태입니다.
             terraform {
@@ -123,14 +123,7 @@ public class AwsTerraformRenderer implements CloudTerraformRenderer {
                 cidr_blocks = [var.aws_admin_cidr]
               }
 
-              ingress {
-                description = "애플리케이션"
-                from_port   = var.app_port
-                to_port     = var.app_port
-                protocol    = "tcp"
-                cidr_blocks = [var.aws_app_cidr]
-              }
-
+            """ + applicationIngress(applicationPortIngress) + publicIngress(publicPorts) + """
               egress {
                 from_port   = 0
                 to_port     = 0
@@ -172,7 +165,42 @@ public class AwsTerraformRenderer implements CloudTerraformRenderer {
             """;
     }
 
-    private String variablesTerraform(int applicationPort) {
+    // 앞단 웹 서버가 앱 포트를 닫는 경우(Caddy)에는 앱 포트 ingress를 만들지 않는다. NGINX는 app_port 변수에 NGINX 포트가 들어간다.
+    private String applicationIngress(boolean applicationPortIngress) {
+        if (!applicationPortIngress) {
+            return "";
+        }
+        return """
+              ingress {
+                description = "애플리케이션"
+                from_port   = var.app_port
+                to_port     = var.app_port
+                protocol    = "tcp"
+                cidr_blocks = [var.aws_app_cidr]
+              }
+
+            """;
+    }
+
+    // 앱 포트와 같은 CIDR로 공개 포트를 연다. 새 변수나 전체 개방 기본값을 만들지 않는다.
+    private String publicIngress(List<Integer> publicPorts) {
+        StringBuilder ingress = new StringBuilder();
+        for (int port : publicPorts) {
+            ingress.append("""
+                  ingress {
+                    description = "웹 서버 공개 포트 %d"
+                    from_port   = %d
+                    to_port     = %d
+                    protocol    = "tcp"
+                    cidr_blocks = [var.aws_app_cidr]
+                  }
+
+                """.formatted(port, port, port));
+        }
+        return ingress.toString();
+    }
+
+    private String variablesTerraform(int applicationPort, boolean applicationPortIngress) {
         return """
             variable "aws_region" {
               type        = string
@@ -242,17 +270,19 @@ public class AwsTerraformRenderer implements CloudTerraformRenderer {
               type        = string
               description = "애플리케이션 접근을 허용할 CIDR 블록"
             }
+            """ + (applicationPortIngress ? """
 
             variable "app_port" {
               type        = number
-              description = "파싱된 그래프의 애플리케이션 포트"
+              description = "외부에서 접속하는 포트 (방화벽 규칙이 허용하는 포트)"
               default     = %d
             }
-            """.formatted(applicationPort);
+            """.formatted(applicationPort) : "");
     }
 
     private String tfvarsExample(
         int applicationPort,
+        boolean applicationPortIngress,
         DeploymentTargetReqDTO.AwsDeploymentTarget target
     ) {
         return """
@@ -270,7 +300,6 @@ public class AwsTerraformRenderer implements CloudTerraformRenderer {
             aws_instance_type = %s
             aws_admin_cidr = %s
             aws_app_cidr = %s
-            app_port = %d
             """.formatted(
                 hcl(valueOrDefault(target.region(), "ap-northeast-2")),
                 hcl(target.vpcName()),
@@ -284,9 +313,8 @@ public class AwsTerraformRenderer implements CloudTerraformRenderer {
                 hcl(target.amiId()),
                 hcl(valueOrDefault(target.instanceType(), "t3.micro")),
                 hcl(target.adminCidr()),
-                hcl(target.appCidr()),
-                applicationPort
-            );
+                hcl(target.appCidr())
+            ) + (applicationPortIngress ? "app_port = %d\n".formatted(applicationPort) : "");
     }
 
     private String valueOrDefault(String value, String defaultValue) {

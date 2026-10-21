@@ -408,6 +408,152 @@ class ValidateGraphStructureTest {
         assertDoesNotThrow(validation::run);
     }
 
+    @Test
+    @DisplayName("앱 → Caddy 연결 — 통과")
+    void validate_ApplicationToCaddy_DoesNotThrow() {
+        // given
+        List<NodeDTO> nodes = List.of(mysqlNode("db-1"), springBootNode("app-1"), caddyNode("caddy-1"));
+        List<EdgeDTO> edges = List.of(edge("db-1", "app-1"), edge("app-1", "caddy-1"));
+
+        // when
+        Runnable validation = () -> validateGraphStructure.validate(nodes, edges);
+
+        // then
+        assertDoesNotThrow(validation::run);
+    }
+
+    @Test
+    @DisplayName("같은 앱 → Caddy 연결선이 중복 — 하나로 세어 통과")
+    void validate_DuplicateApplicationToCaddyEdge_DoesNotThrow() {
+        // given
+        List<NodeDTO> nodes = List.of(springBootNode("app-1"), caddyNode("caddy-1"));
+        List<EdgeDTO> edges = List.of(edge("app-1", "caddy-1"), edge("app-1", "caddy-1"));
+
+        // when
+        Runnable validation = () -> validateGraphStructure.validate(nodes, edges);
+
+        // then
+        assertDoesNotThrow(validation::run);
+    }
+
+    @Test
+    @DisplayName("연결선 없는 웹 서버 — PARSING400_41")
+    void validate_CaddyWithoutEdges_Throws() {
+        // given
+        List<NodeDTO> nodes = List.of(springBootNode("app-1"), caddyNode("caddy-1"));
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> validateGraphStructure.validate(nodes, List.of())
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.INVALID_WEB_SERVER_CONNECTION, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("다른 연결선은 있지만 웹 서버에 닿지 않음 — PARSING400_41")
+    void validate_CaddyNotTouchedByAnyEdge_Throws() {
+        // given
+        List<NodeDTO> nodes = List.of(mysqlNode("db-1"), springBootNode("app-1"), caddyNode("caddy-1"));
+        List<EdgeDTO> edges = List.of(edge("db-1", "app-1"));
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> validateGraphStructure.validate(nodes, edges)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.INVALID_WEB_SERVER_CONNECTION, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("앱이 아닌 노드에서 웹 서버로 연결 — PARSING400_41")
+    void validate_NonApplicationToCaddy_Throws() {
+        // given
+        List<NodeDTO> nodes = List.of(mysqlNode("db-1"), caddyNode("caddy-1"));
+        List<EdgeDTO> edges = List.of(edge("db-1", "caddy-1"));
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> validateGraphStructure.validate(nodes, edges)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.INVALID_WEB_SERVER_CONNECTION, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("앱 둘이 한 웹 서버에 연결 — PARSING400_41")
+    void validate_TwoApplicationsToOneCaddy_Throws() {
+        // given
+        List<NodeDTO> nodes = List.of(springBootNode("app-1"), springBootNode("app-2"), caddyNode("caddy-1"));
+        List<EdgeDTO> edges = List.of(edge("app-1", "caddy-1"), edge("app-2", "caddy-1"));
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> validateGraphStructure.validate(nodes, edges)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.INVALID_WEB_SERVER_CONNECTION, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("종류가 다른 웹 서버(Caddy, NGINX) 둘 — 카테고리 기준으로 PARSING400_40")
+    void validate_CaddyAndNginx_ThrowsDuplicateWebServer() {
+        // given
+        List<NodeDTO> nodes = List.of(springBootNode("app-1"), caddyNode("caddy-1"), nginxNode("nginx-1"));
+        List<EdgeDTO> edges = List.of(edge("app-1", "caddy-1"), edge("app-1", "nginx-1"));
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> validateGraphStructure.validate(nodes, edges)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.DUPLICATE_WEB_SERVER_COMPONENT, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("Caddy → 앱 역방향 — 기존 방향 검사로 PARSING400_10")
+    void validate_CaddyToApplication_ThrowsInvalidDirection() {
+        // given
+        List<NodeDTO> nodes = List.of(springBootNode("app-1"), caddyNode("caddy-1"));
+        List<EdgeDTO> edges = List.of(edge("caddy-1", "app-1"));
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> validateGraphStructure.validate(nodes, edges)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.INVALID_COMPONENT_DEPENDENCY, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("웹 서버 노드가 둘 — PARSING400_40")
+    void validate_TwoCaddyNodes_Throws() {
+        // given
+        List<NodeDTO> nodes = List.of(springBootNode("app-1"), caddyNode("caddy-1"), caddyNode("caddy-2"));
+        List<EdgeDTO> edges = List.of(edge("app-1", "caddy-1"), edge("app-1", "caddy-2"));
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> validateGraphStructure.validate(nodes, edges)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.DUPLICATE_WEB_SERVER_COMPONENT, exception.getCode());
+    }
+
     private static NodeDTO mysqlNode(String nodeId) {
         return new NodeDTO(nodeId, "MYSQL", 100f, 200f, Map.of());
     }
@@ -422,6 +568,14 @@ class ValidateGraphStructureTest {
 
     private static NodeDTO springBootNode(String nodeId) {
         return new NodeDTO(nodeId, "SPRING_BOOT", 400f, 200f, Map.of());
+    }
+
+    private static NodeDTO caddyNode(String nodeId) {
+        return new NodeDTO(nodeId, "CADDY", 700f, 200f, Map.of());
+    }
+
+    private static NodeDTO nginxNode(String nodeId) {
+        return new NodeDTO(nodeId, "NGINX", 700f, 400f, Map.of());
     }
 
     private static EdgeDTO edge(String sourceNodeId, String targetNodeId) {

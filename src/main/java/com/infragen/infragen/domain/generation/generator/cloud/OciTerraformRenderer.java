@@ -22,16 +22,16 @@ public class OciTerraformRenderer implements CloudTerraformRenderer {
     @Override
     public List<IaCFileDTO.FileContentResDTO> render(
         CloudDeployContext context,
-        DeploymentTargetReqDTO.Target deploymentTarget
+        DeploymentTargetReqDTO.Target deploymentTarget,
+        List<Integer> publicPorts,
+        boolean applicationPortIngress
     ) {
         DeploymentTargetReqDTO.OciDeploymentTarget target = requireTarget(deploymentTarget);
         return List.of(
-            file("oci/terraform/main.tf", mainTerraform()),
-            file("oci/terraform/variables.tf", variablesTerraform(context.publicPort())
-                .replace("파싱된 그래프의 Spring Boot 애플리케이션 포트", context.nginx().isPresent()
-                    ? "NGINX 외부 공개 포트" : "파싱된 그래프의 Spring Boot 애플리케이션 포트")),
+            file("oci/terraform/main.tf", mainTerraform(publicPorts, applicationPortIngress)),
+            file("oci/terraform/variables.tf", variablesTerraform(context.publicPort(), applicationPortIngress)),
             file("oci/terraform/terraform.tfvars.example", tfvarsExample(
-                context.publicPort(), target))
+                context.publicPort(), applicationPortIngress, target))
         );
     }
 
@@ -51,7 +51,7 @@ public class OciTerraformRenderer implements CloudTerraformRenderer {
             .build();
     }
 
-    private String mainTerraform() {
+    private String mainTerraform(List<Integer> publicPorts, boolean applicationPortIngress) {
         return """
             # InfraGEN CLOUD_DEPLOY 계획 전용 scaffold입니다. apply_ready=false 상태입니다.
             terraform {
@@ -112,15 +112,7 @@ public class OciTerraformRenderer implements CloudTerraformRenderer {
                   max = 22
                 }
               }
-
-              ingress_security_rules {
-                protocol = "6"
-                source   = var.oci_app_cidr
-                tcp_options {
-                  min = var.app_port
-                  max = var.app_port
-                }
-              }
+            """ + applicationIngress(applicationPortIngress) + publicIngress(publicPorts) + """
             }
 
             resource "oci_core_subnet" "public" {
@@ -158,7 +150,44 @@ public class OciTerraformRenderer implements CloudTerraformRenderer {
             """;
     }
 
-    private String variablesTerraform(int applicationPort) {
+    // 앞단 웹 서버가 앱 포트를 닫는 경우(Caddy)에는 앱 포트 ingress를 만들지 않는다. NGINX는 app_port 변수에 NGINX 포트가 들어간다.
+    private String applicationIngress(boolean applicationPortIngress) {
+        if (!applicationPortIngress) {
+            return "";
+        }
+        return """
+
+              ingress_security_rules {
+                protocol = "6"
+                source   = var.oci_app_cidr
+                tcp_options {
+                  min = var.app_port
+                  max = var.app_port
+                }
+              }
+            """;
+    }
+
+    // 앱 포트와 같은 CIDR로 공개 포트를 연다. 새 변수나 전체 개방 기본값을 만들지 않는다.
+    private String publicIngress(List<Integer> publicPorts) {
+        StringBuilder ingress = new StringBuilder();
+        for (int port : publicPorts) {
+            ingress.append("""
+
+                  ingress_security_rules {
+                    protocol = "6"
+                    source   = var.oci_app_cidr
+                    tcp_options {
+                      min = %d
+                      max = %d
+                    }
+                  }
+                """.formatted(port, port));
+        }
+        return ingress.toString();
+    }
+
+    private String variablesTerraform(int applicationPort, boolean applicationPortIngress) {
         return """
             variable "oci_region" {
               type        = string
@@ -248,17 +277,19 @@ public class OciTerraformRenderer implements CloudTerraformRenderer {
               type        = string
               description = "사용자가 제공하는 SSH 공개 키"
             }
+            """ + (applicationPortIngress ? """
 
             variable "app_port" {
               type        = number
-              description = "파싱된 그래프의 애플리케이션 포트"
+              description = "외부에서 접속하는 포트 (방화벽 규칙이 허용하는 포트)"
               default     = %d
             }
-            """.formatted(applicationPort);
+            """.formatted(applicationPort) : "");
     }
 
     private String tfvarsExample(
         int applicationPort,
+        boolean applicationPortIngress,
         DeploymentTargetReqDTO.OciDeploymentTarget target
     ) {
         return """
@@ -280,7 +311,6 @@ public class OciTerraformRenderer implements CloudTerraformRenderer {
             oci_admin_cidr = %s
             oci_app_cidr = %s
             oci_ssh_authorized_keys = %s
-            app_port = %d
             """.formatted(
                 hcl(valueOrDefault(target.region(), "ap-seoul-1")),
                 hcl(target.vcnName()),
@@ -298,9 +328,8 @@ public class OciTerraformRenderer implements CloudTerraformRenderer {
                 hcl(valueOrDefault(target.subnetCidr(), "10.0.1.0/24")),
                 hcl(target.adminCidr()),
                 hcl(target.appCidr()),
-                hcl(target.sshAuthorizedKeys()),
-                applicationPort
-            );
+                hcl(target.sshAuthorizedKeys())
+            ) + (applicationPortIngress ? "app_port = %d\n".formatted(applicationPort) : "");
     }
 
     private String valueOrDefault(String value, String defaultValue) {

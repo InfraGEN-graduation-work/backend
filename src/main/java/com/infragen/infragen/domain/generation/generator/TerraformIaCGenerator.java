@@ -101,17 +101,17 @@ public class TerraformIaCGenerator implements TargetAwareIaCGenerator {
     ) {
         List<IaCFileDTO.FileContentResDTO> files = new ArrayList<>();
 
+        List<Integer> publicPorts = cloudComposeRenderer.publicPorts(context);
+        boolean applicationPortIngress = cloudComposeRenderer.opensApplicationPortIngress(context);
         for (CloudTerraformRenderer renderer : terraformRenderers) {
-            files.addAll(renderer.render(context, deploymentTarget));
+            files.addAll(renderer.render(context, deploymentTarget, publicPorts, applicationPortIngress));
         }
 
         RuntimeDockerfileRenderer dockerfileRenderer = runtimeDockerfileRenderer(context);
         files.addAll(dockerfileRenderer.renderFiles(context));
-        files.addAll(List.of(
-            cloudComposeRenderer.render(context),
-            cloudDeployWarningRenderer.render(dockerfileRenderer.requiredAppFiles())
-        ));
+        files.add(cloudComposeRenderer.render(context));
         files.addAll(cloudComposeRenderer.additionalFiles(context));
+        files.add(cloudDeployWarningRenderer.render(dockerfileRenderer.requiredAppFiles()));
 
         return cloudDeployFileAssembler.assemble(files);
     }

@@ -1,75 +1,78 @@
 package com.infragen.infragen.domain.generation.exception.code.error;
 
-import org.springframework.http.HttpStatus;
-
 import com.infragen.infragen.global.apiPayload.code.BaseErrorCode;
-
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import org.springframework.http.HttpStatus;
 
 @Getter
 @AllArgsConstructor
 public enum IaCGenerationErrorCode implements BaseErrorCode {
 
     UNSUPPORTED_OUTPUT_FORMAT(
-        HttpStatus.BAD_REQUEST,
-        "지원하지 않는 출력 형식입니다.",
-        "GENERATION400_1"
+            HttpStatus.BAD_REQUEST,
+            "지원하지 않는 출력 형식입니다.",
+            "GENERATION400_1"
     ),
     INVALID_COMPONENT_STATE(
-        HttpStatus.BAD_REQUEST,
-        "인프라 코드 생성에 필요한 컴포넌트 상태가 올바르지 않습니다.",
-        "GENERATION400_2"
+            HttpStatus.BAD_REQUEST,
+            "인프라 코드 생성에 필요한 컴포넌트 상태가 올바르지 않습니다.",
+            "GENERATION400_2"
     ),
     INVALID_GENERATION_REQUEST(
-        HttpStatus.BAD_REQUEST,
-        "인프라 코드 생성 요청이 올바르지 않습니다.",
-        "GENERATION400_3"
+            HttpStatus.BAD_REQUEST,
+            "인프라 코드 생성 요청이 올바르지 않습니다.",
+            "GENERATION400_3"
     ),
     MISSING_DEPLOYMENT_OPTION(
-        HttpStatus.BAD_REQUEST,
-        "배포 옵션이 누락되었습니다.",
-        "GENERATION400_4"
+            HttpStatus.BAD_REQUEST,
+            "배포 옵션이 누락되었습니다.",
+            "GENERATION400_4"
     ),
     MISSING_DEPLOYMENT_TARGET(
-        HttpStatus.BAD_REQUEST,
-        "Cloud 배포 대상 설정이 누락되었습니다.",
-        "GENERATION400_5"
+            HttpStatus.BAD_REQUEST,
+            "Cloud 배포 대상 설정이 누락되었습니다.",
+            "GENERATION400_5"
     ),
     INVALID_LOCAL_DEPLOYMENT_CONFIGURATION(
-        HttpStatus.BAD_REQUEST,
-        "Local 배포 설정 조합이 올바르지 않습니다.",
-        "GENERATION400_6"
+            HttpStatus.BAD_REQUEST,
+            "Local 배포 설정 조합이 올바르지 않습니다.",
+            "GENERATION400_6"
     ),
     DEPLOYMENT_TARGET_PROVIDER_MISMATCH(
-        HttpStatus.BAD_REQUEST,
-        "배포 옵션과 배포 대상 provider가 일치하지 않습니다.",
-        "GENERATION400_7"
+            HttpStatus.BAD_REQUEST,
+            "배포 옵션과 배포 대상 provider가 일치하지 않습니다.",
+            "GENERATION400_7"
     ),
     INVALID_DEPLOYMENT_TARGET(
-        HttpStatus.BAD_REQUEST,
-        "Cloud 배포 대상 설정이 올바르지 않습니다.",
-        "GENERATION400_8"
+            HttpStatus.BAD_REQUEST,
+            "Cloud 배포 대상 설정이 올바르지 않습니다.",
+            "GENERATION400_8"
     ),
     AMBIGUOUS_DEPENDENCY_CONFIGURATION(
-        HttpStatus.BAD_REQUEST,
-        "동일한 유형의 Cloud dependency 설정이 중복되었습니다.",
-        "GENERATION400_9"
+            HttpStatus.BAD_REQUEST,
+            "동일한 유형의 Cloud dependency 설정이 중복되었습니다.",
+            "GENERATION400_9"
     ),
     MULTIPLE_APPLICATION_COMPONENTS(
-        HttpStatus.BAD_REQUEST,
-        "Cloud 배포는 애플리케이션 노드 하나만 지원합니다.",
-        "GENERATION400_10"
+            HttpStatus.BAD_REQUEST,
+            "Cloud 배포는 애플리케이션 노드 하나만 지원합니다.",
+            "GENERATION400_10"
     ),
     UNSUPPORTED_ENV_VALUE(
-        HttpStatus.BAD_REQUEST,
-        "환경변수 값에 줄바꿈이나 NUL 문자를 사용할 수 없습니다.",
-        "GENERATION400_13"
+            HttpStatus.BAD_REQUEST,
+            "환경변수 값에 줄바꿈이나 NUL 문자를 사용할 수 없습니다.",
+            "GENERATION400_13"
     ),
     UNSUPPORTED_ENV_CHARACTER(
-        HttpStatus.BAD_REQUEST,
-        "환경변수 값에 큰따옴표, 백슬래시, 달러 기호를 사용할 수 없습니다.",
-        "GENERATION400_14"
+            HttpStatus.BAD_REQUEST,
+            "환경변수 값에 큰따옴표, 백슬래시, 달러 기호를 사용할 수 없습니다.",
+            "GENERATION400_14"
+    ),
+    UNSUPPORTED_LOCAL_COMPONENT(
+            HttpStatus.BAD_REQUEST,
+            "Local 배포에서 지원하지 않는 컴포넌트입니다. 해당 노드는 Cloud 배포에서만 사용할 수 있습니다.",
+            "GENERATION400_15"
     );
 
     private final HttpStatus httpStatus;

@@ -68,6 +68,7 @@ public class GenerationCommandService {
         DeploymentOption deploymentOption = request.deploymentOption();
 
         if (deploymentOption == DeploymentOption.LOCAL) {
+            rejectUnsupportedForLocalOnly(parsingResult);
             return iaCGenerationService.generate(parsingResult, OutputFormat.DOCKER_COMPOSE);
         }
 
@@ -90,6 +91,17 @@ public class GenerationCommandService {
         return IaCFileDTO.BundleResDTO.builder()
             .files(List.copyOf(files))
             .build();
+    }
+
+    // Local 단독 요청은 Local renderer가 없는 컴포넌트(예: Caddy)가 산출물에서 조용히 빠지므로 거부한다.
+    // 클라우드 요청의 includeLocalSpec은 그 컴포넌트를 클라우드 산출물에만 담으므로 여기서 거부하지 않는다.
+    private void rejectUnsupportedForLocalOnly(ParsingResultDTO parsingResult) {
+        boolean hasUnsupported = parsingResult.getComponents().stream()
+            .anyMatch(component -> !iaCGenerationService.supportsLocal(
+                OutputFormat.DOCKER_COMPOSE, component.getComponentType()));
+        if (hasUnsupported) {
+            throw new IaCGenerationException(IaCGenerationErrorCode.UNSUPPORTED_LOCAL_COMPONENT);
+        }
     }
 
     private void validateRequest(GenerateReqDTO.Request request) {

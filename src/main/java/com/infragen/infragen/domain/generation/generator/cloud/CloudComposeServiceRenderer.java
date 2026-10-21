@@ -1,8 +1,10 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
-import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
-import com.infragen.infragen.global.enums.ComponentType;
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
+import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
+import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
+import com.infragen.infragen.domain.parsing.dto.response.VolumeComponent;
+import com.infragen.infragen.global.enums.ComponentType;
 import java.util.List;
 import java.util.Optional;
 import java.util.SequencedMap;
@@ -26,10 +28,6 @@ public interface CloudComposeServiceRenderer {
      * @return Compose service block
      */
     String render(CloudDeployContext context);
-
-    default List<IaCFileDTO.FileContentResDTO> additionalFiles(CloudDeployContext context) {
-        return List.of();
-    }
 
     /**
      * 앱 컨테이너 {@code environment}에 넣을 이 의존 인프라의 타입별 중립 변수를 만든다.
@@ -55,5 +53,57 @@ public interface CloudComposeServiceRenderer {
      */
     default Optional<DatabaseConnection> databaseConnection() {
         return Optional.empty();
+    }
+
+    /**
+     * 이 service가 산출물에 더할 파일을 돌려준다. 예를 들어 컨테이너가 읽는 설정 파일이나 사용자 안내 파일이다.
+     *
+     * <p>파일 이름은 {@code cloud/} 아래 상대 경로다. {@link #isEnabled}가 {@code true}일 때만 호출한다.
+     *
+     * @return 추가할 파일 목록. 더할 파일이 없으면 빈 목록
+     */
+    default List<IaCFileDTO.FileContentResDTO> additionalFiles(CloudDeployContext context) {
+        return List.of();
+    }
+
+    /**
+     * 이 service가 호스트에 공개하는 TCP 포트를 돌려준다. Terraform ingress가 이 포트를 열어야 외부에서 접근할 수 있다.
+     *
+     * <p>앱 포트는 포함하지 않는다. 앱 포트는 Terraform renderer가 별도로 연다. {@link #isEnabled}가 {@code true}일 때만 호출한다.
+     *
+     * @return 공개할 포트 목록. 공개하는 포트가 없으면 빈 목록
+     */
+    default List<Integer> publicPorts(CloudDeployContext context) {
+        return List.of();
+    }
+
+    /**
+     * 이 service가 앱의 호스트 포트를 닫는지 돌려준다.
+     *
+     * <p>앱 앞단에서 외부 진입점이 되는 웹 서버(Caddy)는 {@code true}를 돌려준다. 그러면 앱 service가 호스트 포트를 공개하지
+     * 않고 Terraform도 앱 포트 ingress를 만들지 않으며, 웹 서버가 Compose 네트워크의 {@code app:<앱 포트>}로 프록시한다.
+     * 앱 포트를 닫는 대신 웹 서버 포트를 {@code app_port}로 쓰는 NGINX는 이 메서드를 쓰지 않는다. {@link #isEnabled}가
+     * {@code true}일 때만 호출한다.
+     *
+     * @return 앱의 호스트 포트를 닫으면 {@code true}. 기본값은 {@code false}
+     */
+    default boolean closesApplicationPort(CloudDeployContext context) {
+        return false;
+    }
+
+    /**
+     * 이 service가 쓰는 named volume 이름을 돌려준다. Compose 루트 {@code volumes:}에 선언할 이름이다.
+     *
+     * <p>이 renderer가 담당하는 타입의 component가 {@link VolumeComponent}이고 볼륨 이름이 비어 있지 않을 때만 값을 돌려준다.
+     * 이름이 비면 Compose가 거부하므로 선언하지 않는다. {@link #isEnabled}가 {@code true}일 때만 호출한다.
+     *
+     * @return 앞뒤 공백을 제거한 볼륨 이름. 볼륨이 없으면 빈 값
+     */
+    default Optional<String> volumeName(CloudDeployContext context) {
+        return context.component(getSupportedType(), BaseComponent.class)
+            .filter(VolumeComponent.class::isInstance)
+            .map(component -> ((VolumeComponent) component).getVolumeName())
+            .filter(volumeName -> volumeName != null && !volumeName.isBlank())
+            .map(String::trim);
     }
 }

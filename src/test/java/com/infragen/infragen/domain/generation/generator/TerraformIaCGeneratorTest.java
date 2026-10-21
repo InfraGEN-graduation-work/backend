@@ -726,8 +726,6 @@ class TerraformIaCGeneratorTest {
                       context: .
                       dockerfile: Dockerfile
                     image: infragen-runtime:plan-only
-                    ports:
-                      - "${APP_PORT:-9090}:9090"
                     env_file:
                       - .env
 
@@ -754,7 +752,7 @@ class TerraformIaCGeneratorTest {
     }
 
     @Test
-    @DisplayName("Caddy 포함 AWS — 앱 CIDR로 80/443 ingress를 앱 포트 규칙 뒤에 추가한다")
+    @DisplayName("Caddy 포함 AWS — 앱 포트 ingress 없이 앱 CIDR로 80/443 ingress만 연다")
     void generate_CaddyWithAws_AddsPublicPortIngress() {
         // given
         ParsingResultDTO parsingResult = validParsingResult();
@@ -762,17 +760,21 @@ class TerraformIaCGeneratorTest {
         parsingResult.setEdges(List.of(edgeFromApplication("caddy-1")));
 
         // when
-        String main = fileContent(generator.generate(parsingResult, awsTarget()), "aws/terraform/main.tf");
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
+        String main = fileContent(bundle, "aws/terraform/main.tf");
 
         // then
         assertAll(
+            () -> assertFalse(main.contains("var.app_port")),
+            () -> assertFalse(fileContent(bundle, "aws/terraform/variables.tf").contains("app_port")),
+            () -> assertFalse(fileContent(bundle, "aws/terraform/terraform.tfvars.example").contains("app_port")),
             () -> assertTrue(main.contains("""
                   ingress {
-                    description = "애플리케이션"
-                    from_port   = var.app_port
-                    to_port     = var.app_port
+                    description = "SSH 관리 접근"
+                    from_port   = 22
+                    to_port     = 22
                     protocol    = "tcp"
-                    cidr_blocks = [var.aws_app_cidr]
+                    cidr_blocks = [var.aws_admin_cidr]
                   }
 
                   ingress {
@@ -797,7 +799,7 @@ class TerraformIaCGeneratorTest {
     }
 
     @Test
-    @DisplayName("Caddy 포함 OCI — 앱 CIDR로 80/443 ingress rule을 앱 포트 규칙 뒤에 추가한다")
+    @DisplayName("Caddy 포함 OCI — 앱 포트 ingress rule 없이 앱 CIDR로 80/443 rule만 연다")
     void generate_CaddyWithOci_AddsPublicPortIngress() {
         // given
         ParsingResultDTO parsingResult = validParsingResult();
@@ -805,13 +807,17 @@ class TerraformIaCGeneratorTest {
         parsingResult.setEdges(List.of(edgeFromApplication("caddy-1")));
 
         // when
-        String main = fileContent(generator.generate(parsingResult, ociTarget()), "oci/terraform/main.tf");
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, ociTarget());
+        String main = fileContent(bundle, "oci/terraform/main.tf");
 
         // then
+        assertFalse(main.contains("var.app_port"));
+        assertFalse(fileContent(bundle, "oci/terraform/variables.tf").contains("app_port"));
+        assertFalse(fileContent(bundle, "oci/terraform/terraform.tfvars.example").contains("app_port"));
         assertTrue(main.contains("""
                 tcp_options {
-                  min = var.app_port
-                  max = var.app_port
+                  min = 22
+                  max = 22
                 }
               }
 

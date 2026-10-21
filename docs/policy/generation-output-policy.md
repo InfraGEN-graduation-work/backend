@@ -26,9 +26,9 @@ Generate 요청의 배포 옵션 조합과 옵션별 산출물 구성, 생성 �
   - Caddy가 있으면 `caddy/Caddyfile`과 사용자 안내 `CADDY_GUIDE.md`, NGINX가 있으면 `nginx/default.conf`
 - 애플리케이션은 하나만 지원한다. 둘 이상이면 `GENERATION400_10`으로 거부한다.
 - Compose에는 앱과 앱에 연결된 의존 인프라만 포함한다. 앱 service 이름은 `app`으로, 의존 인프라는 `mysql`, `redis`처럼 타입별 이름으로 고정한다.
-- 앱 컨테이너는 의존 인프라에 Compose service 이름으로 접속한다. 앱은 `${APP_PORT:-<앱 포트>}`로 호스트에 공개한다. 단 NGINX가 있으면 앱 포트는 호스트에 공개하지 않고 NGINX 포트만 공개한다. Caddy는 앱 포트를 계속 공개한다.
+- 앱 컨테이너는 의존 인프라에 Compose service 이름으로 접속한다. 앱은 `${APP_PORT:-<앱 포트>}`로 호스트에 공개한다. 단 NGINX나 Caddy가 있으면 앱 포트는 호스트에 공개하지 않는다. NGINX는 NGINX 포트만, Caddy는 80/443만 공개하고, 웹 서버가 Compose 네트워크의 `app:<앱 포트>`로 프록시한다.
 - 비밀번호 같은 민감한 값은 생성 파일에 쓰지 않는다. `${변수:?외부 .env에 설정 필요}` 형태로 참조만 하고 사용자가 서버의 외부 `.env`를 제공한다.
-- Terraform 보안 규칙은 SSH(22)를 관리자 접근 CIDR에, 앱 포트와 웹 서버 포트를 앱 접근 CIDR에 연다. NGINX가 있으면 `app_port` 변수 값이 NGINX 포트이고, Caddy는 `app_port`와 별개로 80/443을 추가로 연다. 새 CIDR 변수나 전체 개방 기본값을 만들지 않는다.
+- Terraform 보안 규칙은 SSH(22)를 관리자 접근 CIDR에, 앱 포트와 웹 서버 포트를 앱 접근 CIDR에 연다. NGINX가 있으면 `app_port` 변수 값이 NGINX 포트이다. Caddy가 있으면 앱 포트 ingress와 `app_port` 변수를 만들지 않고 80/443만 연다. 새 CIDR 변수나 전체 개방 기본값을 만들지 않는다.
 
 ## 앱 접속 변수
 

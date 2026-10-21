@@ -70,7 +70,7 @@ public class CloudComposeRenderer {
                   dockerfile: Dockerfile
                 image: infragen-runtime:plan-only
             """);
-        if (context.nginx().isEmpty()) {
+        if (publishesApplicationPort(context)) {
             content.append("    ports:\n");
             content.append(String.format(
                 "      - \"${APP_PORT:-%d}:%d\"\n",
@@ -110,6 +110,36 @@ public class CloudComposeRenderer {
                 .fileName("docker-compose.cloud.yml")
                 .content(content.toString())
                 .build();
+    }
+
+    /**
+     * 앱 service가 호스트 포트를 공개하는지 알려 준다. 앞단 웹 서버가 앱 포트를 닫으면 공개하지 않는다.
+     *
+     * <p>NGINX는 앱 포트를 닫고 NGINX 포트를 Terraform의 {@code app_port}로 쓴다.
+     * 그 밖의 웹 서버는 service renderer의 {@link CloudComposeServiceRenderer#closesApplicationPort}로 알린다.
+     *
+     * @param context CLOUD_DEPLOY renderer가 공유하는 파싱 결과
+     * @return 앱 service에 {@code ports:}를 만들면 {@code true}
+     */
+    public boolean publishesApplicationPort(CloudDeployContext context) {
+        return context.nginx().isEmpty() && !closesApplicationPort(context);
+    }
+
+    /**
+     * Terraform이 앱 포트(NGINX가 있으면 NGINX 포트)용 ingress와 {@code app_port} 변수를 만드는지 알려 준다.
+     * 웹 서버가 앱 포트를 닫으면 만들지 않는다. NGINX는 {@code app_port}에 NGINX 포트를 넣어 계속 만든다.
+     *
+     * @param context CLOUD_DEPLOY renderer가 공유하는 파싱 결과
+     * @return 앱 포트 ingress와 {@code app_port} 변수를 만들면 {@code true}
+     */
+    public boolean opensApplicationPortIngress(CloudDeployContext context) {
+        return !closesApplicationPort(context);
+    }
+
+    private boolean closesApplicationPort(CloudDeployContext context) {
+        return serviceRenderers.stream()
+            .filter(renderer -> renderer.isEnabled(context))
+            .anyMatch(renderer -> renderer.closesApplicationPort(context));
     }
 
     /**

@@ -78,6 +78,20 @@ public interface CloudComposeServiceRenderer {
     }
 
     /**
+     * 이 service가 앱의 호스트 포트를 닫는지 돌려준다.
+     *
+     * <p>앱 앞단에서 외부 진입점이 되는 웹 서버(Caddy)는 {@code true}를 돌려준다. 그러면 앱 service가 호스트 포트를 공개하지
+     * 않고 Terraform도 앱 포트 ingress를 만들지 않으며, 웹 서버가 Compose 네트워크의 {@code app:<앱 포트>}로 프록시한다.
+     * 앱 포트를 닫는 대신 웹 서버 포트를 {@code app_port}로 쓰는 NGINX는 이 메서드를 쓰지 않는다. {@link #isEnabled}가
+     * {@code true}일 때만 호출한다.
+     *
+     * @return 앱의 호스트 포트를 닫으면 {@code true}. 기본값은 {@code false}
+     */
+    default boolean closesApplicationPort(CloudDeployContext context) {
+        return false;
+    }
+
+    /**
      * 이 service가 쓰는 named volume 이름을 돌려준다. Compose 루트 {@code volumes:}에 선언할 이름이다.
      *
      * <p>이 renderer가 담당하는 타입의 component가 {@link VolumeComponent}이고 볼륨 이름이 비어 있지 않을 때만 값을 돌려준다.

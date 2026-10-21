@@ -36,13 +36,14 @@ class CaddyGuideRendererTest {
         String content = file.orElseThrow().content();
         assertAll(
             () -> assertEquals("CADDY_GUIDE.md", file.orElseThrow().fileName()),
-            () -> assertTrue(content.contains("`app:9090`로 전달하는 리버스 프록시")),
+            () -> assertTrue(content.contains("`app:9090` 주소로 전달하는 리버스 프록시")),
             () -> assertTrue(content.contains("도메인 `example.com`의 A 레코드")),
             () -> assertTrue(content.contains("`aws_app_cidr` 또는 `oci_app_cidr`")),
             () -> assertTrue(content.contains("볼륨 `caddy_data`의 `/data`")),
             () -> assertTrue(content.contains(
                 "docker compose -f docker-compose.cloud.yml exec -w /etc/caddy caddy caddy reload")),
-            () -> assertTrue(content.contains("앱 포트 9090도 호스트에 매핑")),
+            () -> assertTrue(content.contains("앱 포트(9090)는 호스트에 공개하지 않습니다")),
+            () -> assertFalse(content.contains("호스트에 매핑")),
             () -> assertFalse(content.contains("도메인을 지정하지 않아서"))
         );
     }

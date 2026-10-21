@@ -93,6 +93,14 @@ public class CaddyCloudComposeServiceRenderer implements CloudComposeServiceRend
     }
 
     /**
+     * @return Caddy가 유일한 외부 진입점이라 앱의 호스트 포트를 닫으므로 항상 {@code true}
+     */
+    @Override
+    public boolean closesApplicationPort(CloudDeployContext context) {
+        return true;
+    }
+
+    /**
      * @return 앱 컨테이너에 넘길 환경변수가 없으므로 빈 값
      */
     @Override

@@ -105,6 +105,19 @@ class CaddyCloudComposeServiceRendererTest {
     }
 
     @Test
+    @DisplayName("Caddy가 외부 진입점이라 앱의 호스트 포트를 닫는다고 알려 준다")
+    void closesApplicationPort_ReturnsTrue() {
+        // given
+        CloudDeployContext context = context("caddy_data", true);
+
+        // when
+        boolean closes = renderer.closesApplicationPort(context);
+
+        // then
+        assertTrue(closes);
+    }
+
+    @Test
     @DisplayName("추가 파일로 Caddyfile과 사용자 안내를 순서대로 알려 준다")
     void additionalFiles_ReturnsCaddyfileAndGuideInOrder() {
         // given

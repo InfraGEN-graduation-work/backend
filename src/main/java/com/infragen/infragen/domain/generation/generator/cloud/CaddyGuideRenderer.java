@@ -37,7 +37,7 @@ public class CaddyGuideRenderer {
         return """
             # Caddy 웹 서버 안내
 
-            `caddy` 서비스는 앱 앞단에서 요청을 받아 `app:%d`로 전달하는 리버스 프록시입니다. 설정은 `caddy/Caddyfile`에 있고, 컨테이너가 `caddy` 디렉터리를 `/etc/caddy`로 읽습니다.
+            `caddy` 서비스는 앱 앞단에서 요청을 받아 `app:%d` 주소로 전달하는 리버스 프록시입니다. 설정은 `caddy/Caddyfile`에 있고, 컨테이너가 `caddy` 디렉터리를 `/etc/caddy`로 읽습니다.
 
             %s
             ## 설정 변경
@@ -51,10 +51,10 @@ public class CaddyGuideRenderer {
             ## 알아둘 점
 
             - HTTP/3에 쓰는 443/udp는 열지 않습니다. TCP 80과 443만 엽니다.
-            - 앱 포트 %d도 호스트에 매핑되어 있어서 Caddy를 거치지 않고 접근할 수 있습니다. 앱 접근 CIDR 값으로 허용 범위를 정해 주세요.
+            - 앱 포트(%d)는 호스트에 공개하지 않습니다. Caddy만 외부에서 접근할 수 있고, 앱에는 Compose 네트워크 안에서 `app:%d` 주소로 전달합니다.
             - 경로별 라우팅, 인증, 압축 같은 설정은 생성하지 않습니다. 필요하면 `caddy/Caddyfile`에 직접 추가해 주세요.
             - 이 산출물은 계획 전용입니다. `terraform apply`는 이 프로젝트가 실행하지 않으므로 `CLOUD_DEPLOY_WARNING.md`의 안내를 먼저 확인해 주세요.
-            """.formatted(applicationPort, preparation, applicationPort);
+            """.formatted(applicationPort, preparation, applicationPort, applicationPort);
     }
 
     private String domainPreparation(String domain, String volumeName) {

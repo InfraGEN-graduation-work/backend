@@ -179,7 +179,11 @@ class CaddyParserTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"caddy", "caddy:2.8-alpine", "ghcr.io/org/caddy:2", "caddy@sha256:abc123"})
+    @ValueSource(strings = {
+        "caddy", "caddy:2.8-alpine", "ghcr.io/org/caddy:2", "localhost:5000/caddy:2",
+        "caddy@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "caddy:2.8@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    })
     @DisplayName("이미지 참조 형식 — 파싱 성공")
     void parse_ValidImageVersion_ReturnsComponent(String imageVersion) {
         // given
@@ -195,9 +199,13 @@ class CaddyParserTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
-        "caddy:2\n    privileged: true", "caddy 2", "${IMAGE}", "-caddy", "caddy:2\"", "caddy#2"
+        "caddy:2\n    privileged: true", "caddy 2", "${IMAGE}", "-caddy", "caddy:2\"", "caddy#2",
+        "caddy:", "caddy@", ":2", "caddy::2", "caddy:2:3", "caddy:-1", "Caddy:2", "caddy@sha256:abc123",
+        "caddy@sha256:",
+        "caddy@:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "caddy@sha256aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     })
-    @DisplayName("YAML 구조를 바꿀 수 있는 이미지 버전 — PARSING400_42")
+    @DisplayName("YAML 구조를 바꾸거나 이미지 참조 구조가 아닌 이미지 버전 — PARSING400_42")
     void parse_InvalidImageVersion_Throws(String imageVersion) {
         // given
         Map<String, Object> properties = validProperties();

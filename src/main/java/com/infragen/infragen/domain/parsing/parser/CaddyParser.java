@@ -28,8 +28,18 @@ public class CaddyParser implements ComponentParser {
     private static final Pattern DOMAIN_PATTERN = Pattern.compile(
         "(?=.{1,253}$)([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\\.)+[A-Za-z]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?");
 
-    // Compose YAML의 image 값에 그대로 들어가므로 줄바꿈, 공백, ${...} 변수 참조를 막는다. NginxParser와 같은 규칙이다.
-    private static final Pattern IMAGE_VERSION_PATTERN = Pattern.compile("[a-zA-Z0-9][a-zA-Z0-9._/:@-]*");
+    // Docker 이미지 참조 문법(이름[:태그][@다이제스트])이다. Compose YAML의 image 값에 그대로 들어가므로 줄바꿈, 공백,
+    // ${...} 변수 참조를 막고, 값이 빈 태그(caddy:)나 짧은 다이제스트처럼 Docker가 거부할 구조도 걸러낸다.
+    // 도메인 라벨, 저장소 경로(소문자), 태그, 다이제스트의 정의는 Docker 이미지 참조 문법을 따른다.
+    private static final String DOMAIN_COMPONENT = "(?:[a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9])";
+    private static final String REGISTRY = DOMAIN_COMPONENT + "(?:\\." + DOMAIN_COMPONENT + ")*(?::[0-9]+)?";
+    private static final String PATH_COMPONENT = "[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*";
+    private static final String NAME = "(?:" + REGISTRY + "/)?" + PATH_COMPONENT + "(?:/" + PATH_COMPONENT + ")*";
+    private static final String TAG = "[\\w][\\w.-]{0,127}";
+    private static final String DIGEST =
+        "[A-Za-z][A-Za-z0-9]*(?:[-_+.][A-Za-z][A-Za-z0-9]*)*:[0-9a-fA-F]{32,}";
+    private static final Pattern IMAGE_VERSION_PATTERN =
+        Pattern.compile(NAME + "(?::" + TAG + ")?(?:@" + DIGEST + ")?");
 
     // Docker 볼륨 이름 규칙이다. 마운트 줄과 루트 volumes 키에 들어가므로 콜론, 공백, 줄바꿈이 구조를 바꾸지 못하게 한다.
     private static final Pattern VOLUME_NAME_PATTERN = Pattern.compile("[a-zA-Z0-9][a-zA-Z0-9_.-]*");

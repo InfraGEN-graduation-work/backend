@@ -208,7 +208,7 @@ public enum ParsingErrorCode implements BaseErrorCode {
     ),
     INVALID_CADDY_IMAGE_VERSION(
             HttpStatus.BAD_REQUEST,
-            "Caddy 이미지 버전은 영문, 숫자, 점, 언더바, 슬래시, 콜론, 골뱅이, 하이픈만 사용할 수 있습니다.",
+            "Caddy 이미지 버전은 Docker 이미지 참조 형식이어야 합니다. 예: caddy:2.8",
             "PARSING400_42"
     ),
     INVALID_CADDY_VOLUME_NAME(

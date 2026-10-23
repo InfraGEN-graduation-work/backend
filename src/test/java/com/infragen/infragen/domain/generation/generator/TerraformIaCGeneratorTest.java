@@ -154,7 +154,7 @@ class TerraformIaCGeneratorTest {
 
         // then
         assertAll(
-            () -> assertEquals(6, first.files().size()),
+            () -> assertEquals(7, first.files().size()),
             () -> assertEquals(first.files(), second.files()),
             () -> assertTerraformContract(first, "aws/terraform/main.tf", "aws",
                 AWS_PROVIDER_SOURCE, AWS_PROVIDER_VERSION),
@@ -183,7 +183,8 @@ class TerraformIaCGeneratorTest {
             () -> assertFalse(fileContent(first, "docker-compose.cloud.yml").contains("depends_on:")),
             () -> assertEquals("cloud/Dockerfile", first.files().get(3).fileName()),
             () -> assertEquals("cloud/docker-compose.cloud.yml", first.files().get(4).fileName()),
-            () -> assertEquals("cloud/CLOUD_DEPLOY_WARNING.md", first.files().get(5).fileName()),
+            () -> assertEquals("cloud/CLOUD_DEPLOY_GUIDE.md", first.files().get(5).fileName()),
+            () -> assertEquals("cloud/CLOUD_DEPLOY_WARNING.md", first.files().get(6).fileName()),
             () -> assertTrueContains(first, "apply_ready=false"),
             () -> assertTrueContains(first, "aws_instance"),
             () -> assertTrueContains(first, "COPY app.jar app.jar"),
@@ -888,8 +889,8 @@ class TerraformIaCGeneratorTest {
     }
 
     @Test
-    @DisplayName("Caddy가 없으면 안내할 섹션이 없어 통합 안내 문서를 만들지 않는다")
-    void generate_WithoutCaddy_DoesNotAddDeployGuide() {
+    @DisplayName("앱만 있는 그래프 — 앱 섹션만 담은 통합 안내 문서를 만들고 Caddy 섹션과 Caddy 전용 안내 파일은 없다")
+    void generate_ApplicationOnly_AddsGuideWithOnlyApplicationSection() {
         // given
         ParsingResultDTO parsingResult = validParsingResult();
 
@@ -897,11 +898,18 @@ class TerraformIaCGeneratorTest {
         IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
 
         // then
-        assertTrue(bundle.files().stream().noneMatch(file -> file.fileName().endsWith("_GUIDE.md")));
+        String guide = fileContent(bundle, "CLOUD_DEPLOY_GUIDE.md");
+        assertAll(
+            () -> assertTrue(guide.contains("\n## Spring Boot 앱\n")),
+            () -> assertTrue(guide.contains("그래프에 입력한 포트(`9090`)로 listen")),
+            () -> assertFalse(guide.contains("## Caddy")),
+            () -> assertFalse(guide.contains("## MySQL")),
+            () -> assertTrue(bundle.files().stream().noneMatch(file -> file.fileName().endsWith("CADDY_GUIDE.md")))
+        );
     }
 
     @Test
-    @DisplayName("의존 인프라 4종 포함 — 통합 안내 문서가 Compose의 외부 .env 필수 변수를 빠짐없이 ComponentType 순서로 안내한다")
+    @DisplayName("의존 인프라 4종 포함 — 통합 안내 문서가 Compose의 외부 .env 필수 변수를 빠짐없이 안내하고 앱 섹션 다음 ComponentType 순서로 둔다")
     void generate_AllDependencies_GuideListsEveryRequiredComposeVariable() {
         // given
         ParsingResultDTO parsingResult = validParsingResult();
@@ -921,7 +929,7 @@ class TerraformIaCGeneratorTest {
             .results()
             .map(result -> result.group(1))
             .collect(Collectors.toCollection(LinkedHashSet::new));
-        List<Integer> sectionIndexes = Stream.of("## MySQL", "## PostgreSQL", "## MongoDB", "## Redis")
+        List<Integer> sectionIndexes = Stream.of("## Spring Boot 앱", "## MySQL", "## PostgreSQL", "## MongoDB", "## Redis")
             .map(heading -> guide.indexOf("\n" + heading + "\n"))
             .toList();
         assertAll(
@@ -1096,6 +1104,8 @@ class TerraformIaCGeneratorTest {
             () -> assertEquals("cloud/.dockerignore", bundle.files().get(4).fileName()),
             () -> assertEquals("cloud/docker-compose.cloud.yml", bundle.files().get(5).fileName()),
             () -> assertEquals("cloud/CLOUD_DEPLOY_GUIDE.md", bundle.files().get(6).fileName()),
+            () -> assertTrue(fileContent(bundle, "CLOUD_DEPLOY_GUIDE.md").contains("\n## Node.js 앱\n")),
+            () -> assertFalse(fileContent(bundle, "CLOUD_DEPLOY_GUIDE.md").contains("## Spring Boot 앱")),
             () -> assertEquals("cloud/CLOUD_DEPLOY_WARNING.md", bundle.files().get(7).fileName()),
             () -> assertTrue(fileContent(bundle, "Dockerfile").contains("FROM node:22-slim")),
             () -> assertTrue(fileContent(bundle, "Dockerfile").contains("EXPOSE 3000")),

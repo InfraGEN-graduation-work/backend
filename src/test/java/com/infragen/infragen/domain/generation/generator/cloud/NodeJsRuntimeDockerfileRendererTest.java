@@ -95,7 +95,27 @@ class NodeJsRuntimeDockerfileRendererTest {
             () -> assertTrue(dockerignoreLines.contains("**/.git")),
             () -> assertTrue(dockerignoreLines.contains("**/node_modules")),
             () -> assertTrue(dockerignoreLines.containsAll(List.of(
-                "aws", "oci", "Dockerfile", ".dockerignore", "docker-compose.cloud.yml", "CLOUD_DEPLOY_WARNING.md")))
+                "aws", "oci", "Dockerfile", ".dockerignore", "docker-compose.cloud.yml", "CLOUD_DEPLOY_WARNING.md",
+                "CLOUD_DEPLOY_GUIDE.md")))
+        );
+    }
+
+    @Test
+    @DisplayName("앱 섹션은 앱 파일 배치, start 스크립트의 exec, 그래프 포트의 PORT listen을 안내한다")
+    void guideSection_nodeJs_guidesAppFilesExecAndPort() {
+        // given
+        CloudDeployContext context = context(nodeJsComponent("22", 3000));
+
+        // when
+        String section = renderer.guideSection(context);
+
+        // then
+        assertAll(
+            () -> assertTrue(section.startsWith("## Node.js 앱\n")),
+            () -> assertTrue(section.contains("`package.json`, `package-lock.json`과 앱 파일을 `Dockerfile`과 같은 디렉터리에")),
+            () -> assertTrue(section.contains("`exec node server.js`처럼 `exec`로")),
+            () -> assertTrue(section.contains("`PORT=3000`(그래프에 입력한 포트)를 넣습니다")),
+            () -> assertTrue(section.contains("docker compose -f docker-compose.cloud.yml up -d --build"))
         );
     }
 

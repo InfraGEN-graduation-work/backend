@@ -126,7 +126,7 @@ class NginxGenerationContractTest {
         var entity = GeneratedFileConverter.toEntity(config, 1L, "v1");
         assertAll(
             () -> assertEquals(42L, result.historyId()),
-            () -> assertEquals(includeCloud ? 10 : 3, result.files().size()),
+            () -> assertEquals(includeCloud ? 11 : 3, result.files().size()),
             () -> assertEquals(includeCloud ? 2 : 1, files.getValue().stream()
                 .filter(file -> file.fileName().endsWith("nginx/default.conf")).count()),
             () -> assertEquals("projects/1/histories/v1/local/nginx/default.conf", entity.getFilePath()),

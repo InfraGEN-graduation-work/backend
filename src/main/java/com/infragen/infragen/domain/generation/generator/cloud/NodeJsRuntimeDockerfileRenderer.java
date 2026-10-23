@@ -36,6 +36,7 @@ public class NodeJsRuntimeDockerfileRenderer implements RuntimeDockerfileRendere
         .dockerignore
         docker-compose.cloud.yml
         CLOUD_DEPLOY_WARNING.md
+        CLOUD_DEPLOY_GUIDE.md
         """;
 
     @Override
@@ -84,6 +85,34 @@ public class NodeJsRuntimeDockerfileRenderer implements RuntimeDockerfileRendere
     @Override
     public List<IaCFileDTO.FileContentResDTO> renderFiles(CloudDeployContext context) {
         return List.of(render(context), dockerignore());
+    }
+
+    /**
+     * @return 앱 파일 배치, {@code start} 스크립트의 {@code exec}, {@code PORT} listen, DB 중립 변수를 안내하는 섹션
+     */
+    @Override
+    public String guideSection(CloudDeployContext context) {
+        return """
+            ## Node.js 앱
+
+            `app` 서비스는 `Dockerfile`로 이 디렉터리의 앱 파일을 이미지에 넣고 `npm start`로 실행합니다. 이미지는 `npm ci --omit=dev`로 운영 의존성만 설치합니다.
+
+            ### 배포 전에 준비할 것
+
+            - `package.json`, `package-lock.json`과 앱 파일을 `Dockerfile`과 같은 디렉터리에 두어 주세요. 생성된 `.dockerignore`가 하위 폴더를 포함해 `.env`, `.env.*`, `.git`, `node_modules`를 이미지에서 제외합니다.
+            - `package.json`의 `start` 스크립트는 `exec node server.js`처럼 `exec`로 앱을 실행해야 합니다. 그래야 `docker stop`의 종료 신호(SIGTERM)가 앱에 전달됩니다.
+            - 앱은 `process.env.PORT`로 listen해야 합니다. Compose가 앱 컨테이너에 `PORT=%d`(그래프에 입력한 포트)를 넣습니다.
+
+            ### DB 접속 설정
+
+            - DB나 Redis를 연결하면 접속 정보가 `MYSQL_HOST`, `MYSQL_PORT`처럼 종류별 변수로 앱 컨테이너에 들어갑니다. 앱 코드에서 이 변수로 연결 설정을 직접 만들어 주세요. 변수 이름은 이 문서의 DB, Redis 섹션에 있습니다.
+
+            ### 실행
+
+            ```
+            docker compose -f docker-compose.cloud.yml up -d --build
+            ```
+            """.formatted(context.applicationPort());
     }
 
     private IaCFileDTO.FileContentResDTO dockerignore() {

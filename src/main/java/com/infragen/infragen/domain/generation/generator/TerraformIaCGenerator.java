@@ -114,7 +114,11 @@ public class TerraformIaCGenerator implements TargetAwareIaCGenerator {
         files.addAll(dockerfileRenderer.renderFiles(context));
         files.add(cloudComposeRenderer.render(context));
         files.addAll(cloudComposeRenderer.additionalFiles(context));
-        cloudDeployGuideRenderer.render(cloudComposeRenderer.guideSections(context)).ifPresent(files::add);
+        // 사용자가 가장 먼저 준비할 앱 파일과 포트를 앞에 두고, 의존 인프라와 웹 서버 섹션을 service 순서로 잇는다.
+        List<String> guideSections = new ArrayList<>();
+        guideSections.add(dockerfileRenderer.guideSection(context));
+        guideSections.addAll(cloudComposeRenderer.guideSections(context));
+        cloudDeployGuideRenderer.render(guideSections).ifPresent(files::add);
         files.add(cloudDeployWarningRenderer.render(dockerfileRenderer.requiredAppFiles()));
 
         return cloudDeployFileAssembler.assemble(files);

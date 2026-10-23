@@ -45,4 +45,35 @@ public class SpringBootRuntimeDockerfileRenderer implements RuntimeDockerfileRen
             .content(content)
             .build();
     }
+
+    /**
+     * @return prebuilt {@code app.jar} 배치, listen 포트, 프레임워크 변수로 전달되는 DB 접속 정보를 안내하는 섹션
+     */
+    @Override
+    public String guideSection(CloudDeployContext context) {
+        // Spring 매퍼는 포트 변수를 넘기지 않으므로 앱이 그래프 포트로 listen하도록 직접 맞춰야 Compose 포트 매핑이 맞는다.
+        int port = context.applicationPort();
+        return """
+            ## Spring Boot 앱
+
+            `app` 서비스는 `Dockerfile`로 만든 이미지에서 `app.jar`를 실행합니다. 이미지는 컴파일이 끝난 JAR만 복사하고 빌드하지 않습니다.
+
+            ### 배포 전에 준비할 것
+
+            - 앱을 빌드한 실행 가능한 JAR를 `app.jar`라는 이름으로 `Dockerfile`과 같은 디렉터리에 두어 주세요.
+            - 앱이 그래프에 입력한 포트(`%d`)로 listen해야 Compose의 포트 연결이 맞습니다. Spring Boot의 기본 포트는 `8080`이므로, 다르면 `server.port`를 같은 값으로 설정하거나 외부 `.env`에 `SERVER_PORT=%d` 한 줄을 적어 주세요. 앱 컨테이너도 외부 `.env`를 읽습니다.
+
+            ### DB 접속 설정
+
+            - 관계형 DB(MySQL, PostgreSQL)가 하나만 연결되면 `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`가 앱 컨테이너에 들어가므로 접속 설정 코드를 바꿀 필요가 없습니다.
+            - 관계형 DB가 둘 이상이면 `SPRING_DATASOURCE_*`를 만들지 않습니다. `MYSQL_HOST`, `POSTGRES_HOST` 같은 DB별 변수로 DataSource를 직접 설정해 주세요.
+            - MongoDB가 연결되면 `SPRING_MONGODB_*` 변수가 들어갑니다.
+
+            ### 실행
+
+            ```
+            docker compose -f docker-compose.cloud.yml up -d --build
+            ```
+            """.formatted(port, port);
+    }
 }

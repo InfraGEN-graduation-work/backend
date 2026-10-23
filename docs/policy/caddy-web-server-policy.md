@@ -38,8 +38,8 @@ Caddy 노드를 지원하면서 정한 정책과 그 이유를 기록한다. 구
 - Compose service: 이름은 `caddy`, 포트는 80과 443, Caddyfile은 `./caddy:/etc/caddy`로 디렉터리째 마운트한다. 편집기가 파일을 교체하면 컨테이너가 단일 파일 마운트의 변경을 못 읽을 수 있어서다. 볼륨이 있으면 `<volumeName>:/data`를 마운트하고 루트 `volumes:`에도 선언한다. service는 `app`에 의존한다(`depends_on`). Caddy가 유일한 외부 진입점이므로 앱 service는 호스트 포트(`ports:`)를 공개하지 않고, Caddy가 Compose 네트워크의 `app:<앱 포트>`로 프록시한다. 앱 포트를 직접 열어 두면 앱 CIDR에 외부 클라이언트가 포함됐을 때 Caddy와 HTTPS를 우회해 접속할 수 있기 때문이다.
 - Caddyfile(`cloud/caddy/Caddyfile`): 도메인이 있으면 `<domain> { reverse_proxy app:<앱 포트> }`, 없으면 `:80 { reverse_proxy app:<앱 포트> }`다. 프록시 대상 `app`은 CLOUD Compose의 앱 service 이름이며, 앱이 하나이고 이름이 고정이라 일치한다.
 - Terraform: AWS와 OCI 모두 TCP 80과 443 ingress를 추가한다. 앱 포트 ingress와 `app_port` 변수, tfvars 예시의 `app_port` 줄은 만들지 않는다. 출발 CIDR은 새 변수나 전체 개방 기본값을 만들지 않고 기존 앱 CIDR 변수(`aws_app_cidr`, `oci_app_cidr`)를 재사용한다. 이 CIDR이 80/443만 제어하므로 외부에 공개해도 앱 포트는 열리지 않는다. 공개 포트는 Compose service가 알려 주는 값(`publicPorts`)을 쓰므로 Compose가 공개하는 포트와 Terraform이 여는 포트가 어긋나지 않는다.
-- 사용자 안내(`cloud/CADDY_GUIDE.md`): 웹 서버가 있을 때만 별도 파일로 추가한다. 기존 `CLOUD_DEPLOY_WARNING.md`를 그대로 두어 Caddy가 없는 산출물을 바꾸지 않기 위해서다. 도메인이 있으면 DNS, 80/443 허용 범위(앱 CIDR), 인증서 볼륨, 설정 다시 읽기 명령을 도메인과 볼륨 이름을 넣어 안내하고, 없으면 HTTP만 동작함과 도메인을 추가하는 방법을 안내한다. Caddy 공식 문서에서 확인한 사실만 쓴다.
-- 웹 서버가 없으면 산출물이 기존과 같다.
+- 사용자 안내: 별도 파일을 만들지 않고 통합 안내 문서 `cloud/CLOUD_DEPLOY_GUIDE.md`의 Caddy 섹션으로 넣는다. 노드마다 안내 파일을 나누면 사용자가 볼 곳이 흩어지기 때문이다(#112, 이전에는 `cloud/CADDY_GUIDE.md`). 도메인이 있으면 DNS, 80/443 허용 범위(앱 CIDR), 인증서 볼륨, 설정 다시 읽기 명령을 도메인과 볼륨 이름을 넣어 안내하고, 없으면 HTTP만 동작함과 도메인을 추가하는 방법을 안내한다. Caddy 공식 문서에서 확인한 사실만 쓴다.
+- 웹 서버가 없으면 Caddy service, Caddyfile, 80/443 ingress, 안내 섹션이 생기지 않는다.
 
 ## 제외 범위와 알려진 한계
 
@@ -57,4 +57,4 @@ Caddy 노드를 지원하면서 정한 정책과 그 이유를 기록한다. 구
 - 지원 출력 경로를 바꾸면 `GenerationCommandService`의 Local 단독 거부(`IaCGenerationService.supportsLocal`, `LocalIaCGenerator.supports`)와 `IaCGenerationErrorCode`의 `UNSUPPORTED_LOCAL_COMPONENT`를 함께 본다.
 - 노드 속성과 검증을 바꾸면 `CaddyParser`, `CaddyComponent`, `ParsingErrorCode`를 함께 본다.
 - 그래프 규칙을 바꾸면 `ValidateGraphStructure`의 `validateWebServerPlacement`를 본다.
-- 산출물을 바꾸면 `CaddyCloudComposeServiceRenderer`(Compose service, 공개 포트, 앱 포트 닫기(`closesApplicationPort`), 추가 파일 목록), `CloudComposeRenderer`(`publishesApplicationPort`, `opensApplicationPortIngress`), `CaddyfileRenderer`, `CaddyGuideRenderer`, `AwsTerraformRenderer`, `OciTerraformRenderer`를 함께 본다.
+- 산출물을 바꾸면 `CaddyCloudComposeServiceRenderer`(Compose service, 공개 포트, 앱 포트 닫기(`closesApplicationPort`), 추가 파일 목록, 안내 섹션(`guideSection`)), `CloudComposeRenderer`(`publishesApplicationPort`, `opensApplicationPortIngress`), `CaddyfileRenderer`, `CaddyGuideRenderer`(통합 안내 문서의 Caddy 섹션), `AwsTerraformRenderer`, `OciTerraformRenderer`를 함께 본다.

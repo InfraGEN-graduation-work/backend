@@ -3,9 +3,9 @@ package com.infragen.infragen.domain.parsing.validator;
 import java.util.regex.Pattern;
 
 /**
- * Compose YAML에 그대로 들어가는 이미지 참조와 볼륨 이름이 Docker 형식인지 판정한다.
+ * Compose YAML에 그대로 들어가는 이미지 참조, 볼륨 이름, 컨테이너 이름이 Docker 형식인지 판정한다.
  *
- * <p>renderer는 이 값을 인코딩 없이 {@code image:} 줄, 볼륨 마운트 줄, 루트 {@code volumes:} 키에 쓰므로 줄바꿈, 공백,
+ * <p>renderer는 이 값을 인코딩 없이 {@code image:} 줄, {@code container_name:} 줄, 볼륨 마운트 줄, 루트 {@code volumes:} 키에 쓰므로 줄바꿈, 공백,
  * {@code ${...}} 변수 참조가 YAML 구조를 바꾸지 못하게 파싱 단계에서 거부한다. 오류 코드는 노드 타입별로 다르므로 판정만 하고 예외는 호출하는 파서가 던진다. 파서마다 정규식이 어긋나지 않도록
  * 한곳에 둔다.
  */
@@ -27,6 +27,10 @@ public final class ComposeYamlValueValidator {
     // Docker 볼륨 이름 규칙이다. 마운트 줄과 루트 volumes 키에 들어가므로 콜론, 공백, 줄바꿈이 구조를 바꾸지 못하게 한다.
     private static final Pattern VOLUME_NAME_PATTERN = Pattern.compile("[a-zA-Z0-9][a-zA-Z0-9_.-]*");
 
+    // Docker 컨테이너 이름 규칙(moby daemon/names.go의 RestrictedNamePattern)이다. 볼륨과 달리 Compose가 프로젝트 이름을 붙이지 않고
+    // 그대로 쓰므로 Docker가 거부하는 1자 이름도 막는다.
+    private static final Pattern CONTAINER_NAME_PATTERN = Pattern.compile("[a-zA-Z0-9][a-zA-Z0-9_.-]+");
+
     private ComposeYamlValueValidator() {
     }
 
@@ -46,5 +50,14 @@ public final class ComposeYamlValueValidator {
      */
     public static boolean isVolumeName(String value) {
         return value != null && VOLUME_NAME_PATTERN.matcher(value).matches();
+    }
+
+    /**
+     * 값이 Docker 컨테이너 이름 규칙을 따르면 true를 돌려준다.
+     *
+     * <p>trim하지 않고 판정한다. 빈 값은 false이므로, 비면 service 이름으로 대체하는 노드는 빈 값을 호출 전에 걸러야 한다.
+     */
+    public static boolean isContainerName(String value) {
+        return value != null && CONTAINER_NAME_PATTERN.matcher(value).matches();
     }
 }

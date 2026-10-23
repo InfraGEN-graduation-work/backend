@@ -101,4 +101,29 @@ class ComposeYamlValueValidatorTest {
         // then
         assertFalse(result);
     }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"mysql", "my-db.1", "DB_1", "a1"})
+    @DisplayName("Docker 컨테이너 이름 규칙 — true")
+    void isContainerName_ValidName_ReturnsTrue(String value) {
+        // when
+        boolean result = ComposeYamlValueValidator.isContainerName(value);
+
+        // then
+        assertTrue(result);
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = {
+        "db\n    privileged: true", "my db", " mysql", "db:1", "db/1", "${NAME}", "_db", ".db", "-db", "a"
+    })
+    @DisplayName("컨테이너 이름 규칙을 어기거나 1자인 값 — false")
+    void isContainerName_InvalidName_ReturnsFalse(String value) {
+        // when
+        boolean result = ComposeYamlValueValidator.isContainerName(value);
+
+        // then
+        assertFalse(result);
+    }
 }

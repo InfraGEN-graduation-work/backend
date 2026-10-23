@@ -368,6 +368,72 @@ class MySQLParserTest {
         );
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"mysql-db", "mysql_db.1", "DB1"})
+    @DisplayName("Docker 컨테이너 이름 규칙 — 파싱 성공")
+    void parse_ValidContainerName_ReturnsComponent(String containerName) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("containerName", containerName);
+
+        // when
+        MySQLComponent component = (MySQLComponent) parse(properties);
+
+        // then
+        assertEquals(containerName, component.getContainerName());
+    }
+
+    @Test
+    @DisplayName("containerName 앞뒤 공백 — 제거해서 저장")
+    void parse_ContainerNameWithSurroundingSpaces_TrimsContainerName() {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("containerName", "  mysql-db  ");
+
+        // when
+        MySQLComponent component = (MySQLComponent) parse(properties);
+
+        // then
+        assertEquals("mysql-db", component.getContainerName());
+    }
+
+    @Test
+    @DisplayName("containerName 공백뿐인 값 — 빈 값으로 파싱")
+    void parse_BlankContainerName_ReturnsEmptyContainerName() {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("containerName", "  ");
+
+        // when
+        MySQLComponent component = (MySQLComponent) parse(properties);
+
+        // then
+        assertEquals("", component.getContainerName());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "mysql\n    privileged: true", "mysql db", "mysql:1", "mysql/1", "${NAME}", "_mysql", "a"
+    })
+    @DisplayName("컨테이너 이름 규칙을 어긴 containerName — INVALID_MYSQL_CONTAINER_NAME")
+    void parse_InvalidContainerName_ThrowsParsingException(String containerName) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("containerName", containerName);
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals(
+            ParsingErrorCode.INVALID_MYSQL_CONTAINER_NAME,
+            exception.getCode()
+        );
+    }
+
     private BaseComponent parse(Map<String, Object> properties) {
         NodeDTO node = new NodeDTO(
             "node-1",

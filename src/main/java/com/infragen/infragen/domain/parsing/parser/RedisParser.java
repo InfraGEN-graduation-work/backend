@@ -40,6 +40,11 @@ public class RedisParser implements ComponentParser {
         if (!resolvedVolumeName.isEmpty() && !ComposeYamlValueValidator.isVolumeName(resolvedVolumeName)) {
             throw new ParsingException(ParsingErrorCode.INVALID_REDIS_VOLUME_NAME);
         }
+        String resolvedContainerName = containerName == null ? "" : containerName.trim();
+        // 비면 renderer가 service 이름으로 대체하므로 이름이 있을 때만 형식을 검사한다.
+        if (!resolvedContainerName.isEmpty() && !ComposeYamlValueValidator.isContainerName(resolvedContainerName)) {
+            throw new ParsingException(ParsingErrorCode.INVALID_REDIS_CONTAINER_NAME);
+        }
         if (password == null || password.isBlank()) {
             throw new ParsingException(ParsingErrorCode.MISSING_REDIS_PASSWORD);
         }
@@ -53,7 +58,7 @@ public class RedisParser implements ComponentParser {
             .posX(posX)
             .posY(posY)
             .imageVersion(resolvedImageVersion)
-            .containerName(containerName != null ? containerName : "")
+            .containerName(resolvedContainerName)
             .port(port)
             .volumeName(resolvedVolumeName)
             .password(password != null ? password : "")

@@ -354,6 +354,72 @@ class PostgreSQLParserTest {
         );
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"postgres-db", "postgres_db.1", "DB1"})
+    @DisplayName("Docker 컨테이너 이름 규칙 — 파싱 성공")
+    void parse_ValidContainerName_ReturnsComponent(String containerName) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("containerName", containerName);
+
+        // when
+        PostgreSQLComponent component = (PostgreSQLComponent) parse(properties);
+
+        // then
+        assertEquals(containerName, component.getContainerName());
+    }
+
+    @Test
+    @DisplayName("containerName 앞뒤 공백 — 제거해서 저장")
+    void parse_ContainerNameWithSurroundingSpaces_TrimsContainerName() {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("containerName", "  postgres-db  ");
+
+        // when
+        PostgreSQLComponent component = (PostgreSQLComponent) parse(properties);
+
+        // then
+        assertEquals("postgres-db", component.getContainerName());
+    }
+
+    @Test
+    @DisplayName("containerName 공백뿐인 값 — 빈 값으로 파싱")
+    void parse_BlankContainerName_ReturnsEmptyContainerName() {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("containerName", "  ");
+
+        // when
+        PostgreSQLComponent component = (PostgreSQLComponent) parse(properties);
+
+        // then
+        assertEquals("", component.getContainerName());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "postgres\n    privileged: true", "postgres db", "postgres:1", "postgres/1", "${NAME}", "_postgres", "a"
+    })
+    @DisplayName("컨테이너 이름 규칙을 어긴 containerName — INVALID_POSTGRES_CONTAINER_NAME")
+    void parse_InvalidContainerName_ThrowsParsingException(String containerName) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("containerName", containerName);
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals(
+            ParsingErrorCode.INVALID_POSTGRES_CONTAINER_NAME,
+            exception.getCode()
+        );
+    }
+
     private BaseComponent parse(Map<String, Object> properties) {
         NodeDTO node = new NodeDTO(
             "node-1",

@@ -58,6 +58,11 @@ public class PostgreSQLParser implements ComponentParser {
         if (!resolvedVolumeName.isEmpty() && !ComposeYamlValueValidator.isVolumeName(resolvedVolumeName)) {
             throw new ParsingException(ParsingErrorCode.INVALID_POSTGRES_VOLUME_NAME);
         }
+        String resolvedContainerName = containerName == null ? "" : containerName.trim();
+        // 비면 renderer가 service 이름으로 대체하므로 이름이 있을 때만 형식을 검사한다.
+        if (!resolvedContainerName.isEmpty() && !ComposeYamlValueValidator.isContainerName(resolvedContainerName)) {
+            throw new ParsingException(ParsingErrorCode.INVALID_POSTGRES_CONTAINER_NAME);
+        }
         if (username == null || username.isBlank()) {
             throw new ParsingException(ParsingErrorCode.MISSING_POSTGRES_USERNAME);
         }
@@ -77,7 +82,7 @@ public class PostgreSQLParser implements ComponentParser {
             .posX(posX)
             .posY(posY)
             .imageVersion(resolvedImageVersion)
-            .containerName(containerName != null ? containerName : "")
+            .containerName(resolvedContainerName)
             .env(env)
             .port(port)
             .volumeName(resolvedVolumeName)

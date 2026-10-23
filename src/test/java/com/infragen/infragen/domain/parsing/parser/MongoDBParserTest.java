@@ -370,6 +370,72 @@ class MongoDBParserTest {
         );
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"mongo-db", "mongo_db.1", "DB1"})
+    @DisplayName("Docker 컨테이너 이름 규칙 — 파싱 성공")
+    void parse_ValidContainerName_ReturnsComponent(String containerName) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("containerName", containerName);
+
+        // when
+        MongoDBComponent component = (MongoDBComponent) parse(properties);
+
+        // then
+        assertEquals(containerName, component.getContainerName());
+    }
+
+    @Test
+    @DisplayName("containerName 앞뒤 공백 — 제거해서 저장")
+    void parse_ContainerNameWithSurroundingSpaces_TrimsContainerName() {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("containerName", "  mongo-db  ");
+
+        // when
+        MongoDBComponent component = (MongoDBComponent) parse(properties);
+
+        // then
+        assertEquals("mongo-db", component.getContainerName());
+    }
+
+    @Test
+    @DisplayName("containerName 공백뿐인 값 — 빈 값으로 파싱")
+    void parse_BlankContainerName_ReturnsEmptyContainerName() {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("containerName", "  ");
+
+        // when
+        MongoDBComponent component = (MongoDBComponent) parse(properties);
+
+        // then
+        assertEquals("", component.getContainerName());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "mongo\n    privileged: true", "mongo db", "mongo:1", "mongo/1", "${NAME}", "_mongo", "a"
+    })
+    @DisplayName("컨테이너 이름 규칙을 어긴 containerName — INVALID_MONGODB_CONTAINER_NAME")
+    void parse_InvalidContainerName_ThrowsParsingException(String containerName) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("containerName", containerName);
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals(
+            ParsingErrorCode.INVALID_MONGODB_CONTAINER_NAME,
+            exception.getCode()
+        );
+    }
+
     private BaseComponent parse(Map<String, Object> properties) {
         NodeDTO node = new NodeDTO(
             "node-1",

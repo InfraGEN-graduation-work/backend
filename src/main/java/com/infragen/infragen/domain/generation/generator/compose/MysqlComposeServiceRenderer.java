@@ -1,13 +1,13 @@
 package com.infragen.infragen.domain.generation.generator.compose;
 
-import org.springframework.stereotype.Component;
-
 import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLEnvComponent;
 import com.infragen.infragen.global.enums.ComponentType;
+import java.util.Optional;
+import org.springframework.stereotype.Component;
 
 @Component
 public class MysqlComposeServiceRenderer implements ComposeServiceRenderer {
@@ -60,5 +60,21 @@ public class MysqlComposeServiceRenderer implements ComposeServiceRenderer {
         yaml.append("      TZ: Asia/Seoul\n");
 
         return yaml.toString();
+    }
+
+    /**
+     * @return 호스트 접속 주소, {@code .env}에 들어 있는 초기화 변수 이름, 첫 기동에서만 적용된다는 점을 안내하는 섹션
+     */
+    @Override
+    public Optional<String> guideSection(BaseComponent component, ComposeGenerationContext context) {
+        MySQLComponent mysql = (MySQLComponent) component;
+        return Optional.of("""
+            ## MySQL
+
+            MySQL 컨테이너에는 호스트에서 `localhost:%d`로 접속합니다.
+
+            - `local/.env`에 그래프에 입력한 `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD` 값이 들어 있고, 컨테이너가 이 값으로 초기화됩니다. 앱과 연결했다면 앱이 읽을 `MYSQL_HOST`, `MYSQL_PORT`도 들어 있습니다.
+            - 초기화 변수는 데이터 디렉터리가 비어 있는 첫 기동에서만 적용됩니다. 기존 데이터가 남아 있는 볼륨으로 다시 기동하면 `local/.env` 값을 바꿔도 이미 만든 DB와 계정은 바뀌지 않습니다.
+            """.formatted(mysql.getPort()));
     }
 }

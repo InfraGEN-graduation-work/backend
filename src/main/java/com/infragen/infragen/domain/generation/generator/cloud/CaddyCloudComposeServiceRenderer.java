@@ -7,7 +7,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.SequencedMap;
-import java.util.stream.Stream;
 import org.springframework.stereotype.Component;
 
 /**
@@ -75,13 +74,19 @@ public class CaddyCloudComposeServiceRenderer implements CloudComposeServiceRend
     }
 
     /**
-     * @return Caddy 컨테이너가 읽는 {@code caddy/Caddyfile}과 사용자 안내 {@code CADDY_GUIDE.md}
+     * @return Caddy 컨테이너가 읽는 {@code caddy/Caddyfile}
      */
     @Override
     public List<IaCFileDTO.FileContentResDTO> additionalFiles(CloudDeployContext context) {
-        return Stream.of(caddyfileRenderer.render(context), caddyGuideRenderer.render(context))
-            .flatMap(Optional::stream)
-            .toList();
+        return caddyfileRenderer.render(context).stream().toList();
+    }
+
+    /**
+     * @return 도메인 유무에 따라 달라지는 Caddy 준비 사항과 설정 변경 방법 섹션
+     */
+    @Override
+    public Optional<String> guideSection(CloudDeployContext context) {
+        return caddyGuideRenderer.render(context);
     }
 
     /**

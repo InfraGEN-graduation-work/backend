@@ -84,4 +84,30 @@ public class MysqlCloudComposeServiceRenderer implements CloudComposeServiceRend
             "${MYSQL_PASSWORD:?외부 .env에 설정 필요}"
         ));
     }
+
+    /**
+     * @return 외부 {@code .env}에 설정할 MySQL 변수와 첫 기동에서만 적용된다는 점을 안내하는 섹션
+     */
+    @Override
+    public Optional<String> guideSection(CloudDeployContext context) {
+        // 변수 이름은 render의 ${변수:?} 참조와 같아야 한다. TerraformIaCGeneratorTest가 Compose 출력과 대조한다.
+        return Optional.of("""
+            ## MySQL
+
+            `mysql` 서비스는 앱이 Compose 네트워크 안에서 `mysql:%d` 주소로 접속하는 DB입니다. 앱 컨테이너에는 `MYSQL_HOST`, `MYSQL_PORT`가 들어갑니다.
+
+            ### 외부 `.env`에 설정할 변수
+
+            `docker-compose.cloud.yml`과 같은 디렉터리의 `.env` 파일에 `변수=값` 형식으로 한 줄에 하나씩 적어 주세요. 값이 없거나 비어 있으면 Compose가 실행을 멈춥니다.
+
+            - `MYSQL_DATABASE`: 처음 기동할 때 만들 DB 이름
+            - `MYSQL_USER`: 앱이 접속할 계정 이름. `MYSQL_DATABASE`에 모든 권한을 받습니다.
+            - `MYSQL_PASSWORD`: `MYSQL_USER`의 비밀번호
+            - `MYSQL_ROOT_PASSWORD`: `root` 계정의 비밀번호
+
+            ### 알아둘 점
+
+            - 위 변수는 데이터 디렉터리가 비어 있는 첫 기동에서만 적용됩니다. 기존 데이터가 남아 있는 볼륨으로 다시 기동하면 값을 바꿔도 이미 만든 DB와 계정은 바뀌지 않습니다.
+            """.formatted(CONTAINER_PORT));
+    }
 }

@@ -93,4 +93,30 @@ public class PostgresCloudComposeServiceRenderer implements CloudComposeServiceR
             "${POSTGRES_PASSWORD:?외부 .env에 설정 필요}"
         ));
     }
+
+    /**
+     * @return 외부 {@code .env}에 설정할 PostgreSQL 변수와 첫 기동에서만 적용된다는 점을 안내하는 섹션
+     */
+    @Override
+    public Optional<String> guideSection(CloudDeployContext context) {
+        // 변수 이름은 render의 ${변수:?} 참조와 같아야 한다. TerraformIaCGeneratorTest가 Compose 출력과 대조한다.
+        return Optional.of("""
+            ## PostgreSQL
+
+            `postgres` 서비스는 앱이 Compose 네트워크 안에서 `postgres:%d` 주소로 접속하는 DB입니다. 앱 컨테이너에는 `POSTGRES_HOST`, `POSTGRES_PORT`가 들어갑니다.
+
+            ### 외부 `.env`에 설정할 변수
+
+            `docker-compose.cloud.yml`과 같은 디렉터리의 `.env` 파일에 `변수=값` 형식으로 한 줄에 하나씩 적어 주세요. 값이 없거나 비어 있으면 Compose가 실행을 멈춥니다.
+
+            - `POSTGRES_DB`: 처음 기동할 때 만들 DB 이름
+            - `POSTGRES_USER`: 앱이 접속할 계정 이름. superuser 권한으로 만들어집니다.
+            - `POSTGRES_PASSWORD`: `POSTGRES_USER`의 비밀번호
+
+            ### 알아둘 점
+
+            - 위 변수는 데이터 디렉터리가 비어 있는 첫 기동에서만 적용됩니다. 기존 데이터가 남아 있는 볼륨으로 다시 기동하면 값을 바꿔도 이미 만든 DB와 계정은 바뀌지 않습니다.
+            - 데이터는 `PGDATA`로 지정한 `%s`에 저장됩니다.
+            """.formatted(CONTAINER_PORT, DATA_DIR));
+    }
 }

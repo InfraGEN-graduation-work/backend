@@ -1,7 +1,6 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -12,13 +11,12 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.CaddyComponent;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.dto.response.SpringBootComponent;
 
-@DisplayName("CLOUD_DEPLOY Caddy 사용자 안내 renderer")
+@DisplayName("CLOUD_DEPLOY 통합 안내 문서의 Caddy 섹션 renderer")
 class CaddyGuideRendererTest {
 
     private final CaddyGuideRenderer renderer = new CaddyGuideRenderer();
@@ -30,12 +28,13 @@ class CaddyGuideRendererTest {
         CloudDeployContext context = context("example.com", "caddy_data", true);
 
         // when
-        Optional<IaCFileDTO.FileContentResDTO> file = renderer.render(context);
+        Optional<String> section = renderer.render(context);
 
         // then
-        String content = file.orElseThrow().content();
+        String content = section.orElseThrow();
         assertAll(
-            () -> assertEquals("CADDY_GUIDE.md", file.orElseThrow().fileName()),
+            () -> assertTrue(content.startsWith("## Caddy 웹 서버\n")),
+            () -> assertFalse(content.contains("CLOUD_DEPLOY_WARNING.md")),
             () -> assertTrue(content.contains("`app:9090` 주소로 전달하는 리버스 프록시")),
             () -> assertTrue(content.contains("도메인 `example.com`의 A 레코드")),
             () -> assertTrue(content.contains("`aws_app_cidr` 또는 `oci_app_cidr`")),
@@ -55,10 +54,10 @@ class CaddyGuideRendererTest {
         CloudDeployContext context = context("", "", true);
 
         // when
-        Optional<IaCFileDTO.FileContentResDTO> file = renderer.render(context);
+        Optional<String> section = renderer.render(context);
 
         // then
-        String content = file.orElseThrow().content();
+        String content = section.orElseThrow();
         assertAll(
             () -> assertTrue(content.contains("도메인을 지정하지 않아서 HTTP(80)만 동작")),
             () -> assertTrue(content.contains("도메인과 인증서를 보관할 볼륨 이름을 입력한 뒤 다시 생성")),
@@ -68,16 +67,16 @@ class CaddyGuideRendererTest {
     }
 
     @Test
-    @DisplayName("Caddy가 없으면 안내 파일을 만들지 않는다")
+    @DisplayName("Caddy가 없으면 섹션을 만들지 않는다")
     void render_WithoutCaddy_ReturnsEmpty() {
         // given
         CloudDeployContext context = context("example.com", "caddy_data", false);
 
         // when
-        Optional<IaCFileDTO.FileContentResDTO> file = renderer.render(context);
+        Optional<String> section = renderer.render(context);
 
         // then
-        assertTrue(file.isEmpty());
+        assertTrue(section.isEmpty());
     }
 
     private static CloudDeployContext context(String domain, String volumeName, boolean withCaddy) {

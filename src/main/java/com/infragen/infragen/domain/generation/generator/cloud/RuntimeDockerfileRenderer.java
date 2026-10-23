@@ -41,4 +41,18 @@ public interface RuntimeDockerfileRenderer {
     default List<IaCFileDTO.FileContentResDTO> renderFiles(CloudDeployContext context) {
         return List.of(render(context));
     }
+
+    /**
+     * 통합 안내 문서 {@code CLOUD_DEPLOY_GUIDE.md}의 맨 앞에 넣을 앱 섹션을 만든다.
+     *
+     * <p>앱 파일을 어디에 두고 앱이 어떤 포트와 변수로 실행돼야 하는지를 안내한다. 무엇이 없으면 실행할 수 없는지는
+     * 경고 문서가 {@link #requiredAppFiles}로 알리므로 여기서는 준비 방법을 쓴다. 섹션은 {@code ##} 제목으로 시작한다.
+     *
+     * <p>앱은 모든 CLOUD 산출물에 있어 빈 섹션이 맞는 경우가 없으므로 default를 두지 않는다. 새 앱 타입 renderer가 안내를
+     * 빠뜨리면 컴파일되지 않는다.
+     *
+     * @param context 선택된 애플리케이션 정보를 담은 CLOUD_DEPLOY 컨텍스트
+     * @return 앱 섹션
+     */
+    String guideSection(CloudDeployContext context);
 }

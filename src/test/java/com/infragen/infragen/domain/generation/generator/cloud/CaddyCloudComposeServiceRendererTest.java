@@ -118,8 +118,8 @@ class CaddyCloudComposeServiceRendererTest {
     }
 
     @Test
-    @DisplayName("추가 파일로 Caddyfile과 사용자 안내를 순서대로 알려 준다")
-    void additionalFiles_ReturnsCaddyfileAndGuideInOrder() {
+    @DisplayName("추가 파일로 Caddyfile만 알려 주고 사용자 안내 파일은 만들지 않는다")
+    void additionalFiles_ReturnsOnlyCaddyfile() {
         // given
         CloudDeployContext context = context("caddy_data", true);
 
@@ -129,7 +129,20 @@ class CaddyCloudComposeServiceRendererTest {
             .toList();
 
         // then
-        assertEquals(List.of("caddy/Caddyfile", "CADDY_GUIDE.md"), fileNames);
+        assertEquals(List.of("caddy/Caddyfile"), fileNames);
+    }
+
+    @Test
+    @DisplayName("통합 안내 문서에 넣을 Caddy 섹션을 알려 준다")
+    void guideSection_ReturnsCaddySection() {
+        // given
+        CloudDeployContext context = context("caddy_data", true);
+
+        // when
+        Optional<String> section = renderer.guideSection(context);
+
+        // then
+        assertTrue(section.orElseThrow().startsWith("## Caddy 웹 서버\n"));
     }
 
     @Test

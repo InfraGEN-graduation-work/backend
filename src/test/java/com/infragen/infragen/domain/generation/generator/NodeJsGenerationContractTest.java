@@ -24,6 +24,8 @@ import com.infragen.infragen.domain.generation.generator.cloud.OciTerraformRende
 import com.infragen.infragen.domain.generation.generator.cloud.SpringBootRuntimeDockerfileRenderer;
 import com.infragen.infragen.domain.generation.generator.compose.MysqlComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.compose.MysqlHostAppEnvContributor;
+import com.infragen.infragen.domain.generation.generator.compose.NodeJsLocalApplicationGuideRenderer;
+import com.infragen.infragen.domain.generation.generator.compose.SpringBootLocalApplicationGuideRenderer;
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
 import com.infragen.infragen.domain.parsing.dto.request.NodeDTO;
 import com.infragen.infragen.domain.parsing.dto.request.ParsingReqDTO;
@@ -57,7 +59,8 @@ class NodeJsGenerationContractTest {
         localGenerator = new DockerComposeIaCGenerator(
             List.of(new MysqlComposeServiceRenderer()),
             List.of(new MysqlHostAppEnvContributor()),
-            List.of(new SpringBootApplicationEnvMapper(), new NodeJsApplicationEnvMapper())
+            List.of(new SpringBootApplicationEnvMapper(), new NodeJsApplicationEnvMapper()),
+            List.of(new SpringBootLocalApplicationGuideRenderer(), new NodeJsLocalApplicationGuideRenderer())
         );
         cloudGenerator = new TerraformIaCGenerator(
             new CloudComposeRenderer(
@@ -81,7 +84,7 @@ class NodeJsGenerationContractTest {
         // then
         String compose = fileContent(bundle, "local/docker-compose.yml");
         String env = fileContent(bundle, "local/.env");
-        assertEquals(List.of("local/docker-compose.yml", "local/.env"), fileNames(bundle));
+        assertEquals(List.of("local/docker-compose.yml", "local/.env", "local/LOCAL_DEV_GUIDE.md"), fileNames(bundle));
         assertTrue(compose.contains("mysql:"));
         assertFalse(compose.contains("node-app"));
         assertTrue(env.contains("MYSQL_HOST=localhost\n"));
@@ -99,10 +102,11 @@ class NodeJsGenerationContractTest {
         IaCFileDTO.BundleResDTO bundle = cloudGenerator.generate(parsingResult, awsTarget());
 
         // then
-        assertEquals(7, bundle.files().size());
+        assertEquals(8, bundle.files().size());
         assertEquals("cloud/Dockerfile", bundle.files().get(3).fileName());
         assertEquals("cloud/.dockerignore", bundle.files().get(4).fileName());
         assertEquals("cloud/docker-compose.cloud.yml", bundle.files().get(5).fileName());
+        assertEquals("cloud/CLOUD_DEPLOY_GUIDE.md", bundle.files().get(6).fileName());
         assertTrue(fileContent(bundle, "cloud/Dockerfile").contains("FROM node:22-slim"));
         assertTrue(fileContent(bundle, "cloud/Dockerfile").contains("CMD [\"npm\", \"start\"]"));
         assertTrue(fileContent(bundle, "cloud/.dockerignore").lines().toList().contains("**/.env"));

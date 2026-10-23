@@ -99,10 +99,11 @@ class NodeJsGenerationContractTest {
         IaCFileDTO.BundleResDTO bundle = cloudGenerator.generate(parsingResult, awsTarget());
 
         // then
-        assertEquals(7, bundle.files().size());
+        assertEquals(8, bundle.files().size());
         assertEquals("cloud/Dockerfile", bundle.files().get(3).fileName());
         assertEquals("cloud/.dockerignore", bundle.files().get(4).fileName());
         assertEquals("cloud/docker-compose.cloud.yml", bundle.files().get(5).fileName());
+        assertEquals("cloud/CLOUD_DEPLOY_GUIDE.md", bundle.files().get(6).fileName());
         assertTrue(fileContent(bundle, "cloud/Dockerfile").contains("FROM node:22-slim"));
         assertTrue(fileContent(bundle, "cloud/Dockerfile").contains("CMD [\"npm\", \"start\"]"));
         assertTrue(fileContent(bundle, "cloud/.dockerignore").lines().toList().contains("**/.env"));

@@ -10,8 +10,13 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -896,6 +901,62 @@ class TerraformIaCGeneratorTest {
     }
 
     @Test
+    @DisplayName("의존 인프라 4종 포함 — 통합 안내 문서가 Compose의 외부 .env 필수 변수를 빠짐없이 ComponentType 순서로 안내한다")
+    void generate_AllDependencies_GuideListsEveryRequiredComposeVariable() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        parsingResult.setComponents(List.of(parsingResult.getComponents().get(0),
+            redisComponent(), mongoComponent(), postgresComponent(), mysqlComponent()));
+        parsingResult.setEdges(List.of(edgeToApplication("redis-1"), edgeToApplication("mongo-1"),
+            edgeToApplication("pg-1"), edgeToApplication("mysql-1")));
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
+
+        // then
+        String guide = fileContent(bundle, "CLOUD_DEPLOY_GUIDE.md");
+        // 안내 문구를 Compose와 따로 적으므로, Compose가 실제로 요구하는 변수를 출력에서 읽어 대조한다.
+        Set<String> requiredVariables = Pattern.compile("\\$\\{([A-Z_]+):\\?")
+            .matcher(fileContent(bundle, "docker-compose.cloud.yml"))
+            .results()
+            .map(result -> result.group(1))
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        List<Integer> sectionIndexes = Stream.of("## MySQL", "## PostgreSQL", "## MongoDB", "## Redis")
+            .map(heading -> guide.indexOf("\n" + heading + "\n"))
+            .toList();
+        assertAll(
+            () -> assertEquals(11, requiredVariables.size()),
+            () -> assertTrue(requiredVariables.stream().allMatch(variable -> guide.contains("- `" + variable + "`: ")),
+                () -> "안내에 없는 변수: " + requiredVariables.stream()
+                    .filter(variable -> !guide.contains("- `" + variable + "`: "))
+                    .toList()),
+            () -> assertTrue(sectionIndexes.getFirst() > 0),
+            () -> assertEquals(sectionIndexes.stream().sorted().toList(), sectionIndexes)
+        );
+    }
+
+    @Test
+    @DisplayName("MySQL만 연결 — 통합 안내 문서에 MySQL 섹션만 넣는다")
+    void generate_MysqlOnly_GuideContainsOnlyMysqlSection() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        parsingResult.setComponents(List.of(parsingResult.getComponents().get(0), mysqlComponent(), redisComponent()));
+        parsingResult.setEdges(List.of(edgeToApplication("mysql-1")));
+
+        // when
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
+
+        // then
+        String guide = fileContent(bundle, "CLOUD_DEPLOY_GUIDE.md");
+        assertAll(
+            () -> assertTrue(guide.contains("\n## MySQL\n")),
+            () -> assertFalse(guide.contains("## Redis")),
+            () -> assertFalse(guide.contains("## PostgreSQL")),
+            () -> assertFalse(guide.contains("## MongoDB"))
+        );
+    }
+
+    @Test
     @DisplayName("Caddy가 없으면 Caddyfile을 만들지 않는다")
     void generate_WithoutCaddy_DoesNotRenderCaddyfile() {
         // given
@@ -1030,11 +1091,12 @@ class TerraformIaCGeneratorTest {
 
         // then
         assertAll(
-            () -> assertEquals(7, bundle.files().size()),
+            () -> assertEquals(8, bundle.files().size()),
             () -> assertEquals("cloud/Dockerfile", bundle.files().get(3).fileName()),
             () -> assertEquals("cloud/.dockerignore", bundle.files().get(4).fileName()),
             () -> assertEquals("cloud/docker-compose.cloud.yml", bundle.files().get(5).fileName()),
-            () -> assertEquals("cloud/CLOUD_DEPLOY_WARNING.md", bundle.files().get(6).fileName()),
+            () -> assertEquals("cloud/CLOUD_DEPLOY_GUIDE.md", bundle.files().get(6).fileName()),
+            () -> assertEquals("cloud/CLOUD_DEPLOY_WARNING.md", bundle.files().get(7).fileName()),
             () -> assertTrue(fileContent(bundle, "Dockerfile").contains("FROM node:22-slim")),
             () -> assertTrue(fileContent(bundle, "Dockerfile").contains("EXPOSE 3000")),
             () -> assertTrue(fileContent(bundle, ".dockerignore").lines().toList().contains("**/.env")),
@@ -1058,7 +1120,7 @@ class TerraformIaCGeneratorTest {
 
         // then
         assertAll(
-            () -> assertEquals(7, bundle.files().size()),
+            () -> assertEquals(8, bundle.files().size()),
             () -> assertEquals("cloud/Dockerfile", bundle.files().get(3).fileName()),
             () -> assertEquals("cloud/.dockerignore", bundle.files().get(4).fileName()),
             () -> assertTrue(fileContent(bundle, "oci/terraform/variables.tf").contains("default     = 3000")),

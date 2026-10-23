@@ -222,6 +222,26 @@ class NginxGenerationContractTest {
 
     @ParameterizedTest
     @MethodSource("cloudTargets")
+    @DisplayName("CLOUD_DEPLOY 통합 안내 문서에 앱 섹션 다음 NGINX 섹션을 넣고, 섹션의 포트와 파일이 Compose와 일치한다")
+    void generate_NginxCloud_GuideDescribesProxyPortsAndConfig(DeploymentTargetReqDTO.Target target) {
+        // given
+        ParsingReqDTO request = request(9090, 8080);
+        // when
+        var bundle = cloudGenerator.generate(parsingService.parsing(request, 1L), target);
+        // then
+        String guide = file(bundle, "cloud/CLOUD_DEPLOY_GUIDE.md");
+        String compose = file(bundle, "cloud/docker-compose.cloud.yml");
+        assertAll(
+            () -> assertTrue(guide.indexOf("\n## Spring Boot 앱\n") < guide.indexOf("\n## NGINX 웹 서버\n")),
+            () -> assertTrue(guide.contains("호스트 포트(`8080`)로 요청을 받아 `app:9090` 주소로 전달")),
+            () -> assertTrue(compose.contains("\"8080:80\"")),
+            () -> assertTrue(compose.contains("./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro")),
+            () -> assertTrue(file(bundle, "cloud/nginx/default.conf").contains("proxy_pass http://app:9090;"))
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("cloudTargets")
     void generate_NginxCloud_ExposesOnlyProxyAndOpensTerraformPort(DeploymentTargetReqDTO.Target target) {
         // given
         ParsingReqDTO request = request(9090, 80);

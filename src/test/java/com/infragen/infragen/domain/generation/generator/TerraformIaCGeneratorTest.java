@@ -904,6 +904,7 @@ class TerraformIaCGeneratorTest {
             () -> assertTrue(guide.contains("그래프에 입력한 포트(`9090`)로 listen")),
             () -> assertFalse(guide.contains("## Caddy")),
             () -> assertFalse(guide.contains("## MySQL")),
+            () -> assertFalse(guide.contains("## NGINX")),
             () -> assertTrue(bundle.files().stream().noneMatch(file -> file.fileName().endsWith("CADDY_GUIDE.md")))
         );
     }

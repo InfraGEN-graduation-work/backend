@@ -126,7 +126,7 @@ class NginxGenerationContractTest {
         var entity = GeneratedFileConverter.toEntity(config, 1L, "v1");
         assertAll(
             () -> assertEquals(42L, result.historyId()),
-            () -> assertEquals(includeCloud ? 11 : 3, result.files().size()),
+            () -> assertEquals(includeCloud ? 12 : 4, result.files().size()),
             () -> assertEquals(includeCloud ? 2 : 1, files.getValue().stream()
                 .filter(file -> file.fileName().endsWith("nginx/default.conf")).count()),
             () -> assertEquals("projects/1/histories/v1/local/nginx/default.conf", entity.getFilePath()),
@@ -200,7 +200,24 @@ class NginxGenerationContractTest {
         // when
         var bundle = localGenerator.generate(parsingService.parsing(request, 1L));
         // then
-        assertEquals(3, bundle.files().size());
+        assertEquals(4, bundle.files().size());
+    }
+
+    @Test
+    @DisplayName("LOCAL_DEV 안내 문서에 호스트 앱으로 프록시하는 NGINX 섹션을 넣고, 포트가 Compose와 설정 파일과 일치한다")
+    void generate_NginxLocal_GuideDescribesHostProxy() {
+        // given
+        ParsingReqDTO request = request(9090, 8080);
+        // when
+        var bundle = localGenerator.generate(parsingService.parsing(request, 1L));
+        // then
+        String guide = file(bundle, "local/LOCAL_DEV_GUIDE.md");
+        assertAll(
+            () -> assertTrue(guide.indexOf("\n## Spring Boot 앱 (포트 `9090`)\n") < guide.indexOf("\n## NGINX 웹 서버\n")),
+            () -> assertTrue(guide.contains("호스트 포트(`8080`)로 요청을 받아 호스트에서 실행 중인 앱(`host.docker.internal:9090`)으로 전달")),
+            () -> assertTrue(file(bundle, "local/docker-compose.yml").contains("\"8080:80\"")),
+            () -> assertTrue(file(bundle, "local/nginx/default.conf").contains("proxy_pass http://host.docker.internal:9090;"))
+        );
     }
 
     @ParameterizedTest

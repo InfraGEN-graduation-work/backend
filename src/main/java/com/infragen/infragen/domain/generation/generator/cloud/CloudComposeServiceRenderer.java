@@ -56,14 +56,28 @@ public interface CloudComposeServiceRenderer {
     }
 
     /**
-     * 이 service가 산출물에 더할 파일을 돌려준다. 예를 들어 컨테이너가 읽는 설정 파일이나 사용자 안내 파일이다.
+     * 이 service가 산출물에 더할 파일을 돌려준다. 예를 들어 컨테이너가 읽는 설정 파일이다.
      *
-     * <p>파일 이름은 {@code cloud/} 아래 상대 경로다. {@link #isEnabled}가 {@code true}일 때만 호출한다.
+     * <p>파일 이름은 {@code cloud/} 아래 상대 경로다. 사용자 안내는 파일로 만들지 않고 {@link #guideSection}으로 알려 준다.
+     * {@link #isEnabled}가 {@code true}일 때만 호출한다.
      *
      * @return 추가할 파일 목록. 더할 파일이 없으면 빈 목록
      */
     default List<IaCFileDTO.FileContentResDTO> additionalFiles(CloudDeployContext context) {
         return List.of();
+    }
+
+    /**
+     * 통합 안내 문서 {@code CLOUD_DEPLOY_GUIDE.md}에 넣을 이 service의 섹션을 돌려준다.
+     *
+     * <p>사용자는 생성된 파일만 받으므로 배포 전 준비 사항과 실행 방법을 노드별 섹션으로 모아 한 문서에 담는다.
+     * 섹션은 {@code ##} 제목으로 시작하는 Markdown이고, 비밀값은 쓰지 않고 변수 이름만 쓴다.
+     * {@link #isEnabled}가 {@code true}일 때만 호출한다.
+     *
+     * @return 안내 섹션. 안내할 내용이 없으면 빈 값
+     */
+    default Optional<String> guideSection(CloudDeployContext context) {
+        return Optional.empty();
     }
 
     /**

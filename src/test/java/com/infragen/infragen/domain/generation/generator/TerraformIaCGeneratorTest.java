@@ -861,27 +861,30 @@ class TerraformIaCGeneratorTest {
     }
 
     @Test
-    @DisplayName("Caddy 포함 — 사용자 안내 파일을 Caddyfile 다음, 경고 문서 앞에 추가한다")
-    void generate_Caddy_AddsGuideFileBetweenCaddyfileAndWarning() {
+    @DisplayName("Caddy 포함 — 통합 안내 문서를 Caddyfile 다음, 경고 문서 앞에 추가하고 Caddy 전용 안내 파일은 만들지 않는다")
+    void generate_Caddy_AddsDeployGuideBetweenCaddyfileAndWarning() {
         // given
         ParsingResultDTO parsingResult = caddyParsingResult();
 
         // when
-        List<String> fileNames = generator.generate(parsingResult, awsTarget()).files().stream()
-            .map(IaCFileDTO.FileContentResDTO::fileName)
-            .toList();
+        IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
 
         // then
+        List<String> fileNames = bundle.files().stream()
+            .map(IaCFileDTO.FileContentResDTO::fileName)
+            .toList();
         int caddyfileIndex = fileNames.indexOf("cloud/caddy/Caddyfile");
         assertAll(
-            () -> assertEquals(caddyfileIndex + 1, fileNames.indexOf("cloud/CADDY_GUIDE.md")),
-            () -> assertEquals(caddyfileIndex + 2, fileNames.indexOf("cloud/CLOUD_DEPLOY_WARNING.md"))
+            () -> assertEquals(caddyfileIndex + 1, fileNames.indexOf("cloud/CLOUD_DEPLOY_GUIDE.md")),
+            () -> assertEquals(caddyfileIndex + 2, fileNames.indexOf("cloud/CLOUD_DEPLOY_WARNING.md")),
+            () -> assertTrue(fileContent(bundle, "cloud/CLOUD_DEPLOY_GUIDE.md").contains("\n## Caddy 웹 서버\n")),
+            () -> assertFalse(fileNames.contains("cloud/CADDY_GUIDE.md"))
         );
     }
 
     @Test
-    @DisplayName("Caddy가 없으면 안내 파일을 만들지 않는다")
-    void generate_WithoutCaddy_DoesNotAddGuideFile() {
+    @DisplayName("Caddy가 없으면 안내할 섹션이 없어 통합 안내 문서를 만들지 않는다")
+    void generate_WithoutCaddy_DoesNotAddDeployGuide() {
         // given
         ParsingResultDTO parsingResult = validParsingResult();
 
@@ -889,7 +892,7 @@ class TerraformIaCGeneratorTest {
         IaCFileDTO.BundleResDTO bundle = generator.generate(parsingResult, awsTarget());
 
         // then
-        assertTrue(bundle.files().stream().noneMatch(file -> file.fileName().endsWith("CADDY_GUIDE.md")));
+        assertTrue(bundle.files().stream().noneMatch(file -> file.fileName().endsWith("_GUIDE.md")));
     }
 
     @Test

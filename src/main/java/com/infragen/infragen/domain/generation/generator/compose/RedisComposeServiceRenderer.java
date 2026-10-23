@@ -65,8 +65,8 @@ public class RedisComposeServiceRenderer implements ComposeServiceRenderer {
 
             Redis 컨테이너에는 호스트에서 `localhost:%d`로 접속합니다.
 
-            - `.env`에 그래프에 입력한 `REDIS_PASSWORD` 값이 들어 있고, Redis는 `--requirepass`로 이 값을 받습니다. 앱과 연결했다면 앱이 읽을 `REDIS_HOST`, `REDIS_PORT`도 들어 있습니다.
-            - 비밀번호는 컨테이너를 만들 때마다 명령 인자로 적용됩니다. `.env` 값을 바꾼 뒤 `docker compose up -d`를 실행하면 Redis 컨테이너가 새 값으로 다시 만들어집니다.
+            - `local/.env`에 그래프에 입력한 `REDIS_PASSWORD` 값이 들어 있고, Redis는 `--requirepass`로 이 값을 받습니다. 앱과 연결했다면 앱이 읽을 `REDIS_HOST`, `REDIS_PORT`도 들어 있습니다.
+            - 비밀번호는 컨테이너를 만들 때마다 명령 인자로 적용됩니다. `local/.env` 값을 바꾼 뒤 `docker compose -f local/docker-compose.yml up -d`를 실행하면 Redis 컨테이너가 새 값으로 다시 만들어집니다.
             """.formatted(redis.getPort()));
     }
 }

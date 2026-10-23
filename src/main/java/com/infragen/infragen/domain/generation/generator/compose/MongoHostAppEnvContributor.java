@@ -24,7 +24,7 @@ public class MongoHostAppEnvContributor implements HostAppEnvContributor {
 
     private static final String LOCALHOST = "localhost";
     // 공식 이미지는 MONGO_INITDB_ROOT_*로 만든 root 계정을 admin DB에 만들므로 앱이 그 계정을 찾을 DB를 알려야 한다.
-    private static final String AUTHENTICATION_DATABASE = "admin";
+    static final String AUTHENTICATION_DATABASE = "admin";
 
     @Override
     public ComponentType getDependencyType() {

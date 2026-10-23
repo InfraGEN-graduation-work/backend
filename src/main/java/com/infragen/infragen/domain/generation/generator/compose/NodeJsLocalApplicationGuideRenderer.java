@@ -25,7 +25,7 @@ public class NodeJsLocalApplicationGuideRenderer implements LocalApplicationGuid
 
             LOCAL_DEV에서는 앱을 컨테이너가 아니라 호스트에서 직접 실행하고, 의존 인프라에는 `localhost`의 포트로 접속합니다.
 
-            ### `.env` 값을 앱에 넣기
+            ### `local/.env` 값을 앱에 넣기
 
             Node.js는 `.env` 파일을 자동으로 읽지 않습니다. Node.js 20.6.0 이상이면 `--env-file`로 읽고, 그보다 낮으면 dotenv 같은 라이브러리로 읽어 주세요. 이미 설정된 환경변수가 파일 값보다 우선합니다.
 

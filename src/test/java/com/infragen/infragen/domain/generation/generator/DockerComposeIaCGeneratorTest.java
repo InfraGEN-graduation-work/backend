@@ -792,7 +792,7 @@ class DockerComposeIaCGeneratorTest {
             .toList();
         // 안내가 ".env에 들어 있다"고 적은 변수 이름이 실제 .env 키와 어긋나면 사용자가 없는 값을 찾게 된다.
         List<String> guidedKeys = guide.lines()
-            .filter(line -> line.startsWith("- `.env`에 그래프에 입력한 "))
+            .filter(line -> line.startsWith("- `local/.env`에 그래프에 입력한 "))
             // 같은 줄 뒤쪽의 앱 접속 변수는 앱과 연결된 경우에만 생기므로 "값이 들어 있고" 앞의 변수만 대조한다.
             .map(line -> line.substring(0, line.indexOf(" 값이 들어 있고")))
             .flatMap(line -> Pattern.compile("`([A-Z_]+)`").matcher(line).results().map(result -> result.group(1)))
@@ -811,6 +811,10 @@ class DockerComposeIaCGeneratorTest {
             () -> assertTrue(guide.contains("`localhost:27018`")),
             () -> assertTrue(guide.contains("`localhost:6379`")),
             () -> assertEquals(11, guidedKeys.size()),
+            // .env는 셸 문법으로 이스케이프하지 않으므로 셸로 읽는 방법을 안내하면 비밀번호의 특수문자가 실행될 수 있다.
+            () -> assertFalse(guide.contains("set -a")),
+            () -> assertTrue(guide.contains("셸의 `.`이나 `source`로 읽지 마세요")),
+            () -> assertTrue(guide.contains("인증 DB를 `admin` 값으로 지정해야 합니다")),
             () -> assertTrue(envKeys.containsAll(guidedKeys)),
             () -> assertFalse(guide.contains("userpass12")),
             () -> assertFalse(guide.contains("rootpass12")),

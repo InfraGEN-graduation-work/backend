@@ -114,7 +114,7 @@ public class MongoCloudComposeServiceRenderer implements CloudComposeServiceRend
             ### 알아둘 점
 
             - 위 변수는 데이터 디렉터리가 비어 있는 첫 기동에서만 적용됩니다. 기존 데이터가 남아 있는 볼륨으로 다시 기동하면 값을 바꿔도 이미 만든 DB와 계정은 바뀌지 않습니다.
-            - `MONGO_USER` 계정은 `%s` DB에 만들어집니다. 앱에서 접속할 때 인증 DB를 `%s`로 지정해야 합니다.
+            - `MONGO_USER` 계정은 `%s` DB에 만들어집니다. 앱에서 접속할 때 인증 DB를 `%s` 값으로 지정해야 합니다.
             """.formatted(CONTAINER_PORT, AUTHENTICATION_DATABASE, AUTHENTICATION_DATABASE));
     }
 }

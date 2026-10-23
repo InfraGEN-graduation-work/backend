@@ -19,18 +19,15 @@ public class SpringBootLocalApplicationGuideRenderer implements LocalApplication
     @Override
     public String guideSection(ApplicationComponent application) {
         int port = application.getPort();
+        // .env 값은 Compose와 Node.js 기준으로만 직렬화된다(ComposeYamlSupport). 셸로 읽으면 ;, &, 백틱이 실행되므로 셸 방법은 안내하지 않는다.
         return """
             ## Spring Boot 앱 (포트 `%d`)
 
             LOCAL_DEV에서는 앱을 컨테이너가 아니라 호스트에서 직접 실행하고, 의존 인프라에는 `localhost`의 포트로 접속합니다.
 
-            ### `.env` 값을 앱에 넣기
+            ### `local/.env` 값을 앱에 넣기
 
-            Spring Boot는 `local/.env` 파일을 자동으로 읽지 않습니다. IDE 실행 구성의 환경변수에 넣거나, 셸에서 아래처럼 환경변수로 내보낸 뒤 같은 셸에서 앱을 실행해 주세요.
-
-            ```
-            set -a; . local/.env; set +a
-            ```
+            Spring Boot는 `local/.env` 파일을 자동으로 읽지 않습니다. IDE 실행 구성의 환경변수에 `local/.env`의 값을 넣어 주세요. `local/.env`는 셸 문법에 맞춰 이스케이프하지 않으므로 셸의 `.`이나 `source`로 읽지 마세요. 비밀번호의 특수문자가 명령으로 실행될 수 있습니다.
 
             ### 접속 설정
 

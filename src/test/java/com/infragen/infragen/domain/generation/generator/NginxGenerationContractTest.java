@@ -216,7 +216,8 @@ class NginxGenerationContractTest {
             () -> assertTrue(guide.indexOf("\n## Spring Boot 앱 (포트 `9090`)\n") < guide.indexOf("\n## NGINX 웹 서버\n")),
             () -> assertTrue(guide.contains("호스트 포트(`8080`)로 요청을 받아 호스트에서 실행 중인 앱(`host.docker.internal:9090`)으로 전달")),
             () -> assertTrue(file(bundle, "local/docker-compose.yml").contains("\"8080:80\"")),
-            () -> assertTrue(file(bundle, "local/nginx/default.conf").contains("proxy_pass http://host.docker.internal:9090;"))
+            () -> assertTrue(file(bundle, "local/nginx/default.conf").contains("proxy_pass http://host.docker.internal:9090;")),
+            () -> assertTrue(guide.contains("`docker compose -f local/docker-compose.yml restart nginx`"))
         );
     }
 

@@ -114,6 +114,7 @@ class NodeJsRuntimeDockerfileRendererTest {
             () -> assertTrue(section.startsWith("## Node.js 앱\n")),
             () -> assertTrue(section.contains("`package.json`, `package-lock.json`과 앱 파일을 `Dockerfile`과 같은 디렉터리에")),
             () -> assertTrue(section.contains("`exec node server.js`처럼 `exec`로")),
+            () -> assertTrue(section.contains("`process.on(\"SIGTERM\", ...)`으로 신호를 받아 정리하는 코드")),
             () -> assertTrue(section.contains("`PORT=3000`(그래프에 입력한 포트)를 넣습니다")),
             () -> assertTrue(section.contains("docker compose -f docker-compose.cloud.yml up -d --build"))
         );

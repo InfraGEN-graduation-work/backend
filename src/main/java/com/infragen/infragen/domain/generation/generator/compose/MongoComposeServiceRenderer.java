@@ -77,9 +77,10 @@ public class MongoComposeServiceRenderer implements ComposeServiceRenderer {
 
             MongoDB 컨테이너에는 호스트에서 `localhost:%d`로 접속합니다.
 
-            - `.env`에 그래프에 입력한 `MONGO_DATABASE`, `MONGO_USER`, `MONGO_PASSWORD` 값이 들어 있고, 컨테이너가 이 값으로 초기화됩니다. 앱과 연결했다면 앱이 읽을 `MONGO_HOST`, `MONGO_PORT`도 들어 있습니다.
-            - `MONGO_USER` 계정은 `admin` DB에 만들어집니다. 앱에서 접속할 때 인증 DB를 `admin`으로 지정해야 합니다.
-            - 초기화 변수는 데이터 디렉터리가 비어 있는 첫 기동에서만 적용됩니다. 기존 데이터가 남아 있는 볼륨으로 다시 기동하면 `.env` 값을 바꿔도 이미 만든 DB와 계정은 바뀌지 않습니다.
-            """.formatted(mongo.getPort()));
+            - `local/.env`에 그래프에 입력한 `MONGO_DATABASE`, `MONGO_USER`, `MONGO_PASSWORD` 값이 들어 있고, 컨테이너가 이 값으로 초기화됩니다. 앱과 연결했다면 앱이 읽을 `MONGO_HOST`, `MONGO_PORT`도 들어 있습니다.
+            - `MONGO_USER` 계정은 `%s` DB에 만들어집니다. 앱에서 접속할 때 인증 DB를 `%s` 값으로 지정해야 합니다.
+            - 초기화 변수는 데이터 디렉터리가 비어 있는 첫 기동에서만 적용됩니다. 기존 데이터가 남아 있는 볼륨으로 다시 기동하면 `local/.env` 값을 바꿔도 이미 만든 DB와 계정은 바뀌지 않습니다.
+            """.formatted(mongo.getPort(), MongoHostAppEnvContributor.AUTHENTICATION_DATABASE,
+            MongoHostAppEnvContributor.AUTHENTICATION_DATABASE));
     }
 }

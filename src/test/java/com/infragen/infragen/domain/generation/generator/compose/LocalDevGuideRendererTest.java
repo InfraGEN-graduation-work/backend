@@ -18,7 +18,7 @@ class LocalDevGuideRendererTest {
     private final LocalDevGuideRenderer renderer = new LocalDevGuideRenderer();
 
     @Test
-    @DisplayName("섹션을 받은 순서대로 제목, 실행 명령, .env 커밋 금지 안내 다음에 넣는다")
+    @DisplayName("섹션을 받은 순서대로 제목, 루트 기준 실행 명령, .env 커밋 금지와 여러 앱의 키 공유 안내 다음에 넣는다")
     void render_WithSections_JoinsSectionsInOrder() {
         // given
         List<String> sections = List.of("## 첫 섹션\n\n첫 내용\n", "## 둘째 섹션\n\n둘째 내용\n");
@@ -31,8 +31,10 @@ class LocalDevGuideRendererTest {
         assertAll(
             () -> assertEquals("LOCAL_DEV_GUIDE.md", guide.orElseThrow().fileName()),
             () -> assertTrue(content.startsWith("# LOCAL_DEV 실행 안내\n")),
-            () -> assertTrue(content.contains("docker compose up -d")),
+            () -> assertTrue(content.contains("`local/` 폴더가 있는 디렉터리(앱 프로젝트 루트) 기준")),
+            () -> assertTrue(content.contains("docker compose -f local/docker-compose.yml up -d")),
             () -> assertTrue(content.contains("버전 관리에 커밋하지 마세요")),
+            () -> assertTrue(content.contains("나중에 처리한 앱의 값만 남으므로")),
             () -> assertTrue(content.endsWith("\n\n## 첫 섹션\n\n첫 내용\n\n## 둘째 섹션\n\n둘째 내용\n"))
         );
     }

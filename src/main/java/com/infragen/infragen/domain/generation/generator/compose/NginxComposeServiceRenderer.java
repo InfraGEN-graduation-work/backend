@@ -51,11 +51,11 @@ public class NginxComposeServiceRenderer implements ComposeServiceRenderer {
         return Optional.of("""
             ## NGINX 웹 서버
 
-            `nginx` 컨테이너는 호스트 포트(`%d`)로 요청을 받아 호스트에서 실행 중인 앱(`host.docker.internal:%d`)으로 전달합니다. 설정은 `%s`에 있습니다.
+            `nginx` 컨테이너는 호스트 포트(`%d`)로 요청을 받아 호스트에서 실행 중인 앱(`host.docker.internal:%d`)으로 전달합니다. 설정은 `local/%s`에 있습니다.
 
             - 앱을 호스트에서 포트(`%d`)로 실행해 두어야 NGINX가 요청을 전달할 수 있습니다.
             - `host.docker.internal`은 Compose의 `extra_hosts`에 지정한 `host-gateway`로 호스트의 내부 IP를 가리킵니다.
-            - `%s` 파일을 수정한 뒤 이 디렉터리에서 `docker compose restart nginx`를 실행해 설정을 다시 읽게 합니다.
+            - `local/%s` 파일을 수정한 뒤 `docker compose -f local/docker-compose.yml restart nginx`를 실행해 설정을 다시 읽게 합니다.
             """.formatted(nginx.getPort(), applicationPort, NginxConfigRenderer.FILE_NAME, applicationPort,
             NginxConfigRenderer.FILE_NAME));
     }

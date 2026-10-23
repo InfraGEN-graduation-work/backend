@@ -100,7 +100,7 @@ public class NodeJsRuntimeDockerfileRenderer implements RuntimeDockerfileRendere
             ### 배포 전에 준비할 것
 
             - `package.json`, `package-lock.json`과 앱 파일을 `Dockerfile`과 같은 디렉터리에 두어 주세요. 생성된 `.dockerignore`가 하위 폴더를 포함해 `.env`, `.env.*`, `.git`, `node_modules`를 이미지에서 제외합니다.
-            - `package.json`의 `start` 스크립트는 `exec node server.js`처럼 `exec`로 앱을 실행해야 합니다. 그래야 `docker stop`의 종료 신호(SIGTERM)가 앱에 전달됩니다.
+            - `package.json`의 `start` 스크립트는 `exec node server.js`처럼 `exec`로 앱을 실행해야 합니다. 그래야 `docker stop`의 종료 신호(SIGTERM)가 앱에 전달됩니다. 앱이 `process.on("SIGTERM", ...)`으로 신호를 받아 정리하는 코드를 가져야 정리 작업이 실행됩니다.
             - 앱은 `process.env.PORT`로 listen해야 합니다. Compose가 앱 컨테이너에 `PORT=%d`(그래프에 입력한 포트)를 넣습니다.
 
             ### DB 접속 설정

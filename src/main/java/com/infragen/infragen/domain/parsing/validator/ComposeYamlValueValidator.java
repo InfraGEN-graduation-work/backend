@@ -6,8 +6,8 @@ import java.util.regex.Pattern;
  * Compose YAML에 그대로 들어가는 이미지 참조와 볼륨 이름이 Docker 형식인지 판정한다.
  *
  * <p>renderer는 이 값을 인코딩 없이 {@code image:} 줄, 볼륨 마운트 줄, 루트 {@code volumes:} 키에 쓰므로 줄바꿈, 공백,
- * {@code ${...}} 변수 참조가 YAML 구조를 바꾸지 못하게 파싱 단계에서 거부한다. 오류 코드는 노드 타입별로 다르므로 판정만 하고
- * 예외는 호출하는 파서가 던진다. 파서마다 정규식이 어긋나지 않도록 한곳에 둔다.
+ * {@code ${...}} 변수 참조가 YAML 구조를 바꾸지 못하게 파싱 단계에서 거부한다. 오류 코드는 노드 타입별로 다르므로 판정만 하고 예외는 호출하는 파서가 던진다. 파서마다 정규식이 어긋나지 않도록
+ * 한곳에 둔다.
  */
 public final class ComposeYamlValueValidator {
 
@@ -18,10 +18,11 @@ public final class ComposeYamlValueValidator {
     private static final String PATH_COMPONENT = "[a-z0-9]+(?:(?:[._]|__|-+)[a-z0-9]+)*";
     private static final String NAME = "(?:" + REGISTRY + "/)?" + PATH_COMPONENT + "(?:/" + PATH_COMPONENT + ")*";
     private static final String TAG = "[\\w][\\w.-]{0,127}";
-    private static final String DIGEST =
-        "[A-Za-z][A-Za-z0-9]*(?:[-_+.][A-Za-z][A-Za-z0-9]*)*:[0-9a-fA-F]{32,}";
+    // regexp.go의 다이제스트 문법(알고리즘:16진수 32자 이상)은 1차 판정이고, Docker는 이어서 go-digest로 알고리즘별 정확한 길이와
+    // 소문자 16진수를 다시 검사한다. 문법만 따르면 sha256:에 32자나 대문자를 붙인 값이 파싱을 통과하고 pull에서 거부되므로 go-digest 기준을 쓴다.
+    private static final String DIGEST = "(?:sha256:[a-f0-9]{64}|sha384:[a-f0-9]{96}|sha512:[a-f0-9]{128})";
     private static final Pattern IMAGE_REFERENCE_PATTERN =
-        Pattern.compile(NAME + "(?::" + TAG + ")?(?:@" + DIGEST + ")?");
+            Pattern.compile(NAME + "(?::" + TAG + ")?(?:@" + DIGEST + ")?");
 
     // Docker 볼륨 이름 규칙이다. 마운트 줄과 루트 volumes 키에 들어가므로 콜론, 공백, 줄바꿈이 구조를 바꾸지 못하게 한다.
     private static final Pattern VOLUME_NAME_PATTERN = Pattern.compile("[a-zA-Z0-9][a-zA-Z0-9_.-]*");

@@ -45,6 +45,39 @@ class ComposeYamlValueValidatorTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {
+        "caddy@sha384:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "caddy@sha512:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    })
+    @DisplayName("Docker가 지원하는 다이제스트 알고리즘과 길이 — true")
+    void isImageReference_SupportedDigest_ReturnsTrue(String value) {
+        // when
+        boolean result = ComposeYamlValueValidator.isImageReference(value);
+
+        // then
+        assertTrue(result);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "caddy@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "caddy@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "caddy@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "caddy@sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "caddy@sha384:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "caddy@sha512:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "caddy@foo:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    })
+    @DisplayName("알고리즘별 길이가 다르거나 대문자이거나 지원하지 않는 알고리즘인 다이제스트 — false")
+    void isImageReference_UnsupportedDigest_ReturnsFalse(String value) {
+        // when
+        boolean result = ComposeYamlValueValidator.isImageReference(value);
+
+        // then
+        assertFalse(result);
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"caddy_data", "caddy-data.1", "Data1"})
     @DisplayName("Docker 볼륨 이름 규칙 — true")
     void isVolumeName_ValidName_ReturnsTrue(String value) {

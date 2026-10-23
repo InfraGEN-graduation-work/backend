@@ -250,6 +250,126 @@ class MongoDBParserTest {
         );
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "mongo", "mongo:8.0-alpine", "ghcr.io/org/mongo:8.0", "localhost:5000/mongo:8.0",
+        "mongo@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    })
+    @DisplayName("Docker 이미지 참조 형식 — 파싱 성공")
+    void parse_ValidImageVersion_ReturnsComponent(String imageVersion) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("imageVersion", imageVersion);
+
+        // when
+        MongoDBComponent component = (MongoDBComponent) parse(properties);
+
+        // then
+        assertEquals(imageVersion, component.getImageVersion());
+    }
+
+    @Test
+    @DisplayName("imageVersion 앞뒤 공백 — 제거해서 저장")
+    void parse_ImageVersionWithSurroundingSpaces_TrimsImageVersion() {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("imageVersion", " mongo:8.0 ");
+
+        // when
+        MongoDBComponent component = (MongoDBComponent) parse(properties);
+
+        // then
+        assertEquals("mongo:8.0", component.getImageVersion());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "mongo:8.0\n    privileged: true", "mongo 8.0", "${IMAGE}", "mongo:",
+        "mongo::8.0", "Mongo:8.0", "mongo@sha256:abc123"
+    })
+    @DisplayName("YAML 구조를 바꾸거나 이미지 참조 구조가 아닌 imageVersion — INVALID_MONGODB_IMAGE_VERSION")
+    void parse_InvalidImageVersion_ThrowsParsingException(String imageVersion) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("imageVersion", imageVersion);
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals(
+            ParsingErrorCode.INVALID_MONGODB_IMAGE_VERSION,
+            exception.getCode()
+        );
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"mongo_data", "mongo-data.1", "Data1"})
+    @DisplayName("Docker 볼륨 이름 규칙 — 파싱 성공")
+    void parse_ValidVolumeName_ReturnsComponent(String volumeName) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("volumeName", volumeName);
+
+        // when
+        MongoDBComponent component = (MongoDBComponent) parse(properties);
+
+        // then
+        assertEquals(volumeName, component.getVolumeName());
+    }
+
+    @Test
+    @DisplayName("volumeName 앞뒤 공백 — 제거해서 저장")
+    void parse_VolumeNameWithSurroundingSpaces_TrimsVolumeName() {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("volumeName", "  mongo_data  ");
+
+        // when
+        MongoDBComponent component = (MongoDBComponent) parse(properties);
+
+        // then
+        assertEquals("mongo_data", component.getVolumeName());
+    }
+
+    @Test
+    @DisplayName("volumeName 공백뿐인 값 — 볼륨 없이 파싱")
+    void parse_BlankVolumeName_ReturnsEmptyVolumeName() {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("volumeName", "  ");
+
+        // when
+        MongoDBComponent component = (MongoDBComponent) parse(properties);
+
+        // then
+        assertEquals("", component.getVolumeName());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"mongo@data", "data:/etc", "mongo data", "mongo\ndata", "_data", "${VOL}"})
+    @DisplayName("볼륨 이름 규칙을 어긴 volumeName — INVALID_MONGODB_VOLUME_NAME")
+    void parse_InvalidVolumeName_ThrowsParsingException(String volumeName) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("volumeName", volumeName);
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals(
+            ParsingErrorCode.INVALID_MONGODB_VOLUME_NAME,
+            exception.getCode()
+        );
+    }
+
     private BaseComponent parse(Map<String, Object> properties) {
         NodeDTO node = new NodeDTO(
             "node-1",

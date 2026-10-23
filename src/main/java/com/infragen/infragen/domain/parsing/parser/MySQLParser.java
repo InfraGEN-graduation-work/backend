@@ -8,6 +8,7 @@ import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLEnvComponent;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
+import com.infragen.infragen.domain.parsing.validator.ComposeYamlValueValidator;
 import com.infragen.infragen.domain.parsing.validator.EnvValueValidator;
 import com.infragen.infragen.global.enums.ComponentType;
 
@@ -43,6 +44,15 @@ public class MySQLParser implements ComponentParser {
         if (imageVersion == null || imageVersion.isBlank()) {
             throw new ParsingException(ParsingErrorCode.MISSING_MYSQL_IMAGE_VERSION);
         }
+        String resolvedImageVersion = imageVersion.trim();
+        if (!ComposeYamlValueValidator.isImageReference(resolvedImageVersion)) {
+            throw new ParsingException(ParsingErrorCode.INVALID_MYSQL_IMAGE_VERSION);
+        }
+        String resolvedVolumeName = volumeName == null ? "" : volumeName.trim();
+        // 볼륨은 선택 항목이라 이름이 있을 때만 형식을 검사한다.
+        if (!resolvedVolumeName.isEmpty() && !ComposeYamlValueValidator.isVolumeName(resolvedVolumeName)) {
+            throw new ParsingException(ParsingErrorCode.INVALID_MYSQL_VOLUME_NAME);
+        }
         if (username == null || username.isBlank()) {
             throw new ParsingException(ParsingErrorCode.MISSING_MYSQL_USERNAME);
         }
@@ -66,11 +76,11 @@ public class MySQLParser implements ComponentParser {
             .id(node.getNodeId())
             .posX(posX)
             .posY(posY)
-            .imageVersion(imageVersion)
+            .imageVersion(resolvedImageVersion)
             .containerName(containerName != null ? containerName : "")
             .env(env)
             .port(port)
-            .volumeName(volumeName != null ? volumeName : "")
+            .volumeName(resolvedVolumeName)
             .build();
     }
 }

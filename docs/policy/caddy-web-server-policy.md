@@ -47,7 +47,6 @@ Caddy 노드를 지원하면서 정한 정책과 그 이유를 기록한다. 구
 - 80/443은 앱 CIDR이 허용한 범위에만 열린다. 외부에 공개하려면 사용자가 해당 CIDR을 지정해야 한다.
 - 생성기는 앱 포트가 Caddy의 80/443과 같은지 확인하지 않는다. 앱, DB, 캐시의 포트는 1024 이상이어야 하는 파싱 검증(`PARSING400_5`)이 충돌을 막으며, 이 하한을 낮추면 Compose 호스트 포트와 Terraform ingress가 겹칠 수 있으므로 함께 확인해야 한다.
 - 앱 포트를 호스트에 공개하지 않으므로 Caddy를 거치지 않고 앱에 직접 접속하거나 호스트에서 앱 포트로 확인할 수 없다. 앱 컨테이너 상태는 서버에서 `docker compose` 명령으로 확인해야 한다. NGINX도 앱 포트를 닫으므로 두 웹 서버의 공개 정책이 같다. 다만 NGINX는 `app_port` 변수에 NGINX 포트를 넣어 ingress를 만들고, Caddy는 `app_port` 변수 없이 80/443만 연다.
-- MySQL, PostgreSQL, MongoDB, Redis의 `imageVersion`과 `volumeName`은 아직 형식 검증 없이 Compose YAML에 들어간다. Caddy와 NGINX만 검증하며, 나머지는 후속 이슈로 남겼다.
 - 생성기는 Caddy가 앱에 연결됐는지 다시 확인하지 않는다. 연결 검증은 parsing 단계의 책임이며, 그래프가 이 단계를 통과해야 한다는 전제를 둔다.
 - 산출물은 plan-only scaffold다. 실제 Caddy 컨테이너 기동과 Caddyfile 문법 검증, `terraform apply`는 수행하지 않는다. Terraform 산출물은 `terraform validate`까지만 확인한다.
 - 프론트에서 Local 단독을 선택한 채 Caddy 노드를 배치하면 생성 시점에야 거부된다.
@@ -55,6 +54,6 @@ Caddy 노드를 지원하면서 정한 정책과 그 이유를 기록한다. 구
 ## 정책을 바꿀 때 확인할 곳
 
 - 지원 출력 경로를 바꾸면 `GenerationCommandService`의 Local 단독 거부(`IaCGenerationService.supportsLocal`, `LocalIaCGenerator.supports`)와 `IaCGenerationErrorCode`의 `UNSUPPORTED_LOCAL_COMPONENT`를 함께 본다.
-- 노드 속성과 검증을 바꾸면 `CaddyParser`, `CaddyComponent`, `ParsingErrorCode`를 함께 본다.
+- 노드 속성과 검증을 바꾸면 `CaddyParser`, `CaddyComponent`, `ParsingErrorCode`를 함께 본다. 이미지 참조와 볼륨 이름의 정규식은 DB, 캐시와 함께 쓰는 `ComposeYamlValueValidator`에 있으므로, 바꾸면 DB와 캐시 노드에도 적용된다.
 - 그래프 규칙을 바꾸면 `ValidateGraphStructure`의 `validateWebServerPlacement`를 본다.
 - 산출물을 바꾸면 `CaddyCloudComposeServiceRenderer`(Compose service, 공개 포트, 앱 포트 닫기(`closesApplicationPort`), 추가 파일 목록), `CloudComposeRenderer`(`publishesApplicationPort`, `opensApplicationPortIngress`), `CaddyfileRenderer`, `CaddyGuideRenderer`, `AwsTerraformRenderer`, `OciTerraformRenderer`를 함께 본다.

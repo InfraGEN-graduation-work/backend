@@ -101,6 +101,126 @@ class RedisParserTest {
         );
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "redis", "redis:7.4-alpine", "ghcr.io/org/redis:7.4", "localhost:5000/redis:7.4",
+        "redis@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    })
+    @DisplayName("Docker 이미지 참조 형식 — 파싱 성공")
+    void parse_ValidImageVersion_ReturnsComponent(String imageVersion) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("imageVersion", imageVersion);
+
+        // when
+        RedisComponent component = parse(properties);
+
+        // then
+        assertEquals(imageVersion, component.getImageVersion());
+    }
+
+    @Test
+    @DisplayName("imageVersion 앞뒤 공백 — 제거해서 저장")
+    void parse_ImageVersionWithSurroundingSpaces_TrimsImageVersion() {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("imageVersion", " redis:7.4 ");
+
+        // when
+        RedisComponent component = parse(properties);
+
+        // then
+        assertEquals("redis:7.4", component.getImageVersion());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "redis:7.4\n    privileged: true", "redis 7.4", "${IMAGE}", "redis:",
+        "redis::7.4", "Redis:7.4", "redis@sha256:abc123"
+    })
+    @DisplayName("YAML 구조를 바꾸거나 이미지 참조 구조가 아닌 imageVersion — INVALID_REDIS_IMAGE_VERSION")
+    void parse_InvalidImageVersion_ThrowsParsingException(String imageVersion) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("imageVersion", imageVersion);
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals(
+            ParsingErrorCode.INVALID_REDIS_IMAGE_VERSION,
+            exception.getCode()
+        );
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"redis_data", "redis-data.1", "Data1"})
+    @DisplayName("Docker 볼륨 이름 규칙 — 파싱 성공")
+    void parse_ValidVolumeName_ReturnsComponent(String volumeName) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("volumeName", volumeName);
+
+        // when
+        RedisComponent component = parse(properties);
+
+        // then
+        assertEquals(volumeName, component.getVolumeName());
+    }
+
+    @Test
+    @DisplayName("volumeName 앞뒤 공백 — 제거해서 저장")
+    void parse_VolumeNameWithSurroundingSpaces_TrimsVolumeName() {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("volumeName", "  redis_data  ");
+
+        // when
+        RedisComponent component = parse(properties);
+
+        // then
+        assertEquals("redis_data", component.getVolumeName());
+    }
+
+    @Test
+    @DisplayName("volumeName 공백뿐인 값 — 볼륨 없이 파싱")
+    void parse_BlankVolumeName_ReturnsEmptyVolumeName() {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("volumeName", "  ");
+
+        // when
+        RedisComponent component = parse(properties);
+
+        // then
+        assertEquals("", component.getVolumeName());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"redis@data", "data:/etc", "redis data", "redis\ndata", "_data", "${VOL}"})
+    @DisplayName("볼륨 이름 규칙을 어긴 volumeName — INVALID_REDIS_VOLUME_NAME")
+    void parse_InvalidVolumeName_ThrowsParsingException(String volumeName) {
+        // given
+        Map<String, Object> properties = validProperties();
+        properties.put("volumeName", volumeName);
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parse(properties)
+        );
+
+        // then
+        assertEquals(
+            ParsingErrorCode.INVALID_REDIS_VOLUME_NAME,
+            exception.getCode()
+        );
+    }
+
     private RedisComponent parse(Map<String, Object> properties) {
         NodeDTO node = new NodeDTO(
             "node-1",

@@ -84,9 +84,9 @@ class CaddyGenerationContractTest {
                     reverse_proxy app:3000
                 }
                 """, fileContent(bundle, "cloud/caddy/Caddyfile")),
-            () -> assertTrue(compose.contains("  caddy:\n    image: caddy:2.8\n")),
+            () -> assertTrue(compose.contains("  caddy:\n    image: \"caddy:2.8\"\n")),
             () -> assertTrue(compose.contains("      - caddy_data:/data\n")),
-            () -> assertTrue(compose.contains("\nvolumes:\n  mysql_data:\n  caddy_data:\n")),
+            () -> assertTrue(compose.contains("\nvolumes:\n  \"mysql_data\":\n  \"caddy_data\":\n")),
             () -> assertTrue(fileContent(bundle, "cloud/aws/terraform/main.tf").contains("from_port   = 443"))
         );
     }

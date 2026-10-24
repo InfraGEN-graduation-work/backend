@@ -37,7 +37,7 @@ class CaddyCloudComposeServiceRendererTest {
         assertEquals("""
 
               caddy:
-                image: caddy:2.8
+                image: "caddy:2.8"
                 ports:
                   - "80:80"
                   - "443:443"

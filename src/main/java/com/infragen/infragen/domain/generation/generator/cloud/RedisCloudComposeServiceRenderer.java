@@ -1,5 +1,6 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
+import com.infragen.infragen.domain.generation.generator.compose.ComposeYamlSupport;
 import com.infragen.infragen.domain.parsing.dto.response.RedisComponent;
 import com.infragen.infragen.global.enums.ComponentType;
 import java.util.LinkedHashMap;
@@ -53,7 +54,7 @@ public class RedisCloudComposeServiceRenderer implements CloudComposeServiceRend
             env_file:
               - .env
             command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?외부 .env에 설정 필요}", "--appendonly", "yes"]
-        %s""".formatted(redis.getImageVersion(), volumeMount);
+        %s""".formatted(ComposeYamlSupport.toYamlString(redis.getImageVersion()), volumeMount);
     }
 
     /** 앱 컨테이너가 Compose 서비스 DNS로 Redis에 접속할 {@code REDIS_HOST/PORT/PASSWORD}를 만든다. */

@@ -1,6 +1,7 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
 import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
+import com.infragen.infragen.domain.generation.generator.compose.ComposeYamlSupport;
 import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLComponent;
 import com.infragen.infragen.global.enums.ComponentType;
 import java.util.LinkedHashMap;
@@ -68,7 +69,7 @@ public class PostgresCloudComposeServiceRenderer implements CloudComposeServiceR
                       POSTGRES_USER: ${POSTGRES_USER:?외부 .env에 설정 필요}
                       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?외부 .env에 설정 필요}
                       PGDATA: %s
-                %s""".formatted(postgres.getImageVersion(), DATA_DIR, volumeMount);
+                %s""".formatted(ComposeYamlSupport.toYamlString(postgres.getImageVersion()), DATA_DIR, volumeMount);
     }
 
     /** 앱 컨테이너가 Compose 서비스 DNS로 PostgreSQL에 접속할 {@code POSTGRES_HOST/PORT}를 만든다. */

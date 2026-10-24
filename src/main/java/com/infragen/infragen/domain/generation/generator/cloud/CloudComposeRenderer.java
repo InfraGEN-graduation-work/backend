@@ -5,6 +5,7 @@ import com.infragen.infragen.domain.generation.exception.IaCGenerationException;
 import com.infragen.infragen.domain.generation.exception.code.error.IaCGenerationErrorCode;
 import com.infragen.infragen.domain.generation.generator.application.ApplicationEnvMapper;
 import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
+import com.infragen.infragen.domain.generation.generator.compose.ComposeYamlSupport;
 import com.infragen.infragen.global.enums.ComponentType;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -192,7 +193,7 @@ public class CloudComposeRenderer {
         content.append("\nvolumes:\n");
 
         for (String volumeName : volumeNames) {
-            content.append("  ").append(volumeName).append(":\n");
+            content.append("  ").append(ComposeYamlSupport.toYamlString(volumeName)).append(":\n");
         }
     }
 

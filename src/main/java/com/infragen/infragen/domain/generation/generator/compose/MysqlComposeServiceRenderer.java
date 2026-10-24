@@ -39,9 +39,9 @@ public class MysqlComposeServiceRenderer implements ComposeServiceRenderer {
         context.getEnvVars().put("MYSQL_ROOT_PASSWORD", env.getRootPassword());
 
         StringBuilder yaml = new StringBuilder();
-        yaml.append("  ").append(serviceName).append(":\n");
-        yaml.append("    image: ").append(image).append('\n');
-        yaml.append("    container_name: ").append(containerName).append('\n');
+        yaml.append("  ").append(ComposeYamlSupport.toYamlString(serviceName)).append(":\n");
+        yaml.append("    image: ").append(ComposeYamlSupport.toYamlString(image)).append('\n');
+        yaml.append("    container_name: ").append(ComposeYamlSupport.toYamlString(containerName)).append('\n');
         yaml.append("    ports:\n");
         yaml.append("      - \"").append(mysql.getPort()).append(":3306\"\n");
 

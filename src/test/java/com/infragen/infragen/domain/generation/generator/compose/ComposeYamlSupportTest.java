@@ -144,4 +144,42 @@ class ComposeYamlSupportTest {
             Arguments.of("백틱", "ab`cd1234", "\"ab`cd1234\"")
         );
     }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"mysql:8.0", "true", "123", "null", "mysql_data"})
+    @DisplayName("이름 값 — 큰따옴표 문자열로 감싼다")
+    void toYamlString_Name_WrapsInDoubleQuotes(String value) {
+        // when
+        String result = ComposeYamlSupport.toYamlString(value);
+
+        // then
+        assertEquals("\"" + value + "\"", result);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"a\"b", "a\\b", "a\nb", "a\rb", "a\0b"})
+    @DisplayName("큰따옴표, 백슬래시, 줄바꿈, NUL이 든 값 — INVALID_COMPONENT_STATE")
+    void toYamlString_StructureBreakingCharacter_ThrowsGenerationException(String value) {
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> ComposeYamlSupport.toYamlString(value)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("null — INVALID_COMPONENT_STATE")
+    void toYamlString_Null_ThrowsGenerationException() {
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> ComposeYamlSupport.toYamlString(null)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
+    }
 }

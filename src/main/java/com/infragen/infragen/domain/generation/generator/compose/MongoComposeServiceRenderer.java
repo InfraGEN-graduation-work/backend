@@ -44,9 +44,9 @@ public class MongoComposeServiceRenderer implements ComposeServiceRenderer {
         context.getEnvVars().put("MONGO_PASSWORD", env.getPassword());
 
         StringBuilder yaml = new StringBuilder();
-        yaml.append("  ").append(serviceName).append(":\n");
-        yaml.append("    image: ").append(image).append('\n');
-        yaml.append("    container_name: ").append(containerName).append('\n');
+        yaml.append("  ").append(ComposeYamlSupport.toYamlString(serviceName)).append(":\n");
+        yaml.append("    image: ").append(ComposeYamlSupport.toYamlString(image)).append('\n');
+        yaml.append("    container_name: ").append(ComposeYamlSupport.toYamlString(containerName)).append('\n');
         yaml.append("    ports:\n");
         yaml.append("      - \"").append(mongo.getPort()).append(":27017\"\n");
 

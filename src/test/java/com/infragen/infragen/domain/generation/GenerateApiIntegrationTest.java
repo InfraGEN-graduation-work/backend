@@ -544,7 +544,7 @@ class GenerateApiIntegrationTest {
         assertTrue(generatedFiles.stream().anyMatch(file ->
             "local/docker-compose.yml".equals(file.getFileName())
                 && file.getContent().contains("durable_redis_data:/data")
-                && file.getContent().contains("  durable_redis_data:\n")));
+                && file.getContent().contains("  \"durable_redis_data\":\n")));
         assertTrue(generatedFiles.stream().anyMatch(file ->
             "local/.env".equals(file.getFileName())
                 && file.getContent().contains("REDIS_HOST=localhost")

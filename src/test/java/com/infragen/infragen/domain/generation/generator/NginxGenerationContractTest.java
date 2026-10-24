@@ -321,7 +321,7 @@ class NginxGenerationContractTest {
             }
             var dependency = dependencies.get(index);
             assertTrue(file(local, "local/docker-compose.yml")
-                .contains("image: " + dependency.getProperties().get("imageVersion")));
+                .contains("image: \"" + dependency.getProperties().get("imageVersion") + "\""));
             for (var cloud : clouds) {
                 String compose = file(cloud, "cloud/docker-compose.cloud.yml");
                 assertTrue(compose.contains("image: " + dependency.getProperties().get("imageVersion")));

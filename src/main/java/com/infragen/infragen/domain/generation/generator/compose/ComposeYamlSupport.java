@@ -41,6 +41,22 @@ public final class ComposeYamlSupport {
         return defaultImage;
     }
 
+    /**
+     * 사용자 입력에서 온 이름을 Compose YAML의 큰따옴표 문자열로 만든다.
+     *
+     * <p>따옴표 없이 쓰면 YAML이 {@code true}, {@code 123}, {@code null}을 불리언, 숫자, null로 읽어 Compose가 거부한다.
+     * 파서가 형식을 검증해 {@code "}, 백슬래시, 줄바꿈이 없다는 전제로 이스케이프하지 않고 감싼다.
+     *
+     * @throws IaCGenerationException 전제를 어긴 값이 renderer에 직접 전달된 경우
+     */
+    public static String toYamlString(String value) {
+        // parser를 거치지 않고 호출돼도 YAML 구조가 바뀌지 않도록 내부 계약 위반으로 거부한다.
+        if (value == null || value.chars().anyMatch(c -> c == '"' || c == '\\' || c == '\n' || c == '\r' || c == '\0')) {
+            throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
+        }
+        return "\"" + value + "\"";
+    }
+
     // .env 값 직렬화 — 공백, #, 작은따옴표, 백틱이 있으면 큰따옴표로 감싼다
     /**
      * {@code .env} 한 줄의 값을 Compose와 Node.js가 같게 읽도록 직렬화한다.

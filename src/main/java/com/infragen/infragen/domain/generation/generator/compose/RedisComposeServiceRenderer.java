@@ -35,9 +35,9 @@ public class RedisComposeServiceRenderer implements ComposeServiceRenderer {
         context.getEnvVars().put("REDIS_PASSWORD", redis.getPassword());
 
         StringBuilder yaml = new StringBuilder();
-        yaml.append("  ").append(serviceName).append(":\n");
-        yaml.append("    image: ").append(redis.getImageVersion().trim()).append('\n');
-        yaml.append("    container_name: ").append(containerName).append('\n');
+        yaml.append("  ").append(ComposeYamlSupport.toYamlString(serviceName)).append(":\n");
+        yaml.append("    image: ").append(ComposeYamlSupport.toYamlString(redis.getImageVersion().trim())).append('\n');
+        yaml.append("    container_name: ").append(ComposeYamlSupport.toYamlString(containerName)).append('\n');
         yaml.append("    ports:\n");
         yaml.append("      - \"").append(redis.getPort()).append(":").append(REDIS_PORT)
             .append("\"\n");

@@ -44,9 +44,9 @@ import com.infragen.infragen.global.enums.ComponentType;
 class DockerComposeIaCGeneratorTest {
     private static final String EXPECTED_COMPOSE = """
         services:
-          mysql:
-            image: mysql:8.0
-            container_name: mysql
+          "mysql":
+            image: "mysql:8.0"
+            container_name: "mysql"
             ports:
               - "3306:3306"
             volumes:
@@ -61,7 +61,7 @@ class DockerComposeIaCGeneratorTest {
               TZ: Asia/Seoul
 
         volumes:
-          mysql_data:
+          "mysql_data":
         """;
 
     private static final String EXPECTED_ENV = """
@@ -80,9 +80,9 @@ class DockerComposeIaCGeneratorTest {
         """;
 
     private static final String MYSQL_SERVICE_BLOCK = """
-          mysql:
-            image: mysql:8.0
-            container_name: mysql
+          "mysql":
+            image: "mysql:8.0"
+            container_name: "mysql"
             ports:
               - "3306:3306"
             volumes:
@@ -98,9 +98,9 @@ class DockerComposeIaCGeneratorTest {
         """;
 
     private static final String POSTGRES_SERVICE_BLOCK = """
-          postgres:
-            image: postgres:17
-            container_name: postgres
+          "postgres":
+            image: "postgres:17"
+            container_name: "postgres"
             ports:
               - "5433:5432"
             volumes:
@@ -116,9 +116,9 @@ class DockerComposeIaCGeneratorTest {
         """;
 
     private static final String REDIS_SERVICE_BLOCK = """
-          redis:
-            image: redis:7.4
-            container_name: redis
+          "redis":
+            image: "redis:7.4"
+            container_name: "redis"
             ports:
               - "6379:6379"
             volumes:
@@ -176,6 +176,40 @@ class DockerComposeIaCGeneratorTest {
         assertEquals(EXPECTED_COMPOSE, fileContent(bundle, "docker-compose.yml"));
         assertEquals(EXPECTED_ENV, fileContent(bundle, ".env"));
         assertFalse(fileContent(bundle, "docker-compose.yml").contains("eclipse-temurin"));
+    }
+
+    @Test
+    @DisplayName("YAML이 숫자나 불리언으로 읽을 이름 — service 키, image, container_name, 루트 volumes 키를 큰따옴표로 출력")
+    void generate_YamlTypedNames_QuotesAsStrings() {
+        // given
+        MySQLComponent mysql = MySQLComponent.builder()
+            .id("node-1")
+            .posX(100f)
+            .posY(200f)
+            .imageVersion("123")
+            .containerName("true")
+            .volumeName("456")
+            .port(3306)
+            .env(MySQLEnvComponent.builder()
+                .databaseName("appdb")
+                .username("user")
+                .userPassword("userpass12")
+                .rootPassword("rootpass12")
+                .build())
+            .build();
+        ParsingResultDTO parsingResult = parsingResult(List.of(mysql), List.of());
+
+        // when
+        String compose = fileContent(generator.generate(parsingResult), "docker-compose.yml");
+
+        // then
+        assertAll(
+            () -> assertTrue(compose.contains("\n  \"true\":\n")),
+            () -> assertTrue(compose.contains("\n    image: \"123\"\n")),
+            () -> assertTrue(compose.contains("\n    container_name: \"true\"\n")),
+            () -> assertTrue(compose.contains("\n      - 456:/var/lib/mysql\n")),
+            () -> assertTrue(compose.endsWith("\nvolumes:\n  \"456\":\n"))
+        );
     }
 
     @Test
@@ -277,9 +311,9 @@ class DockerComposeIaCGeneratorTest {
         assertEquals(2, bundle.files().size());
         assertEquals("""
             services:
-              redis:
-                image: redis:7.4
-                container_name: redis
+              "redis":
+                image: "redis:7.4"
+                container_name: "redis"
                 ports:
                   - "6379:6379"
                 volumes:
@@ -289,7 +323,7 @@ class DockerComposeIaCGeneratorTest {
                 command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
 
             volumes:
-              redis_data:
+              "redis_data":
             """, fileContent(bundle, "docker-compose.yml"));
         assertEquals("""
             # InfraGEN generated environment variables
@@ -317,9 +351,9 @@ class DockerComposeIaCGeneratorTest {
         assertAll(
             () -> assertEquals("""
                 services:
-                  postgres:
-                    image: postgres:17
-                    container_name: postgres
+                  "postgres":
+                    image: "postgres:17"
+                    container_name: "postgres"
                     ports:
                       - "5433:5432"
                     volumes:
@@ -334,7 +368,7 @@ class DockerComposeIaCGeneratorTest {
                       TZ: Asia/Seoul
 
                 volumes:
-                  pg_data:
+                  "pg_data":
                 """, fileContent(bundle, "docker-compose.yml")),
             () -> assertEquals("""
                 # InfraGEN generated environment variables
@@ -368,9 +402,9 @@ class DockerComposeIaCGeneratorTest {
         assertAll(
             () -> assertEquals("""
                 services:
-                  mongo:
-                    image: mongo:8.0
-                    container_name: mongo
+                  "mongo":
+                    image: "mongo:8.0"
+                    container_name: "mongo"
                     ports:
                       - "27018:27017"
                     volumes:
@@ -384,7 +418,7 @@ class DockerComposeIaCGeneratorTest {
                       TZ: Asia/Seoul
 
                 volumes:
-                  mongo_data:
+                  "mongo_data":
                 """, fileContent(bundle, "docker-compose.yml")),
             () -> assertEquals("""
                 # InfraGEN generated environment variables
@@ -491,8 +525,8 @@ class DockerComposeIaCGeneratorTest {
                 # DataSource를 직접 설정하고 .env의 DB별 접속 변수를 사용하세요.
                 services:
                 """)),
-            () -> assertTrue(compose.contains("  mysql:\n")),
-            () -> assertTrue(compose.contains("  postgres:\n")),
+            () -> assertTrue(compose.contains("  \"mysql\":\n")),
+            () -> assertTrue(compose.contains("  \"postgres\":\n")),
             () -> assertTrue(env.contains("MYSQL_HOST=localhost\n")),
             () -> assertTrue(env.contains("MYSQL_PORT=3306\n")),
             () -> assertTrue(env.contains("POSTGRES_HOST=localhost\n")),
@@ -520,8 +554,8 @@ class DockerComposeIaCGeneratorTest {
                 """ + MYSQL_SERVICE_BLOCK + REDIS_SERVICE_BLOCK + """
 
                 volumes:
-                  mysql_data:
-                  redis_data:
+                  "mysql_data":
+                  "redis_data":
                 """, fileContent(bundle, "docker-compose.yml")),
             () -> assertEquals("""
                 # InfraGEN generated environment variables
@@ -582,8 +616,8 @@ class DockerComposeIaCGeneratorTest {
                 """ + MYSQL_SERVICE_BLOCK + POSTGRES_SERVICE_BLOCK + """
 
                 volumes:
-                  mysql_data:
-                  pg_data:
+                  "mysql_data":
+                  "pg_data":
                 """, fileContent(bundle, "docker-compose.yml")),
             () -> assertEquals("""
                 # InfraGEN generated environment variables
@@ -638,7 +672,7 @@ class DockerComposeIaCGeneratorTest {
         // then
         String env = fileContent(bundle, ".env");
         assertAll(
-            () -> assertTrue(fileContent(bundle, "docker-compose.yml").contains("  postgres:\n")),
+            () -> assertTrue(fileContent(bundle, "docker-compose.yml").contains("  \"postgres\":\n")),
             () -> assertFalse(env.contains("POSTGRES_HOST")),
             () -> assertFalse(env.contains("SPRING_DATASOURCE_URL"))
         );
@@ -725,8 +759,8 @@ class DockerComposeIaCGeneratorTest {
                 """ + MYSQL_SERVICE_BLOCK + REDIS_SERVICE_BLOCK + """
 
                 volumes:
-                  mysql_data:
-                  redis_data:
+                  "mysql_data":
+                  "redis_data":
                 """, fileContent(bundle, "docker-compose.yml")),
             () -> assertEquals("""
                 # InfraGEN generated environment variables

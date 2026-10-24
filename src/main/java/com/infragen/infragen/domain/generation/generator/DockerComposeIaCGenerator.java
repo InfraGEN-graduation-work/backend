@@ -247,7 +247,7 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
         if (!rootVolumeNames.isEmpty()) {
             content.append("\nvolumes:\n");
             for (String volumeName : rootVolumeNames) {
-                content.append("  ").append(volumeName).append(":\n");
+                content.append("  ").append(ComposeYamlSupport.toYamlString(volumeName)).append(":\n");
             }
         }
 

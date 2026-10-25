@@ -13,7 +13,8 @@ Generate 요청의 배포 옵션 조합과 옵션별 산출물 구성, 생성 �
 ## Compose 이름 값의 출력
 
 - 데이터베이스, 캐시, Caddy service의 사용자 입력 이름 값은 큰따옴표 문자열로 출력한다. LOCAL_DEV는 service 키, `image:`, `container_name:`, 루트 `volumes:` 키, CLOUD_DEPLOY는 `image:`와 루트 `volumes:` 키다. 따옴표가 없으면 YAML이 `true`, `123`, `null`을 다른 타입으로 읽어 Compose가 거부하기 때문이다(`image must be a string`, `non-string key in services`).
-- 파서가 큰따옴표, 백슬래시, 줄바꿈을 막으므로 이스케이프하지 않고 감싼다. 생성기에 이 문자가 직접 전달되면 `GENERATION400_2`(`INVALID_COMPONENT_STATE`)로 거부한다.
+- 파서가 큰따옴표, 백슬래시, 줄바꿈, 제어 문자를 막으므로 이스케이프하지 않고 감싼다. 생성기에 직접 전달된 값에 큰따옴표, 백슬래시, 줄바꿈(`\n`, `\r`, NEL)이나 YAML 1.2가 허용하지 않는 문자(탭을 뺀 제어 문자, DEL, C1 제어 문자, U+FFFE, U+FFFF, 짝 없는 서로게이트)가 있으면 `GENERATION400_2`(`INVALID_COMPONENT_STATE`)로 거부한다. NEL은 YAML 1.2에서는 출력 가능 문자지만 Compose의 YAML 파서가 공백으로 바꿔 읽어 값이 바뀌므로 거부한다.
+- 이미지 값은 앞뒤 공백을 제거한 뒤 감싼다. 따옴표 안의 공백은 값에 남아 Docker가 `invalid reference format`으로 거부하기 때문이다. LOCAL_DEV와 CLOUD_DEPLOY 모두 같다.
 - 볼륨 마운트 줄(`- 이름:경로`)은 콜론이 있어 항상 문자열이므로 감싸지 않는다. CLOUD_DEPLOY의 service 키와 앱 이미지는 고정값이라 감싸지 않는다.
 
 ## LOCAL_DEV 산출물

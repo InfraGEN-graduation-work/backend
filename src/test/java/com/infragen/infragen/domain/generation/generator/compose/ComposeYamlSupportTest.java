@@ -157,6 +157,31 @@ class ComposeYamlSupportTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"a\tb", "a\u00a0b", "한글"})
+    @DisplayName("탭과 YAML이 허용하는 비ASCII 문자 — 그대로 감싼다")
+    void toYamlString_YamlPrintableCharacter_WrapsInDoubleQuotes(String value) {
+        // when
+        String result = ComposeYamlSupport.toYamlString(value);
+
+        // then
+        assertEquals("\"" + value + "\"", result);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"a\u0001b", "a\u001fb", "a\u007fb", "a\u0085b", "a\u009fb", "a\ufffeb", "a\ud800b"})
+    @DisplayName("YAML이 허용하지 않는 제어 문자, 값을 바꾸는 NEL, 짝 없는 서로게이트 — INVALID_COMPONENT_STATE")
+    void toYamlString_NonPrintableCodePoint_ThrowsGenerationException(String value) {
+        // when
+        IaCGenerationException exception = assertThrows(
+            IaCGenerationException.class,
+            () -> ComposeYamlSupport.toYamlString(value)
+        );
+
+        // then
+        assertEquals(IaCGenerationErrorCode.INVALID_COMPONENT_STATE, exception.getCode());
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"a\"b", "a\\b", "a\nb", "a\rb", "a\0b"})
     @DisplayName("큰따옴표, 백슬래시, 줄바꿈, NUL이 든 값 — INVALID_COMPONENT_STATE")
     void toYamlString_StructureBreakingCharacter_ThrowsGenerationException(String value) {

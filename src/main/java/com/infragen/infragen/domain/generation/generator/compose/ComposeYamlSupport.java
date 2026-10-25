@@ -45,13 +45,13 @@ public final class ComposeYamlSupport {
      * 사용자 입력에서 온 이름을 Compose YAML의 큰따옴표 문자열로 만든다.
      *
      * <p>따옴표 없이 쓰면 YAML이 {@code true}, {@code 123}, {@code null}을 불리언, 숫자, null로 읽어 Compose가 거부한다.
-     * 파서가 형식을 검증해 {@code "}, 백슬래시, 줄바꿈이 없다는 전제로 이스케이프하지 않고 감싼다.
+     * 파서가 형식을 검증해 {@code "}, 백슬래시, 줄바꿈, 제어 문자가 없다는 전제로 이스케이프하지 않고 감싼다.
      *
      * @throws IaCGenerationException 전제를 어긴 값이 renderer에 직접 전달된 경우
      */
     public static String toYamlString(String value) {
-        // parser를 거치지 않고 호출돼도 YAML 구조가 바뀌지 않도록 내부 계약 위반으로 거부한다.
-        if (value == null || value.chars().anyMatch(c -> c == '"' || c == '\\' || c == '\n' || c == '\r' || c == '\0')) {
+        // parser를 거치지 않고 호출돼도 YAML 구조나 값이 바뀌지 않도록 내부 계약 위반으로 거부한다.
+        if (value == null || !value.codePoints().allMatch(ComposeYamlSupport::isYamlStringCodePoint)) {
             throw new IaCGenerationException(IaCGenerationErrorCode.INVALID_COMPONENT_STATE);
         }
         return "\"" + value + "\"";
@@ -122,6 +122,19 @@ public final class ComposeYamlSupport {
 
     private static boolean needsQuoting(String value) {
         return value.chars().anyMatch(c -> " #'`".indexOf(c) >= 0);
+    }
+
+    // YAML 1.2의 출력 가능 문자(c-printable)에서 줄바꿈과 큰따옴표 문자열의 특수 문자를 뺀 집합이다.
+    // NEL(U+0085)은 출력 가능 문자지만 Compose의 go-yaml이 공백으로 접어 값이 바뀌므로 줄바꿈과 함께 뺀다. 짝 없는 서로게이트도 여기서 걸러진다.
+    private static boolean isYamlStringCodePoint(int codePoint) {
+        if (codePoint == '"' || codePoint == '\\') {
+            return false;
+        }
+        return codePoint == '\t'
+            || (codePoint >= 0x20 && codePoint <= 0x7E)
+            || (codePoint >= 0xA0 && codePoint <= 0xD7FF)
+            || (codePoint >= 0xE000 && codePoint <= 0xFFFD)
+            || (codePoint >= 0x10000 && codePoint <= 0x10FFFF);
     }
 
     private static String firstNonBlank(String... candidates) {

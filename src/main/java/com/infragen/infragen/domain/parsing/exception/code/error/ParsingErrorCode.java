@@ -215,6 +215,66 @@ public enum ParsingErrorCode implements BaseErrorCode {
             HttpStatus.BAD_REQUEST,
             "Caddy 볼륨 이름은 영문 또는 숫자로 시작하고 영문, 숫자, 언더바, 점, 하이픈만 사용할 수 있습니다.",
             "PARSING400_43"
+    ),
+    INVALID_MYSQL_IMAGE_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "MySQL 이미지 버전은 Docker 이미지 참조 형식이어야 합니다. 예: mysql:8.0",
+            "PARSING400_44"
+    ),
+    INVALID_MYSQL_VOLUME_NAME(
+            HttpStatus.BAD_REQUEST,
+            "MySQL 볼륨 이름은 영문 또는 숫자로 시작하고 영문, 숫자, 언더바, 점, 하이픈만 사용할 수 있습니다.",
+            "PARSING400_45"
+    ),
+    INVALID_REDIS_IMAGE_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "Redis 이미지 버전은 Docker 이미지 참조 형식이어야 합니다. 예: redis:7.4",
+            "PARSING400_46"
+    ),
+    INVALID_REDIS_VOLUME_NAME(
+            HttpStatus.BAD_REQUEST,
+            "Redis 볼륨 이름은 영문 또는 숫자로 시작하고 영문, 숫자, 언더바, 점, 하이픈만 사용할 수 있습니다.",
+            "PARSING400_47"
+    ),
+    INVALID_POSTGRES_IMAGE_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "PostgreSQL 이미지 버전은 Docker 이미지 참조 형식이어야 합니다. 예: postgres:16",
+            "PARSING400_48"
+    ),
+    INVALID_POSTGRES_VOLUME_NAME(
+            HttpStatus.BAD_REQUEST,
+            "PostgreSQL 볼륨 이름은 영문 또는 숫자로 시작하고 영문, 숫자, 언더바, 점, 하이픈만 사용할 수 있습니다.",
+            "PARSING400_49"
+    ),
+    INVALID_MONGODB_IMAGE_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "MongoDB 이미지 버전은 Docker 이미지 참조 형식이어야 합니다. 예: mongo:8.0",
+            "PARSING400_50"
+    ),
+    INVALID_MONGODB_VOLUME_NAME(
+            HttpStatus.BAD_REQUEST,
+            "MongoDB 볼륨 이름은 영문 또는 숫자로 시작하고 영문, 숫자, 언더바, 점, 하이픈만 사용할 수 있습니다.",
+            "PARSING400_51"
+    ),
+    INVALID_MYSQL_CONTAINER_NAME(
+            HttpStatus.BAD_REQUEST,
+            "MySQL 컨테이너 이름은 영문 또는 숫자로 시작하는 2자 이상이어야 하고 영문, 숫자, 언더바, 점, 하이픈만 사용할 수 있습니다.",
+            "PARSING400_52"
+    ),
+    INVALID_REDIS_CONTAINER_NAME(
+            HttpStatus.BAD_REQUEST,
+            "Redis 컨테이너 이름은 영문 또는 숫자로 시작하는 2자 이상이어야 하고 영문, 숫자, 언더바, 점, 하이픈만 사용할 수 있습니다.",
+            "PARSING400_53"
+    ),
+    INVALID_POSTGRES_CONTAINER_NAME(
+            HttpStatus.BAD_REQUEST,
+            "PostgreSQL 컨테이너 이름은 영문 또는 숫자로 시작하는 2자 이상이어야 하고 영문, 숫자, 언더바, 점, 하이픈만 사용할 수 있습니다.",
+            "PARSING400_54"
+    ),
+    INVALID_MONGODB_CONTAINER_NAME(
+            HttpStatus.BAD_REQUEST,
+            "MongoDB 컨테이너 이름은 영문 또는 숫자로 시작하는 2자 이상이어야 하고 영문, 숫자, 언더바, 점, 하이픈만 사용할 수 있습니다.",
+            "PARSING400_55"
     );
 
     private final HttpStatus httpStatus;

@@ -16,6 +16,8 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.infragen.infragen.domain.generation.dto.request.DeploymentTargetReqDTO;
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
@@ -37,6 +39,7 @@ import com.infragen.infragen.domain.generation.generator.cloud.OciTerraformRende
 import com.infragen.infragen.domain.generation.generator.cloud.PostgresCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.RedisCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
+import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.CaddyComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MongoDBComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
@@ -54,7 +57,7 @@ class TerraformIaCGeneratorTest {
     private static final String MYSQL_SERVICE_BLOCK = """
 
           mysql:
-            image: mysql:8.4
+            image: "mysql:8.4"
             env_file:
               - .env
             environment:
@@ -68,7 +71,7 @@ class TerraformIaCGeneratorTest {
     private static final String POSTGRES_SERVICE_BLOCK = """
 
           postgres:
-            image: postgres:17
+            image: "postgres:17"
             env_file:
               - .env
             environment:
@@ -82,7 +85,7 @@ class TerraformIaCGeneratorTest {
     private static final String REDIS_SERVICE_BLOCK = """
 
           redis:
-            image: redis:7.4
+            image: "redis:7.4"
             env_file:
               - .env
             command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?외부 .env에 설정 필요}", "--appendonly", "yes"]
@@ -293,6 +296,70 @@ class TerraformIaCGeneratorTest {
     }
 
     @Test
+    @DisplayName("YAML이 숫자로 읽을 이미지와 볼륨 이름 — image와 루트 volumes 키를 큰따옴표로 출력")
+    void generate_YamlTypedNames_QuotesImageAndRootVolumeKey() {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        MySQLComponent mysql = MySQLComponent.builder()
+            .id("mysql-1")
+            .posX(0f)
+            .posY(0f)
+            .imageVersion("123")
+            .containerName("mysql")
+            .port(3306)
+            .volumeName("456")
+            .build();
+        parsingResult.setComponents(List.of(parsingResult.getComponents().get(0), mysql));
+        parsingResult.setEdges(List.of(edgeToApplication("mysql-1")));
+
+        // when
+        String compose = fileContent(generator.generate(parsingResult, awsTarget()), "docker-compose.cloud.yml");
+
+        // then
+        assertAll(
+            () -> assertTrue(compose.contains("\n    image: \"123\"\n")),
+            () -> assertTrue(compose.contains("      - 456:/var/lib/mysql")),
+            () -> assertTrue(compose.endsWith("\nvolumes:\n  \"456\":\n"))
+        );
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"MYSQL", "POSTGRESQL", "MONGODB", "REDIS", "CADDY"})
+    @DisplayName("앞뒤 공백이 든 이미지 버전 — 공백을 제거한 뒤 큰따옴표로 출력")
+    void generate_ImageVersionWithSurroundingSpaces_TrimsBeforeQuoting(String type) {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        BaseComponent component = switch (type) {
+            case "MYSQL" -> MySQLComponent.builder().id("dep-1").posX(0f).posY(0f)
+                .imageVersion(" mysql:8.4 ").containerName("mysql").port(3306).build();
+            case "POSTGRESQL" -> PostgreSQLComponent.builder().id("dep-1").posX(0f).posY(0f)
+                .imageVersion(" postgres:17 ").containerName("postgres").port(5432).build();
+            case "MONGODB" -> MongoDBComponent.builder().id("dep-1").posX(0f).posY(0f)
+                .imageVersion(" mongo:8.0 ").containerName("mongo").port(27017).build();
+            case "REDIS" -> RedisComponent.builder().id("dep-1").posX(0f).posY(0f)
+                .imageVersion(" redis:7.4 ").containerName("redis").port(6379).build();
+            default -> CaddyComponent.builder().id("dep-1").posX(0f).posY(0f)
+                .imageVersion(" caddy:2.8 ").containerName("caddy").domain("").volumeName("").build();
+        };
+        String expectedImage = switch (type) {
+            case "MYSQL" -> "mysql:8.4";
+            case "POSTGRESQL" -> "postgres:17";
+            case "MONGODB" -> "mongo:8.0";
+            case "REDIS" -> "redis:7.4";
+            default -> "caddy:2.8";
+        };
+        EdgeDTO edge = type.equals("CADDY") ? edgeFromApplication("dep-1") : edgeToApplication("dep-1");
+        parsingResult.setComponents(List.of(parsingResult.getComponents().get(0), component));
+        parsingResult.setEdges(List.of(edge));
+
+        // when
+        String compose = fileContent(generator.generate(parsingResult, awsTarget()), "docker-compose.cloud.yml");
+
+        // then
+        assertTrue(compose.contains("\n    image: \"" + expectedImage + "\"\n"));
+    }
+
+    @Test
     @DisplayName("MySQL만 선택 — MySQL과 연결된 depends_on만 생성")
     void generate_MysqlOnly_RendersSelectedServiceAndDependency() {
         // given
@@ -319,11 +386,11 @@ class TerraformIaCGeneratorTest {
         // then
         assertAll(
             () -> assertTrue(compose.contains("mysql:")),
-            () -> assertTrue(compose.contains("image: mysql:8.4")),
-            () -> assertFalse(compose.contains("image: mysql:8.0")),
+            () -> assertTrue(compose.contains("image: \"mysql:8.4\"")),
+            () -> assertFalse(compose.contains("image: \"mysql:8.0\"")),
             () -> assertTrue(compose.contains("MYSQL_DATABASE")),
             () -> assertTrue(compose.contains("      - mysql_data:/var/lib/mysql")),
-            () -> assertTrue(compose.contains("\nvolumes:\n  mysql_data:\n")),
+            () -> assertTrue(compose.contains("\nvolumes:\n  \"mysql_data\":\n")),
             () -> assertTrue(compose.contains("depends_on:")),
             () -> assertTrue(compose.contains("      - mysql")),
             () -> assertFalse(compose.contains("redis:")),
@@ -371,7 +438,7 @@ class TerraformIaCGeneratorTest {
         // then
         assertAll(
             () -> assertTrue(compose.contains("redis:")),
-            () -> assertTrue(compose.contains("image: redis:7.4")),
+            () -> assertTrue(compose.contains("image: \"redis:7.4\"")),
             () -> assertTrue(compose.contains("redis_data:/data")),
             () -> assertTrue(compose.contains("REDIS_HOST: redis")),
             () -> assertTrue(compose.contains("REDIS_PORT: \"6379\"")),
@@ -380,8 +447,8 @@ class TerraformIaCGeneratorTest {
             () -> assertTrue(compose.contains("MYSQL_HOST: mysql")),
             () -> assertTrue(compose.contains("      - mysql\n")),
             () -> assertTrue(compose.contains("      - redis\n")),
-            () -> assertTrue(compose.contains("  mysql_data:\n")),
-            () -> assertTrue(compose.contains("  redis_data:\n"))
+            () -> assertTrue(compose.contains("  \"mysql_data\":\n")),
+            () -> assertTrue(compose.contains("  \"redis_data\":\n"))
         );
     }
 
@@ -405,7 +472,7 @@ class TerraformIaCGeneratorTest {
             () -> assertTrue(compose.contains("""
 
                   postgres:
-                    image: postgres:17
+                    image: "postgres:17"
                     env_file:
                       - .env
                     environment:
@@ -416,7 +483,7 @@ class TerraformIaCGeneratorTest {
                     volumes:
                       - pg_data:/var/lib/postgresql/data
                 """)),
-            () -> assertTrue(compose.contains("\nvolumes:\n  pg_data:\n")),
+            () -> assertTrue(compose.contains("\nvolumes:\n  \"pg_data\":\n")),
             () -> assertTrue(compose.contains("depends_on:\n      - postgres\n")),
             () -> assertTrue(compose.contains(
                 "SPRING_DATASOURCE_URL: \"jdbc:postgresql://postgres:5432/${POSTGRES_DB:?외부 .env에 설정 필요}\"")),
@@ -444,7 +511,7 @@ class TerraformIaCGeneratorTest {
             () -> assertTrue(compose.contains("""
 
                   mongodb:
-                    image: mongo:8.0
+                    image: "mongo:8.0"
                     env_file:
                       - .env
                     environment:
@@ -454,7 +521,7 @@ class TerraformIaCGeneratorTest {
                     volumes:
                       - mongo_data:/data/db
                 """)),
-            () -> assertTrue(compose.contains("\nvolumes:\n  mongo_data:\n")),
+            () -> assertTrue(compose.contains("\nvolumes:\n  \"mongo_data\":\n")),
             () -> assertTrue(compose.contains("depends_on:\n      - mongodb\n")),
             () -> assertTrue(compose.contains("SPRING_MONGODB_HOST: \"mongodb\"\n")),
             () -> assertTrue(compose.contains("SPRING_MONGODB_PORT: \"27017\"\n")),
@@ -574,7 +641,7 @@ class TerraformIaCGeneratorTest {
             """ + MYSQL_SERVICE_BLOCK + """
 
             volumes:
-              mysql_data:
+              "mysql_data":
             """, fileContent(bundle, "docker-compose.cloud.yml"));
     }
 
@@ -613,7 +680,7 @@ class TerraformIaCGeneratorTest {
             """ + POSTGRES_SERVICE_BLOCK + """
 
             volumes:
-              pg_data:
+              "pg_data":
             """, fileContent(bundle, "docker-compose.cloud.yml"));
     }
 
@@ -657,8 +724,8 @@ class TerraformIaCGeneratorTest {
             """ + MYSQL_SERVICE_BLOCK + REDIS_SERVICE_BLOCK + """
 
             volumes:
-              mysql_data:
-              redis_data:
+              "mysql_data":
+              "redis_data":
             """, fileContent(bundle, "docker-compose.cloud.yml"));
     }
 
@@ -700,8 +767,8 @@ class TerraformIaCGeneratorTest {
             """ + MYSQL_SERVICE_BLOCK + POSTGRES_SERVICE_BLOCK + """
 
             volumes:
-              mysql_data:
-              pg_data:
+              "mysql_data":
+              "pg_data":
             """, fileContent(bundle, "docker-compose.cloud.yml"));
     }
 
@@ -730,7 +797,7 @@ class TerraformIaCGeneratorTest {
                       - .env
 
                   caddy:
-                    image: caddy:2.8
+                    image: "caddy:2.8"
                     ports:
                       - "80:80"
                       - "443:443"
@@ -741,7 +808,7 @@ class TerraformIaCGeneratorTest {
                       - app
 
                 volumes:
-                  caddy_data:
+                  "caddy_data":
                 """, fileContent(bundle, "docker-compose.cloud.yml")),
             () -> assertEquals("""
                 example.com {

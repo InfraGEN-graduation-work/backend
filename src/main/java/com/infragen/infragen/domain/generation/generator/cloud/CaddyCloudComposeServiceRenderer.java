@@ -1,6 +1,7 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
+import com.infragen.infragen.domain.generation.generator.compose.ComposeYamlSupport;
 import com.infragen.infragen.domain.parsing.dto.response.CaddyComponent;
 import com.infragen.infragen.global.enums.ComponentType;
 import java.util.LinkedHashMap;
@@ -68,7 +69,7 @@ public class CaddyCloudComposeServiceRenderer implements CloudComposeServiceRend
                       - "%d:%d"
                     volumes:
                       - ./caddy:/etc/caddy
-                """.formatted(caddy.getImageVersion(), HTTP_PORT, HTTP_PORT, HTTPS_PORT, HTTPS_PORT));
+                """.formatted(ComposeYamlSupport.toYamlString(ComposeYamlSupport.resolveImage(caddy.getImageVersion(), null)), HTTP_PORT, HTTP_PORT, HTTPS_PORT, HTTPS_PORT));
         volumeName(context).ifPresent(volumeName -> block.append("      - ").append(volumeName).append(":/data\n"));
         block.append("    depends_on:\n      - app\n");
         return block.toString();

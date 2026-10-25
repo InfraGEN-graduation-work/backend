@@ -21,7 +21,7 @@ Caddy 노드를 지원하면서 정한 정책과 그 이유를 기록한다. 구
 
 ## 입력 검증
 
-- 이미지 버전 누락은 `PARSING400_37`로 거부한다. Docker 이미지 참조 형식(`이름[:태그][@다이제스트]`)이 아니면 `PARSING400_42`로 거부한다. 값이 `image:` 줄에 그대로 들어가므로 줄바꿈, 공백, `${...}`로 Compose 구조가 바뀌는 것을 막고, 태그가 빈 `caddy:`나 짧은 다이제스트처럼 Docker가 거부할 값도 걸러낸다. 저장소 경로는 소문자, 태그는 128자 이내, 다이제스트는 `알고리즘:16진수 32자 이상`이어야 한다. NGINX 파서는 문자 구성만 검사하므로 이 검증이 더 엄격하다.
+- 이미지 버전 누락은 `PARSING400_37`로 거부한다. Docker 이미지 참조 형식(`이름[:태그][@다이제스트]`)이 아니면 `PARSING400_42`로 거부한다. 값이 `image:` 줄에 그대로 들어가므로 줄바꿈, 공백, `${...}`로 Compose 구조가 바뀌는 것을 막고, 태그가 빈 `caddy:`나 짧은 다이제스트처럼 Docker가 거부할 값도 걸러낸다. 저장소 경로는 소문자, 태그는 128자 이내, 다이제스트는 `sha256:` 뒤 64자, `sha384:` 뒤 96자, `sha512:` 뒤 128자의 소문자 16진수여야 한다(Docker가 알고리즘별 길이를 다시 검사하기 때문). NGINX 파서는 문자 구성만 검사하므로 이 검증이 더 엄격하다.
 - 도메인은 점을 포함한 호스트명만 허용하고 위반하면 `PARSING400_38`로 거부한다. 도메인이 Caddyfile의 사이트 주소로 그대로 들어가므로 공백, 중괄호, 줄바꿈처럼 설정을 바꿀 수 있는 문자를 막아야 한다. 마지막 라벨이 영문자로 시작해야 하므로 IP와 `localhost`도 거부하고, 한글 도메인은 퓨니코드로 입력해야 한다.
 - 도메인이 있는데 볼륨 이름이 없으면 `PARSING400_39`으로 거부한다.
 - 볼륨 이름은 값이 있으면 도메인 유무와 상관없이 `[a-zA-Z0-9][a-zA-Z0-9_.-]*`만 허용하고 위반하면 `PARSING400_43`으로 거부한다. 도메인이 없어도 이름이 있으면 마운트와 루트 `volumes:` 키에 들어가기 때문이다. 콜론이 있으면 마운트 대상이 바뀌므로 인코딩이 아니라 거부한다.
@@ -47,7 +47,6 @@ Caddy 노드를 지원하면서 정한 정책과 그 이유를 기록한다. 구
 - 80/443은 앱 CIDR이 허용한 범위에만 열린다. 외부에 공개하려면 사용자가 해당 CIDR을 지정해야 한다.
 - 생성기는 앱 포트가 Caddy의 80/443과 같은지 확인하지 않는다. 앱, DB, 캐시의 포트는 1024 이상이어야 하는 파싱 검증(`PARSING400_5`)이 충돌을 막으며, 이 하한을 낮추면 Compose 호스트 포트와 Terraform ingress가 겹칠 수 있으므로 함께 확인해야 한다.
 - 앱 포트를 호스트에 공개하지 않으므로 Caddy를 거치지 않고 앱에 직접 접속하거나 호스트에서 앱 포트로 확인할 수 없다. 앱 컨테이너 상태는 서버에서 `docker compose` 명령으로 확인해야 한다. NGINX도 앱 포트를 닫으므로 두 웹 서버의 공개 정책이 같다. 다만 NGINX는 `app_port` 변수에 NGINX 포트를 넣어 ingress를 만들고, Caddy는 `app_port` 변수 없이 80/443만 연다.
-- MySQL, PostgreSQL, MongoDB, Redis의 `imageVersion`과 `volumeName`은 아직 형식 검증 없이 Compose YAML에 들어간다. Caddy와 NGINX만 검증하며, 나머지는 후속 이슈로 남겼다.
 - 생성기는 Caddy가 앱에 연결됐는지 다시 확인하지 않는다. 연결 검증은 parsing 단계의 책임이며, 그래프가 이 단계를 통과해야 한다는 전제를 둔다.
 - 산출물은 plan-only scaffold다. 실제 Caddy 컨테이너 기동과 Caddyfile 문법 검증, `terraform apply`는 수행하지 않는다. Terraform 산출물은 `terraform validate`까지만 확인한다.
 - 프론트에서 Local 단독을 선택한 채 Caddy 노드를 배치하면 생성 시점에야 거부된다.
@@ -55,6 +54,6 @@ Caddy 노드를 지원하면서 정한 정책과 그 이유를 기록한다. 구
 ## 정책을 바꿀 때 확인할 곳
 
 - 지원 출력 경로를 바꾸면 `GenerationCommandService`의 Local 단독 거부(`IaCGenerationService.supportsLocal`, `LocalIaCGenerator.supports`)와 `IaCGenerationErrorCode`의 `UNSUPPORTED_LOCAL_COMPONENT`를 함께 본다.
-- 노드 속성과 검증을 바꾸면 `CaddyParser`, `CaddyComponent`, `ParsingErrorCode`를 함께 본다.
+- 노드 속성과 검증을 바꾸면 `CaddyParser`, `CaddyComponent`, `ParsingErrorCode`를 함께 본다. 이미지 참조와 볼륨 이름의 정규식은 DB, 캐시와 함께 쓰는 `ComposeYamlValueValidator`에 있으므로, 바꾸면 DB와 캐시 노드에도 적용된다.
 - 그래프 규칙을 바꾸면 `ValidateGraphStructure`의 `validateWebServerPlacement`를 본다.
 - 산출물을 바꾸면 `CaddyCloudComposeServiceRenderer`(Compose service, 공개 포트, 앱 포트 닫기(`closesApplicationPort`), 추가 파일 목록), `CloudComposeRenderer`(`publishesApplicationPort`, `opensApplicationPortIngress`), `CaddyfileRenderer`, `CaddyGuideRenderer`, `AwsTerraformRenderer`, `OciTerraformRenderer`를 함께 본다.

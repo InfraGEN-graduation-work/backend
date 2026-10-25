@@ -1,6 +1,7 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
 import com.infragen.infragen.domain.generation.generator.application.DatabaseConnection;
+import com.infragen.infragen.domain.generation.generator.compose.ComposeYamlSupport;
 import com.infragen.infragen.domain.parsing.dto.response.MongoDBComponent;
 import com.infragen.infragen.global.enums.ComponentType;
 import java.util.LinkedHashMap;
@@ -65,7 +66,7 @@ public class MongoCloudComposeServiceRenderer implements CloudComposeServiceRend
               MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:?외부 .env에 설정 필요}
               MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?외부 .env에 설정 필요}
               MONGO_INITDB_DATABASE: ${MONGO_DATABASE:?외부 .env에 설정 필요}
-        %s""".formatted(mongo.getImageVersion(), volumeMount);
+        %s""".formatted(ComposeYamlSupport.toYamlString(ComposeYamlSupport.resolveImage(mongo.getImageVersion(), null)), volumeMount);
     }
 
     /** 앱 컨테이너가 Compose 서비스 DNS로 MongoDB에 접속할 {@code MONGO_HOST/PORT}를 만든다. */

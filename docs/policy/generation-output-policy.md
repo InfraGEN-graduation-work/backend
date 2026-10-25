@@ -10,6 +10,13 @@ Generate 요청의 배포 옵션 조합과 옵션별 산출물 구성, 생성 �
 - 클라우드 요청에서 `includeLocalSpec`이 `true`이면 클라우드 산출물에 LOCAL_DEV 산출물을 이어 붙여 한 번에 반환한다. 이때 Local Compose renderer가 없는 노드(Caddy)는 로컬 쪽에서만 빠진다. 반대로 Local 단독 요청에 그런 노드가 있으면 거부한다(`GENERATION400_15`). Local renderer가 있는 NGINX는 거부하지 않는다.
 - 생성 결과는 요청 한 번당 하나의 생성 이력으로 저장한다.
 
+## Compose 이름 값의 출력
+
+- 데이터베이스, 캐시, Caddy service의 사용자 입력 이름 값은 큰따옴표 문자열로 출력한다. LOCAL_DEV는 service 키, `image:`, `container_name:`, 루트 `volumes:` 키, CLOUD_DEPLOY는 `image:`와 루트 `volumes:` 키다. 따옴표가 없으면 YAML이 `true`, `123`, `null`을 다른 타입으로 읽어 Compose가 거부하기 때문이다(`image must be a string`, `non-string key in services`).
+- 파서가 큰따옴표, 백슬래시, 줄바꿈, 제어 문자를 막으므로 이스케이프하지 않고 감싼다. 생성기에 직접 전달된 값에 큰따옴표, 백슬래시, 줄바꿈(`\n`, `\r`, NEL)이나 YAML 1.2가 허용하지 않는 문자(탭을 뺀 제어 문자, DEL, C1 제어 문자, U+FFFE, U+FFFF, 짝 없는 서로게이트)가 있으면 `GENERATION400_2`(`INVALID_COMPONENT_STATE`)로 거부한다. NEL은 YAML 1.2에서는 출력 가능 문자지만 Compose의 YAML 파서가 공백으로 바꿔 읽어 값이 바뀌므로 거부한다.
+- 이미지 값은 앞뒤 공백을 제거한 뒤 감싼다. 따옴표 안의 공백은 값에 남아 Docker가 `invalid reference format`으로 거부하기 때문이다. LOCAL_DEV와 CLOUD_DEPLOY 모두 같다.
+- 볼륨 마운트 줄(`- 이름:경로`)은 콜론이 있어 항상 문자열이므로 감싸지 않는다. CLOUD_DEPLOY의 service 키와 앱 이미지는 고정값이라 감싸지 않는다.
+
 ## LOCAL_DEV 산출물
 
 - 파일은 `local/docker-compose.yml`과 `local/.env` 두 개다. NGINX가 있으면 `local/nginx/default.conf`가 더해진다.

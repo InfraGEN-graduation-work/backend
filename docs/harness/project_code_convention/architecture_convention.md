@@ -93,7 +93,7 @@ Collaboration
 Parsing은 그래프 정합성을 판단하지만 Compose나 Terraform 문법을 생성하지 않는다.
 
 - `ValidateGraphStructure`: node id, component type, edge endpoint, dependency 방향, cycle, 애플리케이션별 같은 타입 의존 중복 검증, 그래프 전체 같은 타입 DB·캐시 노드 중복 검증(`PARSING400_29`), 웹 서버 카테고리 노드 하나와 앱에서 오는 연결선 하나 검증(`PARSING400_40`, `PARSING400_41`)
-- `ComponentParser`: component별 property와 필수값 검증, component DTO 생성. DB·Redis parser는 사용자 이름과 비밀번호의 `.env` 금지 문자를 `EnvValueValidator`로 검증한다.
+- `ComponentParser`: component별 property와 필수값 검증, component DTO 생성. DB·Redis parser는 사용자 이름과 비밀번호의 `.env` 금지 문자를 `EnvValueValidator`로 검증한다. DB·Redis·Caddy parser는 Compose YAML에 들어가는 이미지 버전과 볼륨 이름을, DB·Redis parser는 컨테이너 이름도 `ComposeYamlValueValidator`로 판정하고, 판정기는 예외를 던지지 않으므로 parser가 타입별 코드로 거부한다. Compose renderer는 이 이름 값을 `ComposeYamlSupport.toYamlString`으로 큰따옴표 문자열로 출력한다.
 - `ParsingService`: parser registry, port range·중복 검증, 결과 조립
 - `ParsingResultConverter`: 생성 결과에서 component를 type/class 기준으로 추출
 

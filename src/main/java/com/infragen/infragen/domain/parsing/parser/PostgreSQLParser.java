@@ -8,6 +8,7 @@ import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLEnvComponent;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
+import com.infragen.infragen.domain.parsing.validator.ComposeYamlValueValidator;
 import com.infragen.infragen.domain.parsing.validator.EnvValueValidator;
 import com.infragen.infragen.global.enums.ComponentType;
 
@@ -48,6 +49,20 @@ public class PostgreSQLParser implements ComponentParser {
         if (imageVersion == null || imageVersion.isBlank()) {
             throw new ParsingException(ParsingErrorCode.MISSING_POSTGRES_IMAGE_VERSION);
         }
+        String resolvedImageVersion = imageVersion.trim();
+        if (!ComposeYamlValueValidator.isImageReference(resolvedImageVersion)) {
+            throw new ParsingException(ParsingErrorCode.INVALID_POSTGRES_IMAGE_VERSION);
+        }
+        String resolvedVolumeName = volumeName == null ? "" : volumeName.trim();
+        // 볼륨은 선택 항목이라 이름이 있을 때만 형식을 검사한다.
+        if (!resolvedVolumeName.isEmpty() && !ComposeYamlValueValidator.isVolumeName(resolvedVolumeName)) {
+            throw new ParsingException(ParsingErrorCode.INVALID_POSTGRES_VOLUME_NAME);
+        }
+        String resolvedContainerName = containerName == null ? "" : containerName.trim();
+        // 비면 renderer가 service 이름으로 대체하므로 이름이 있을 때만 형식을 검사한다.
+        if (!resolvedContainerName.isEmpty() && !ComposeYamlValueValidator.isContainerName(resolvedContainerName)) {
+            throw new ParsingException(ParsingErrorCode.INVALID_POSTGRES_CONTAINER_NAME);
+        }
         if (username == null || username.isBlank()) {
             throw new ParsingException(ParsingErrorCode.MISSING_POSTGRES_USERNAME);
         }
@@ -66,11 +81,11 @@ public class PostgreSQLParser implements ComponentParser {
             .id(node.getNodeId())
             .posX(posX)
             .posY(posY)
-            .imageVersion(imageVersion)
-            .containerName(containerName != null ? containerName : "")
+            .imageVersion(resolvedImageVersion)
+            .containerName(resolvedContainerName)
             .env(env)
             .port(port)
-            .volumeName(volumeName != null ? volumeName : "")
+            .volumeName(resolvedVolumeName)
             .build();
     }
 }

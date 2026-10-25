@@ -69,7 +69,7 @@ public class CaddyCloudComposeServiceRenderer implements CloudComposeServiceRend
                       - "%d:%d"
                     volumes:
                       - ./caddy:/etc/caddy
-                """.formatted(ComposeYamlSupport.toYamlString(caddy.getImageVersion()), HTTP_PORT, HTTP_PORT, HTTPS_PORT, HTTPS_PORT));
+                """.formatted(ComposeYamlSupport.toYamlString(ComposeYamlSupport.resolveImage(caddy.getImageVersion(), null)), HTTP_PORT, HTTP_PORT, HTTPS_PORT, HTTPS_PORT));
         volumeName(context).ifPresent(volumeName -> block.append("      - ").append(volumeName).append(":/data\n"));
         block.append("    depends_on:\n      - app\n");
         return block.toString();

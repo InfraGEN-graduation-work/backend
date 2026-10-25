@@ -69,7 +69,7 @@ public class PostgresCloudComposeServiceRenderer implements CloudComposeServiceR
                       POSTGRES_USER: ${POSTGRES_USER:?외부 .env에 설정 필요}
                       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?외부 .env에 설정 필요}
                       PGDATA: %s
-                %s""".formatted(ComposeYamlSupport.toYamlString(postgres.getImageVersion()), DATA_DIR, volumeMount);
+                %s""".formatted(ComposeYamlSupport.toYamlString(ComposeYamlSupport.resolveImage(postgres.getImageVersion(), null)), DATA_DIR, volumeMount);
     }
 
     /** 앱 컨테이너가 Compose 서비스 DNS로 PostgreSQL에 접속할 {@code POSTGRES_HOST/PORT}를 만든다. */

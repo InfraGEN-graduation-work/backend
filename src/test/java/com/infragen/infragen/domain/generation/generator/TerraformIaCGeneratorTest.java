@@ -16,6 +16,8 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import com.infragen.infragen.domain.generation.dto.request.DeploymentTargetReqDTO;
 import com.infragen.infragen.domain.generation.dto.response.IaCFileDTO;
@@ -37,6 +39,7 @@ import com.infragen.infragen.domain.generation.generator.cloud.OciTerraformRende
 import com.infragen.infragen.domain.generation.generator.cloud.PostgresCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.RedisCloudComposeServiceRenderer;
 import com.infragen.infragen.domain.parsing.dto.request.EdgeDTO;
+import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.CaddyComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MongoDBComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MySQLComponent;
@@ -318,6 +321,42 @@ class TerraformIaCGeneratorTest {
             () -> assertTrue(compose.contains("      - 456:/var/lib/mysql")),
             () -> assertTrue(compose.endsWith("\nvolumes:\n  \"456\":\n"))
         );
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"MYSQL", "POSTGRESQL", "MONGODB", "REDIS", "CADDY"})
+    @DisplayName("앞뒤 공백이 든 이미지 버전 — 공백을 제거한 뒤 큰따옴표로 출력")
+    void generate_ImageVersionWithSurroundingSpaces_TrimsBeforeQuoting(String type) {
+        // given
+        ParsingResultDTO parsingResult = validParsingResult();
+        BaseComponent component = switch (type) {
+            case "MYSQL" -> MySQLComponent.builder().id("dep-1").posX(0f).posY(0f)
+                .imageVersion(" mysql:8.4 ").containerName("mysql").port(3306).build();
+            case "POSTGRESQL" -> PostgreSQLComponent.builder().id("dep-1").posX(0f).posY(0f)
+                .imageVersion(" postgres:17 ").containerName("postgres").port(5432).build();
+            case "MONGODB" -> MongoDBComponent.builder().id("dep-1").posX(0f).posY(0f)
+                .imageVersion(" mongo:8.0 ").containerName("mongo").port(27017).build();
+            case "REDIS" -> RedisComponent.builder().id("dep-1").posX(0f).posY(0f)
+                .imageVersion(" redis:7.4 ").containerName("redis").port(6379).build();
+            default -> CaddyComponent.builder().id("dep-1").posX(0f).posY(0f)
+                .imageVersion(" caddy:2.8 ").containerName("caddy").domain("").volumeName("").build();
+        };
+        String expectedImage = switch (type) {
+            case "MYSQL" -> "mysql:8.4";
+            case "POSTGRESQL" -> "postgres:17";
+            case "MONGODB" -> "mongo:8.0";
+            case "REDIS" -> "redis:7.4";
+            default -> "caddy:2.8";
+        };
+        EdgeDTO edge = type.equals("CADDY") ? edgeFromApplication("dep-1") : edgeToApplication("dep-1");
+        parsingResult.setComponents(List.of(parsingResult.getComponents().get(0), component));
+        parsingResult.setEdges(List.of(edge));
+
+        // when
+        String compose = fileContent(generator.generate(parsingResult, awsTarget()), "docker-compose.cloud.yml");
+
+        // then
+        assertTrue(compose.contains("\n    image: \"" + expectedImage + "\"\n"));
     }
 
     @Test

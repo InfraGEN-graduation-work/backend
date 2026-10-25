@@ -60,7 +60,7 @@ public class MysqlCloudComposeServiceRenderer implements CloudComposeServiceRend
               MYSQL_USER: ${MYSQL_USER:?외부 .env에 설정 필요}
               MYSQL_PASSWORD: ${MYSQL_PASSWORD:?외부 .env에 설정 필요}
               MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?외부 .env에 설정 필요}
-        %s""".formatted(ComposeYamlSupport.toYamlString(mysql.getImageVersion()), volumeMount);
+        %s""".formatted(ComposeYamlSupport.toYamlString(ComposeYamlSupport.resolveImage(mysql.getImageVersion(), null)), volumeMount);
     }
 
     /** 앱 컨테이너가 Compose 서비스 DNS로 MySQL에 접속할 {@code MYSQL_HOST/PORT}를 만든다. */

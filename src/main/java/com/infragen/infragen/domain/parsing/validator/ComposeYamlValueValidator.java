@@ -1,5 +1,6 @@
 package com.infragen.infragen.domain.parsing.validator;
 
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
@@ -21,6 +22,9 @@ public final class ComposeYamlValueValidator {
     // regexp.go의 다이제스트 문법(알고리즘:16진수 32자 이상)은 1차 판정이고, Docker는 이어서 go-digest로 알고리즘별 정확한 길이와
     // 소문자 16진수를 다시 검사한다. 문법만 따르면 sha256:에 32자나 대문자를 붙인 값이 파싱을 통과하고 pull에서 거부되므로 go-digest 기준을 쓴다.
     private static final String DIGEST = "(?:sha256:[a-f0-9]{64}|sha384:[a-f0-9]{96}|sha512:[a-f0-9]{128})";
+    // distribution/reference의 RepositoryNameTotalLengthMax다. Docker는 이름을 정규화한 뒤 도메인을 뺀 경로로 길이를 잰다.
+    private static final int REPOSITORY_PATH_MAX_LENGTH = 255;
+    private static final String OFFICIAL_REPOSITORY_PREFIX = "library/";
     private static final Pattern IMAGE_REFERENCE_PATTERN =
             Pattern.compile(NAME + "(?::" + TAG + ")?(?:@" + DIGEST + ")?");
 
@@ -40,7 +44,9 @@ public final class ComposeYamlValueValidator {
      * <p>trim하지 않고 판정하므로 호출자는 앞뒤 공백을 제거한 값을 넘겨야 한다. null과 빈 값은 false다.
      */
     public static boolean isImageReference(String value) {
-        return value != null && IMAGE_REFERENCE_PATTERN.matcher(value).matches();
+        return value != null
+            && IMAGE_REFERENCE_PATTERN.matcher(value).matches()
+            && normalizedRepositoryPath(value).length() <= REPOSITORY_PATH_MAX_LENGTH;
     }
 
     /**
@@ -59,5 +65,38 @@ public final class ComposeYamlValueValidator {
      */
     public static boolean isContainerName(String value) {
         return value != null && CONTAINER_NAME_PATTERN.matcher(value).matches();
+    }
+
+    // Docker CLI의 splitDockerDomain과 같은 규칙으로 태그, 다이제스트, 도메인을 뺀 저장소 경로를 만든다.
+    // 도메인이 없는 한 단어 이름은 docker.io/library/로 정규화되므로 정규식만 통과한 248자 이름도 Docker가 거부한다.
+    private static String normalizedRepositoryPath(String reference) {
+        String name = reference;
+        int digestSeparator = name.indexOf('@');
+        if (digestSeparator >= 0) {
+            name = name.substring(0, digestSeparator);
+        }
+        int tagSeparator = name.lastIndexOf(':');
+        if (tagSeparator > name.lastIndexOf('/')) {
+            name = name.substring(0, tagSeparator);
+        }
+
+        int domainSeparator = name.indexOf('/');
+        if (domainSeparator < 0) {
+            return OFFICIAL_REPOSITORY_PREFIX + name;
+        }
+        String maybeDomain = name.substring(0, domainSeparator);
+        String remoteName = name.substring(domainSeparator + 1);
+        boolean dockerHub = maybeDomain.equals("docker.io") || maybeDomain.equals("index.docker.io");
+        boolean domain = maybeDomain.equals("localhost")
+            || maybeDomain.contains(".")
+            || maybeDomain.contains(":")
+            || !maybeDomain.equals(maybeDomain.toLowerCase(Locale.ROOT));
+        if (!domain) {
+            return name;
+        }
+        if (dockerHub && remoteName.indexOf('/') < 0) {
+            return OFFICIAL_REPOSITORY_PREFIX + remoteName;
+        }
+        return remoteName;
     }
 }

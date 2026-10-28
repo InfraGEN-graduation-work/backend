@@ -177,6 +177,22 @@ public class CloudComposeRenderer {
         return List.copyOf(files);
     }
 
+    /**
+     * Compose에 포함되는 service가 통합 안내 문서에 넣을 섹션을 모은다.
+     *
+     * @param context CLOUD_DEPLOY renderer가 공유하는 파싱 결과
+     * @return service 순서대로 모은 섹션. 안내할 service가 없으면 빈 목록
+     */
+    public List<String> guideSections(CloudDeployContext context) {
+        List<String> sections = new ArrayList<>();
+        for (CloudComposeServiceRenderer renderer : serviceRenderers) {
+            if (renderer.isEnabled(context)) {
+                renderer.guideSection(context).ifPresent(sections::add);
+            }
+        }
+        return List.copyOf(sections);
+    }
+
     private void appendRootVolumes(StringBuilder content, CloudDeployContext context) {
         Set<String> volumeNames = new LinkedHashSet<>();
 

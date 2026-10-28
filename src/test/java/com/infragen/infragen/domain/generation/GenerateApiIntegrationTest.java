@@ -333,7 +333,7 @@ class GenerateApiIntegrationTest {
             .andExpect(jsonPath("$.isSuccess").value(true))
             .andExpect(jsonPath("$.code").value("GENERATION200_1"))
             .andExpect(jsonPath("$.result.historyId").isNumber())
-            .andExpect(jsonPath("$.result.files.length()").value(2));
+            .andExpect(jsonPath("$.result.files.length()").value(3));
 
         // then
         List<ProjectHistory> histories = projectHistoryRepository
@@ -346,7 +346,7 @@ class GenerateApiIntegrationTest {
 
         List<GeneratedFile> generatedFiles = generatedFileRepository
             .findAllByProjectHistoryId(history.getId());
-        assertEquals(2, generatedFiles.size());
+        assertEquals(3, generatedFiles.size());
         assertTrue(generatedFiles.stream().anyMatch(file ->
             "local/docker-compose.yml".equals(file.getFileName())
                 && file.getContent().contains("services:")));
@@ -510,7 +510,7 @@ class GenerateApiIntegrationTest {
             .map(ProjectHistory::getVersionName)
             .sorted()
             .toList());
-        assertEquals(4, generatedFileRepository.count());
+        assertEquals(6, generatedFileRepository.count());
     }
 
     @Test
@@ -533,7 +533,7 @@ class GenerateApiIntegrationTest {
             .andExpect(jsonPath("$.isSuccess").value(true))
             .andExpect(jsonPath("$.code").value("GENERATION200_1"))
             .andExpect(jsonPath("$.result.historyId").isNumber())
-            .andExpect(jsonPath("$.result.files.length()").value(2));
+            .andExpect(jsonPath("$.result.files.length()").value(3));
 
         ProjectHistory history = projectHistoryRepository
             .findAllByProjectIdOrderByCreatedAtDesc(project.getId())
@@ -597,7 +597,7 @@ class GenerateApiIntegrationTest {
         result
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.isSuccess").value(true))
-            .andExpect(jsonPath("$.result.files.length()").value(2));
+            .andExpect(jsonPath("$.result.files.length()").value(3));
 
         String response = result.andReturn().getResponse().getContentAsString();
         assertFalse(objectMapper.readTree(response).path("result").path("files").toString()
@@ -772,9 +772,9 @@ class GenerateApiIntegrationTest {
         result
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.isSuccess").value(true))
-            .andExpect(jsonPath("$.result.files.length()").value(2));
+            .andExpect(jsonPath("$.result.files.length()").value(3));
         assertEquals(1, projectHistoryRepository.countByProjectId(project.getId()));
-        assertEquals(2, generatedFileRepository.count());
+        assertEquals(3, generatedFileRepository.count());
     }
 
     private Member saveMember(String email) {

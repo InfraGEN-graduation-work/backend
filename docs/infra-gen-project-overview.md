@@ -43,25 +43,20 @@ InfraGEN은 사용자가 웹 캔버스에서 인프라 노드와 연결 관계�
 
 ## 7. 앱 준비 사항
 
-생성된 파일을 쓰려면 앱 쪽에서 아래 내용을 맞춰야 한다. 생성기는 앱 코드를 만들지 않는다.
+생성된 파일을 쓰려면 앱 쪽에서 맞춰야 할 것이 있다. 생성기는 앱 코드를 만들지 않는다. 노드별 준비 사항과 실행 방법은 생성 결과에 포함된 안내 문서가 그래프에 있는 노드만 골라 안내하므로, 이 절은 요약과 캔버스 입력 규칙만 적는다.
 
-- **Spring Boot**: 연결 설정은 `SPRING_DATASOURCE_*`, `SPRING_MONGODB_*` 같은 프레임워크 변수로 자동 전달된다. 앱 코드를 바꿀 필요가 없다.
-- **Node.js**
-  - DB 접속 정보는 `MYSQL_HOST`, `MYSQL_PORT`처럼 DB별 중립 변수로 전달된다. 앱 코드에서 연결 설정을 직접 조립한다.
-  - LOCAL_DEV에서 Node.js는 `.env`를 자동으로 읽지 않는다. `node --env-file=local/.env`(Node 20.6 이상)를 쓰거나 dotenv로 읽는다.
-  - `package.json`의 `start` 스크립트는 `exec node server.js`처럼 `exec`로 시작해야 한다. 그래야 `docker stop`의 종료 신호(SIGTERM)가 앱에 전달된다. 앱이 `process.on("SIGTERM", ...)`로 신호를 받아 정리하는 코드를 가져야 정리 작업이 실행된다.
-  - CLOUD_DEPLOY의 Compose는 앱 컨테이너에 그래프에 입력한 포트를 `PORT` 환경변수로 전달한다. 앱은 `process.env.PORT`로 listen해야 포트 연결이 맞는다. LOCAL_DEV는 호스트에서 실행하므로 `PORT`를 전달하지 않고, 앱이 직접 맞춘다.
-  - CLOUD_DEPLOY에서는 `cloud/` 폴더에 `package.json`, `package-lock.json`과 앱 파일을 둔다. 생성된 `.dockerignore`가 하위 폴더를 포함해 `.env`, `.env.*`, `.git`, `node_modules`를 이미지에서 제외한다.
+- **생성 안내 문서**: CLOUD_DEPLOY는 `cloud/CLOUD_DEPLOY_GUIDE.md`, LOCAL_DEV는 `local/LOCAL_DEV_GUIDE.md`를 만든다. 앱 섹션이 먼저 오고 DB, 캐시, 웹 서버 섹션이 이어진다. 비밀번호 같은 값은 쓰지 않고 변수 이름만 쓴다. plan-only 경고는 `cloud/CLOUD_DEPLOY_WARNING.md`에 따로 둔다. 파일 구성과 섹션 순서는 [배포 옵션과 산출물 정책](policy/generation-output-policy.md)에 기록한다.
+- **Spring Boot**: 연결 설정은 `SPRING_DATASOURCE_*`, `SPRING_MONGODB_*` 같은 프레임워크 변수로 자동 전달된다. 앱 코드를 바꿀 필요가 없다. 앱은 그래프에 입력한 포트로 listen해야 한다.
+- **Node.js**: DB 접속 정보는 `MYSQL_HOST`, `MYSQL_PORT`처럼 DB별 중립 변수로 전달되고, 앱 코드에서 연결 설정을 직접 조립한다. `start` 스크립트의 `exec`, CLOUD_DEPLOY의 `PORT` 환경변수, LOCAL_DEV의 `.env` 로딩 방법은 안내 문서에 있다.
 - **NGINX** (LOCAL_DEV, CLOUD_DEPLOY)
   - 캔버스에서 앱 노드에서 NGINX 노드로 연결선을 긋는다. 요청이 흐르는 방향과 화살표가 반대이며, 연결이 맞지 않으면 생성 요청이 거부된다(`PARSING400_35`).
   - 외부에 공개할 포트를 입력한다. 1~65535를 허용하고 범위를 벗어나면 `PARSING400_36`으로 거부된다.
-  - LOCAL_DEV에서는 NGINX가 호스트의 앱(`host.docker.internal`)으로 프록시한다. CLOUD_DEPLOY에서는 앱 포트를 호스트에 공개하지 않고 NGINX 포트만 공개하며, Terraform의 `app_port` 변수 값도 NGINX 포트다.
+  - 프록시 대상(LOCAL_DEV는 호스트의 앱, CLOUD_DEPLOY는 `app` 컨테이너)과 공개 포트, Terraform `app_port` 값은 안내 문서에 있다.
   - 속성과 세부 규칙은 NGINX 담당자가 관리하며 이 문서는 지원 범위만 적는다.
 - **Caddy** (CLOUD_DEPLOY 전용)
   - 캔버스에서 앱 노드에서 Caddy 노드로 연결선을 긋는다. 요청이 흐르는 방향과 화살표가 반대이며, 방향이 틀리거나 연결이 없으면 생성 요청이 거부된다. Caddy는 하나만 둘 수 있다.
   - 호스트 포트는 입력하지 않는다. 80/443으로 고정이다.
-  - 도메인을 입력하면 Caddy가 HTTPS 인증서를 자동 발급한다. 도메인의 DNS가 서버를 가리켜야 하고, 인증서를 보관할 볼륨 이름이 필요하다. 도메인이 없으면 HTTP(80)만 동작한다.
-  - 80/443은 Terraform에서 앱 CIDR 변수가 허용한 범위에만 열린다. 외부에 공개하려면 해당 CIDR을 지정해야 한다.
+  - 도메인을 입력하면 Caddy가 HTTPS 인증서를 자동 발급하며, 인증서를 보관할 볼륨 이름이 필요하다. 도메인이 없으면 HTTP(80)만 동작한다. DNS와 접근 CIDR 준비는 안내 문서에 있다.
   - 정책과 이유는 [Caddy 웹 서버 지원 정책](policy/caddy-web-server-policy.md)에 기록한다.
 - **공통**: `.env` 값(비밀번호, 사용자 이름 등)에 큰따옴표, 백슬래시, 달러 기호를 쓸 수 없다. DB·Redis 노드의 사용자 이름과 비밀번호는 줄바꿈과 NUL도 쓸 수 없고, 생성 요청의 파싱 단계에서 `PARSING400_33`으로 거부된다. 프로젝트 저장 시점에는 검사하지 않는다. 생성 단계의 `GENERATION400_13`, `GENERATION400_14` 검사는 마지막 방어선으로 남는다. 이 제한은 Spring 프로젝트에도 똑같이 적용된다.
 

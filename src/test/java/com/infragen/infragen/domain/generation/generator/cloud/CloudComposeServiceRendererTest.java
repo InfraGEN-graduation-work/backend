@@ -1,5 +1,6 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -8,10 +9,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.SequencedMap;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-@DisplayName("CLOUD_DEPLOY 의존 인프라 renderer의 앱 접속 정보")
+@DisplayName("CLOUD_DEPLOY 의존 인프라 renderer의 앱 접속 정보와 안내 섹션")
 class CloudComposeServiceRendererTest {
 
     @Test
@@ -166,5 +171,40 @@ class CloudComposeServiceRendererTest {
 
         // then
         assertTrue(connection.isEmpty());
+    }
+
+    @ParameterizedTest(name = "{1}")
+    @MethodSource("guideSections")
+    @DisplayName("통합 안내 문서에 넣을 섹션이 제목, 접속 주소, 외부 .env 변수를 담는다")
+    void guideSection_DependencyRenderer_ListsAddressAndExternalEnvVariables(
+            CloudComposeServiceRenderer renderer,
+            String heading,
+            String address,
+            List<String> variables
+    ) {
+        // when
+        // DB와 Redis 섹션은 그래프 값을 쓰지 않아 context 없이 호출한다. 활성 조건은 TerraformIaCGeneratorTest가 확인한다.
+        String section = renderer.guideSection(null).orElseThrow();
+
+        // then
+        assertAll(
+            () -> assertTrue(section.startsWith(heading + "\n")),
+            () -> assertTrue(section.contains("`" + address + "` 주소로 접속")),
+            () -> assertTrue(section.contains("### 외부 `.env`에 설정할 변수")),
+            () -> assertTrue(variables.stream().allMatch(variable -> section.contains("- `" + variable + "`: ")))
+        );
+    }
+
+    private static Stream<Arguments> guideSections() {
+        return Stream.of(
+            Arguments.of(new MysqlCloudComposeServiceRenderer(), "## MySQL", "mysql:3306",
+                List.of("MYSQL_DATABASE", "MYSQL_USER", "MYSQL_PASSWORD", "MYSQL_ROOT_PASSWORD")),
+            Arguments.of(new PostgresCloudComposeServiceRenderer(), "## PostgreSQL", "postgres:5432",
+                List.of("POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD")),
+            Arguments.of(new MongoCloudComposeServiceRenderer(), "## MongoDB", "mongodb:27017",
+                List.of("MONGO_DATABASE", "MONGO_USER", "MONGO_PASSWORD")),
+            Arguments.of(new RedisCloudComposeServiceRenderer(), "## Redis", "redis:6379",
+                List.of("REDIS_PASSWORD"))
+        );
     }
 }

@@ -21,6 +21,9 @@ import com.infragen.infragen.domain.generation.generator.compose.ComposeGenerati
 import com.infragen.infragen.domain.generation.generator.compose.ComposeServiceRenderer;
 import com.infragen.infragen.domain.generation.generator.compose.ComposeYamlSupport;
 import com.infragen.infragen.domain.generation.generator.compose.HostAppEnvContributor;
+import com.infragen.infragen.domain.generation.generator.compose.LocalApplicationGuideRenderer;
+import com.infragen.infragen.domain.generation.generator.compose.LocalDevGuideRenderer;
+import com.infragen.infragen.domain.parsing.dto.response.ApplicationComponent;
 import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.dto.response.VolumeComponent;
@@ -38,12 +41,15 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
     private final Map<ComponentType, HostAppEnvContributor> hostAppEnvContributorMap;
     // 앱 타입별 프레임워크 변수 규칙
     private final Map<ComponentType, ApplicationEnvMapper> applicationEnvMapperMap;
+    private final Map<ComponentType, LocalApplicationGuideRenderer> applicationGuideRendererMap;
+    private final LocalDevGuideRenderer localDevGuideRenderer = new LocalDevGuideRenderer();
 
-    // Compose renderer, 호스트 앱 env contributor, 앱 env mapper를 주입받아 Map으로 보관
+    // Compose renderer, 호스트 앱 env contributor, 앱 env mapper, 앱 안내 renderer를 주입받아 Map으로 보관
     public DockerComposeIaCGenerator(
         @NonNull List<ComposeServiceRenderer> renderers,
         @NonNull List<HostAppEnvContributor> hostAppEnvContributors,
-        @NonNull List<ApplicationEnvMapper> applicationEnvMappers
+        @NonNull List<ApplicationEnvMapper> applicationEnvMappers,
+        @NonNull List<LocalApplicationGuideRenderer> applicationGuideRenderers
     ) {
         this.rendererMap = renderers.stream()
             .collect(Collectors.toMap(
@@ -61,6 +67,12 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
             .collect(Collectors.toMap(
                 ApplicationEnvMapper::getApplicationType,
                 mapper -> mapper,
+                (existing, replacement) -> existing
+            ));
+        this.applicationGuideRendererMap = applicationGuideRenderers.stream()
+            .collect(Collectors.toMap(
+                LocalApplicationGuideRenderer::getApplicationType,
+                renderer -> renderer,
                 (existing, replacement) -> existing
             ));
     }
@@ -87,6 +99,7 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
         ComposeGenerationContext context = new ComposeGenerationContext(parsingResult);
         List<String> serviceBlocks = new ArrayList<>();
         List<IaCFileDTO.FileContentResDTO> additionalFiles = new ArrayList<>();
+        List<String> infrastructureGuideSections = new ArrayList<>();
         Set<String> rootVolumeNames = new LinkedHashSet<>();
         /**
          * 컴포넌트를 시작 우선순위 순으로 정렬
@@ -113,6 +126,7 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
             }
             serviceBlocks.add(renderer.render(component, context));
             additionalFiles.addAll(renderer.additionalFiles(component, context));
+            renderer.guideSection(component, context).ifPresent(infrastructureGuideSections::add);
             if (component instanceof VolumeComponent volumeComponent
                 && volumeComponent.getVolumeName() != null
                 && !volumeComponent.getVolumeName().isBlank()) {
@@ -150,9 +164,34 @@ public class DockerComposeIaCGenerator implements LocalIaCGenerator {
                     .content(envContent)
                     .build()
             ));
+        // 안내 문서는 기존 파일 순서를 바꾸지 않도록 맨 뒤에 둔다. 앱을 먼저 실행 준비해야 하므로 앱 섹션을 앞에 둔다.
+        List<String> guideSections = new ArrayList<>(applicationGuideSections(sortedComponents));
+        guideSections.addAll(infrastructureGuideSections);
+        localDevGuideRenderer.render(guideSections).ifPresent(additionalFiles::add);
         additionalFiles.forEach(file -> files.add(IaCFileDTO.FileContentResDTO.builder()
             .fileName("local/" + file.fileName()).content(file.content()).build()));
         return IaCFileDTO.BundleResDTO.builder().files(List.copyOf(files)).build();
+    }
+
+    // LOCAL_DEV는 앱이 여러 개일 수 있어 앱 노드마다 섹션을 만든다.
+    private List<String> applicationGuideSections(List<BaseComponent> components) {
+        List<String> sections = new ArrayList<>();
+        for (BaseComponent component : components) {
+            if (!(component instanceof ApplicationComponent application)) {
+                continue;
+            }
+            LocalApplicationGuideRenderer renderer = applicationGuideRendererMap.get(component.getComponentType());
+            if (renderer == null) {
+                log.warn(
+                    "LocalApplicationGuideRenderer 없음: type={}, nodeId={}",
+                    component.getComponentType(),
+                    component.getNodeId()
+                );
+                continue;
+            }
+            sections.add(renderer.guideSection(application));
+        }
+        return sections;
     }
 
     // LOCAL_DEV — 애플리케이션별 incoming dependency의 접속 정보를 모아 .env에 앱 타입별 매핑과 함께 넣는다.

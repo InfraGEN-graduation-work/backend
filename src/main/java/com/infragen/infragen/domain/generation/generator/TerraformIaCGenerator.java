@@ -18,6 +18,7 @@ import com.infragen.infragen.domain.generation.exception.code.error.IaCGeneratio
 import com.infragen.infragen.domain.generation.generator.cloud.CloudComposeRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployContext;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployFileAssembler;
+import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployGuideRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudDeployWarningRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.CloudTerraformRenderer;
 import com.infragen.infragen.domain.generation.generator.cloud.RuntimeDockerfileRenderer;
@@ -34,6 +35,8 @@ public class TerraformIaCGenerator implements TargetAwareIaCGenerator {
         terraformRendererMap;
     private final Map<ComponentType, RuntimeDockerfileRenderer> runtimeDockerfileRendererMap;
     private final CloudComposeRenderer cloudComposeRenderer;
+    private final CloudDeployGuideRenderer cloudDeployGuideRenderer =
+        new CloudDeployGuideRenderer();
     private final CloudDeployWarningRenderer cloudDeployWarningRenderer =
         new CloudDeployWarningRenderer();
     private final CloudDeployFileAssembler cloudDeployFileAssembler =
@@ -111,6 +114,11 @@ public class TerraformIaCGenerator implements TargetAwareIaCGenerator {
         files.addAll(dockerfileRenderer.renderFiles(context));
         files.add(cloudComposeRenderer.render(context));
         files.addAll(cloudComposeRenderer.additionalFiles(context));
+        // 사용자가 가장 먼저 준비할 앱 파일과 포트를 앞에 두고, 의존 인프라와 웹 서버 섹션을 service 순서로 잇는다.
+        List<String> guideSections = new ArrayList<>();
+        guideSections.add(dockerfileRenderer.guideSection(context));
+        guideSections.addAll(cloudComposeRenderer.guideSections(context));
+        cloudDeployGuideRenderer.render(guideSections).ifPresent(files::add);
         files.add(cloudDeployWarningRenderer.render(dockerfileRenderer.requiredAppFiles()));
 
         return cloudDeployFileAssembler.assemble(files);

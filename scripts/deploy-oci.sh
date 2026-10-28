@@ -66,12 +66,14 @@ prepare_rollback() {
 
 wait_for_health() {
     echo "infragen-app 기동을 기다리는 중입니다..."
-    for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    # OCI 인스턴스에서 앱 기동이 2분 이상 걸려 최대 약 7분 30초(30회 x 15초)까지 기다린다.
+    max_attempts=30
+    for attempt in $(seq 1 "$max_attempts"); do
         response="$(curl --silent --show-error --max-time 5 http://127.0.0.1:8080/health || true)"
         if [ "$response" = "UP" ]; then
             return 0
         fi
-        if [ "$attempt" -lt 10 ]; then
+        if [ "$attempt" -lt "$max_attempts" ]; then
             sleep 15
         fi
     done

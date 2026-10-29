@@ -8,6 +8,7 @@ import com.infragen.infragen.domain.parsing.dto.response.RedisComponent;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
 import com.infragen.infragen.domain.parsing.validator.ComposeYamlValueValidator;
+import com.infragen.infragen.domain.parsing.validator.EnvValueField;
 import com.infragen.infragen.domain.parsing.validator.EnvValueValidator;
 import com.infragen.infragen.global.enums.ComponentType;
 
@@ -26,7 +27,7 @@ public class RedisParser implements ComponentParser {
         String imageVersion = props.path("imageVersion").asString();
         String containerName = props.path("containerName").asString();
         String volumeName = props.path("volumeName").asString();
-        String password = props.path("password").asString();
+        String password = EnvValueField.REDIS_PASSWORD.read(props);
 
         if (imageVersion == null || imageVersion.isBlank()) {
             throw new ParsingException(ParsingErrorCode.MISSING_REDIS_IMAGE_VERSION);

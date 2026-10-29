@@ -9,6 +9,7 @@ import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLEnvComponent;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
 import com.infragen.infragen.domain.parsing.validator.ComposeYamlValueValidator;
+import com.infragen.infragen.domain.parsing.validator.EnvValueField;
 import com.infragen.infragen.domain.parsing.validator.EnvValueValidator;
 import com.infragen.infragen.global.enums.ComponentType;
 
@@ -36,8 +37,8 @@ public class PostgreSQLParser implements ComponentParser {
 
         JsonNode envNode = props.path("env");
         String dbName = envNode.path("databaseName").asString();
-        String password = envNode.path("password").asString();
-        String username = envNode.path("username").asString();
+        String password = EnvValueField.POSTGRESQL_PASSWORD.read(props);
+        String username = EnvValueField.POSTGRESQL_USERNAME.read(props);
 
         if (dbName == null || dbName.isBlank() || !dbName.matches("^[a-zA-Z0-9_]+$")) {
             throw new ParsingException(ParsingErrorCode.INVALID_DB_NAME);

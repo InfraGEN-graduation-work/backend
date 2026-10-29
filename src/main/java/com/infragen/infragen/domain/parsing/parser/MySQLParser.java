@@ -9,6 +9,7 @@ import com.infragen.infragen.domain.parsing.dto.response.MySQLEnvComponent;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
 import com.infragen.infragen.domain.parsing.validator.ComposeYamlValueValidator;
+import com.infragen.infragen.domain.parsing.validator.EnvValueField;
 import com.infragen.infragen.domain.parsing.validator.EnvValueValidator;
 import com.infragen.infragen.global.enums.ComponentType;
 
@@ -30,9 +31,9 @@ public class MySQLParser implements ComponentParser {
 
         JsonNode envNode = props.path("env");
         String dbName = envNode.path("databaseName").asString();
-        String dbPass = envNode.path("rootPassword").asString();
-        String userPass = envNode.path("userPassword").asString();
-        String username = envNode.path("username").asString();
+        String dbPass = EnvValueField.MYSQL_ROOT_PASSWORD.read(props);
+        String userPass = EnvValueField.MYSQL_USER_PASSWORD.read(props);
+        String username = EnvValueField.MYSQL_USERNAME.read(props);
 
         if (dbName == null || dbName.isBlank() || !dbName.matches("^[a-zA-Z0-9_]+$")) {
             throw new ParsingException(ParsingErrorCode.INVALID_DB_NAME);

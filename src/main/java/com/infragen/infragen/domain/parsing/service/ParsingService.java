@@ -14,6 +14,7 @@ import com.infragen.infragen.domain.parsing.dto.response.ParsingResultDTO;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
 import com.infragen.infragen.domain.parsing.parser.ComponentParser;
+import com.infragen.infragen.domain.parsing.validator.EnvValueValidator;
 import com.infragen.infragen.domain.parsing.validator.ValidateGraphStructure;
 import com.infragen.infragen.global.enums.ComponentType;
 
@@ -95,6 +96,29 @@ public class ParsingService {
         }
 
         return result;
+    }
+
+    /**
+     * 노드 속성의 사용자 이름과 비밀번호에 {@code .env} 금지 문자가 있는지 검사한다. 프로젝트 저장이 생성 요청 전에 같은 기준으로 거부하려고 쓴다.
+     *
+     * <p>검사 위치는 컴포넌트 파서와 같은 {@code EnvValueField}를 쓴다. 필수값 누락과 길이는 보지 않아 미완성 노드도 통과하고, 알 수 없는 컴포넌트 타입과 null
+     * 속성은 건너뛴다. 그런 노드는 호출한 쪽의 기존 변환 단계가 처리한다.
+     *
+     * @param componentType 노드의 컴포넌트 타입 이름. 대소문자를 구분한다.
+     * @param properties 노드 속성. null이면 건너뛴다.
+     * @throws ParsingException 금지 문자가 있는 경우. 값과 필드 이름은 노출하지 않는다.
+     */
+    public void validateEnvValues(String componentType, Map<String, Object> properties) {
+        if (componentType == null || properties == null) {
+            return;
+        }
+        ComponentType type;
+        try {
+            type = ComponentType.valueOf(componentType);
+        } catch (IllegalArgumentException e) {
+            return;
+        }
+        EnvValueValidator.validateProperties(type, objectMapper.valueToTree(properties));
     }
 
     private ComponentType resolveComponentType(String componentType) {

@@ -1,5 +1,6 @@
 package com.infragen.infragen.domain.parsing.service;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -252,6 +253,47 @@ class ParsingServiceTest {
 
         // then
         assertEquals(ParsingErrorCode.DUPLICATE_PORT, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("저장용 계정 값 검사 — 금지 문자가 있으면 UNSUPPORTED_ENV_VALUE_CHARACTER")
+    void validateEnvValues_ForbiddenCharacter_ThrowsParsingException() {
+        // given
+        Map<String, Object> properties = Map.of("env", Map.of("rootPassword", "pa$$word1"));
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parsingService.validateEnvValues("MYSQL", properties)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.UNSUPPORTED_ENV_VALUE_CHARACTER, exception.getCode());
+    }
+
+    @Test
+    @DisplayName("저장용 계정 값 검사 — 허용 문자이거나 비밀번호가 비어 있어도 통과")
+    void validateEnvValues_AllowedOrIncompleteValues_DoesNotThrow() {
+        // given
+        Map<String, Object> complete = Map.of("env", Map.of("rootPassword", "root-pass1", "username", "app_user"));
+        Map<String, Object> incomplete = Map.of("env", Map.of("rootPassword", ""));
+
+        // when & then
+        assertDoesNotThrow(() -> parsingService.validateEnvValues("MYSQL", complete));
+        assertDoesNotThrow(() -> parsingService.validateEnvValues("MYSQL", incomplete));
+        assertDoesNotThrow(() -> parsingService.validateEnvValues("MYSQL", Map.of()));
+    }
+
+    @Test
+    @DisplayName("저장용 계정 값 검사 — 알 수 없는 타입, null 타입, null 속성은 건너뜀")
+    void validateEnvValues_UnknownTypeOrNullInput_DoesNotThrow() {
+        // given
+        Map<String, Object> forbidden = Map.of("env", Map.of("rootPassword", "pa$$word1"));
+
+        // when & then
+        assertDoesNotThrow(() -> parsingService.validateEnvValues("UNKNOWN", forbidden));
+        assertDoesNotThrow(() -> parsingService.validateEnvValues(null, forbidden));
+        assertDoesNotThrow(() -> parsingService.validateEnvValues("MYSQL", null));
     }
 
     private static ParsingReqDTO validRequest() {

@@ -87,6 +87,11 @@ public enum ProjectErrorCode implements BaseErrorCode {
             "소유권을 이전할 수 없는 프로젝트 참여자입니다.",
             "PROJECT404_4"
     ),
+    UNSUPPORTED_ACCOUNT_VALUE_CHARACTER(
+            HttpStatus.BAD_REQUEST,
+            "사용자 이름과 비밀번호에 큰따옴표, 백슬래시, 달러 기호, 줄바꿈은 사용할 수 없습니다.",
+            "PROJECT400_8"
+    ),
     ;
     private final HttpStatus httpStatus;
     private final String message;

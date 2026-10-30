@@ -256,6 +256,22 @@ class ParsingServiceTest {
     }
 
     @Test
+    @DisplayName("저장용 형식 값 검사 — 잘못된 이미지 버전이 있으면 해당 컴포넌트의 에러코드")
+    void validateEnvValues_InvalidImageVersion_ThrowsValidationException() {
+        // given
+        Map<String, Object> properties = Map.of("imageVersion", "invalid:image:tag:extra");
+
+        // when
+        ParsingException exception = assertThrows(
+            ParsingException.class,
+            () -> parsingService.validateEnvValues("MYSQL", properties)
+        );
+
+        // then
+        assertEquals(ParsingErrorCode.INVALID_MYSQL_IMAGE_VERSION, exception.getCode());
+    }
+
+    @Test
     @DisplayName("저장용 계정 값 검사 — 금지 문자가 있으면 UNSUPPORTED_ENV_VALUE_CHARACTER")
     void validateEnvValues_ForbiddenCharacter_ThrowsParsingException() {
         // given

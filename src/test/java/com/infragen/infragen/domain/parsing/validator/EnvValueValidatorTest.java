@@ -2,30 +2,20 @@ package com.infragen.infragen.domain.parsing.validator;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-
-import java.util.List;
-import java.util.stream.Stream;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
-import com.infragen.infragen.global.enums.ComponentType;
-
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
 
 @DisplayName(".env 값 금지 문자 검증")
 class EnvValueValidatorTest {
-
-    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @ParameterizedTest
     @ValueSource(strings = {"a\"b", "a\\b", "a$b", "a\nb", "a\rb", "a\0b"})
@@ -61,103 +51,44 @@ class EnvValueValidatorTest {
     }
 
     @ParameterizedTest
-    @MethodSource("forbiddenFieldProperties")
-    @DisplayName("properties의 계정 값 필드에 금지 문자 — UNSUPPORTED_ENV_VALUE_CHARACTER")
-    void validateProperties_ForbiddenCharacterInField_ThrowsParsingException(
-        ComponentType componentType,
-        String propertiesJson
-    ) {
-        // given
-        JsonNode props = objectMapper.readTree(propertiesJson);
+    @ValueSource(strings = {"a\"b", "a\\b", "a$b", "a\nb", "a\rb", "a\0b"})
+    @DisplayName("금지 문자 포함 여부 검사 — true 반환")
+    void hasForbiddenCharacter_ForbiddenCharacter_ReturnsTrue(String value) {
+        // given: 금지 문자가 포함된 문자열
 
         // when
-        ParsingException exception = assertThrows(
-            ParsingException.class,
-            () -> EnvValueValidator.validateProperties(componentType, props)
-        );
+        boolean result = EnvValueValidator.hasForbiddenCharacter(value);
 
         // then
-        assertEquals(
-            ParsingErrorCode.UNSUPPORTED_ENV_VALUE_CHARACTER,
-            exception.getCode()
-        );
+        assertTrue(result);
     }
 
     @ParameterizedTest
-    @EnumSource(value = ComponentType.class, names = {"MYSQL", "POSTGRESQL", "MONGODB", "REDIS"})
-    @DisplayName("properties가 비었거나 키가 없음 — 누락은 보지 않으므로 통과")
-    void validateProperties_MissingKeys_DoesNotThrow(ComponentType componentType) {
-        // given
-        JsonNode props = objectMapper.readTree("{}");
+    @ValueSource(strings = {"abc12345", "a!@#%^&*b", "a b", "a'b", "a`b", "한글비밀번호"})
+    @DisplayName("허용 문자만 포함된 경우 — false 반환")
+    void hasForbiddenCharacter_AllowedCharacters_ReturnsFalse(String value) {
+        // given: 허용 문자만 포함된 문자열
 
-        // when & then
-        assertDoesNotThrow(() -> EnvValueValidator.validateProperties(componentType, props));
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = ComponentType.class, names = {"MYSQL", "POSTGRESQL", "MONGODB", "REDIS"})
-    @DisplayName("계정 값이 허용 문자뿐 — 통과")
-    void validateProperties_AllowedCharacters_DoesNotThrow(ComponentType componentType) {
-        // given
-        JsonNode props = objectMapper.readTree("""
-            {"password": "pass!@#word", "env": {"rootPassword": "root-pass1", "userPassword": "user-pass1",
-             "password": "pass!@#word", "username": "app_user"}}
-            """);
-
-        // when & then
-        assertDoesNotThrow(() -> EnvValueValidator.validateProperties(componentType, props));
-    }
-
-    @Test
-    @DisplayName("검사 대상이 없는 타입 — 같은 키에 금지 문자가 있어도 통과")
-    void validateProperties_TypeWithoutFields_DoesNotThrow() {
-        // given
-        JsonNode props = objectMapper.readTree("{\"password\": \"a$b\", \"env\": {\"password\": \"a$b\"}}");
-
-        // when & then
-        assertDoesNotThrow(() -> EnvValueValidator.validateProperties(ComponentType.CADDY, props));
-    }
-
-    @Test
-    @DisplayName("필드 목록 — MySQL은 루트 비밀번호, 사용자 이름, 사용자 비밀번호 순서")
-    void of_MySql_ReturnsFieldsInDeclaredOrder() {
         // when
-        List<EnvValueField> fields = EnvValueField.of(ComponentType.MYSQL);
+        boolean result = EnvValueValidator.hasForbiddenCharacter(value);
 
         // then
-        assertEquals(
-            List.of(
-                EnvValueField.MYSQL_ROOT_PASSWORD,
-                EnvValueField.MYSQL_USERNAME,
-                EnvValueField.MYSQL_USER_PASSWORD
-            ),
-            fields
-        );
+        assertFalse(result);
     }
 
     @Test
-    @DisplayName("필드 읽기 — 있는 키는 값을, 없는 키는 빈 문자열을 돌려준다")
-    void read_PresentAndMissingKey_ReturnsValueOrEmpty() {
+    @DisplayName("null과 빈 값에 대한 금지 문자 검사 — false 반환")
+    void hasForbiddenCharacter_NullOrEmpty_ReturnsFalse() {
         // given
-        JsonNode props = objectMapper.readTree("{\"env\": {\"password\": \"pg-pass\"}}");
+        String nullValue = null;
+        String emptyValue = "";
 
-        // when & then
-        assertEquals("pg-pass", EnvValueField.POSTGRESQL_PASSWORD.read(props));
-        assertEquals("", EnvValueField.POSTGRESQL_USERNAME.read(props));
-        assertEquals("", EnvValueField.REDIS_PASSWORD.read(props));
-    }
+        // when
+        boolean nullResult = EnvValueValidator.hasForbiddenCharacter(nullValue);
+        boolean emptyResult = EnvValueValidator.hasForbiddenCharacter(emptyValue);
 
-    // 파서가 읽는 위치를 그대로 적어 enum의 키가 바뀌면 이 목록이 깨지게 한다.
-    private static Stream<Arguments> forbiddenFieldProperties() {
-        return Stream.of(
-            Arguments.of(ComponentType.MYSQL, "{\"env\": {\"rootPassword\": \"a$b\"}}"),
-            Arguments.of(ComponentType.MYSQL, "{\"env\": {\"username\": \"a\\\"b\"}}"),
-            Arguments.of(ComponentType.MYSQL, "{\"env\": {\"userPassword\": \"a\\nb\"}}"),
-            Arguments.of(ComponentType.POSTGRESQL, "{\"env\": {\"password\": \"a$b\"}}"),
-            Arguments.of(ComponentType.POSTGRESQL, "{\"env\": {\"username\": \"a\\\\b\"}}"),
-            Arguments.of(ComponentType.MONGODB, "{\"env\": {\"password\": \"a$b\"}}"),
-            Arguments.of(ComponentType.MONGODB, "{\"env\": {\"username\": \"a\\rb\"}}"),
-            Arguments.of(ComponentType.REDIS, "{\"password\": \"a$b\"}")
-        );
+        // then
+        assertFalse(nullResult);
+        assertFalse(emptyResult);
     }
 }

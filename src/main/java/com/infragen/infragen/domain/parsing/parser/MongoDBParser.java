@@ -8,8 +8,8 @@ import com.infragen.infragen.domain.parsing.dto.response.MongoDBComponent;
 import com.infragen.infragen.domain.parsing.dto.response.MongoDBEnvComponent;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
+import com.infragen.infragen.domain.parsing.validator.ComponentPropertyField;
 import com.infragen.infragen.domain.parsing.validator.ComposeYamlValueValidator;
-import com.infragen.infragen.domain.parsing.validator.EnvValueField;
 import com.infragen.infragen.domain.parsing.validator.EnvValueValidator;
 import com.infragen.infragen.global.enums.ComponentType;
 
@@ -31,14 +31,14 @@ public class MongoDBParser implements ComponentParser {
 
     @Override
     public BaseComponent parse(NodeDTO node, JsonNode props, int port) {
-        String imageVersion = props.path("imageVersion").asString();
-        String containerName = props.path("containerName").asString();
-        String volumeName = props.path("volumeName").asString();
+        String imageVersion = ComponentPropertyField.MONGODB_IMAGE_VERSION.read(props);
+        String containerName = ComponentPropertyField.MONGODB_CONTAINER_NAME.read(props);
+        String volumeName = ComponentPropertyField.MONGODB_VOLUME_NAME.read(props);
 
         JsonNode envNode = props.path("env");
         String dbName = envNode.path("databaseName").asString();
-        String password = EnvValueField.MONGODB_PASSWORD.read(props);
-        String username = EnvValueField.MONGODB_USERNAME.read(props);
+        String password = ComponentPropertyField.MONGODB_PASSWORD.read(props);
+        String username = ComponentPropertyField.MONGODB_USERNAME.read(props);
 
         if (dbName == null || dbName.isBlank() || !dbName.matches("^[a-zA-Z0-9_]+$")) {
             throw new ParsingException(ParsingErrorCode.INVALID_DB_NAME);

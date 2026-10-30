@@ -19,8 +19,10 @@ import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.member.exception.MemberException;
 import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
+import com.infragen.infragen.domain.parsing.exception.ComponentPropertyValidationException;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.service.ParsingService;
+import com.infragen.infragen.domain.parsing.validator.PropertyFieldKind;
 import com.infragen.infragen.domain.project.converter.ProjectConverter;
 import com.infragen.infragen.domain.project.converter.ProjectEdgeConverter;
 import com.infragen.infragen.domain.project.converter.ProjectNodeConverter;
@@ -102,7 +104,7 @@ public class ProjectCommandService {
         Project project = projectQueryService.getWriteableProject(projectId, memberId);
 
         // 권한 검사 뒤에 두어 쓰기 권한이 없는 사용자에게 검증 오류가 보이지 않게 하고, 거부된 요청이 version을 올리거나 노드를 지우지 않게 한다.
-        validateAccountValues(request.nodes());
+        validateNodeProperties(request.nodes());
 
         Long serverVersion = projectCollaborationVersionService.issueNextVersionForFullReplace(
                 projectId,
@@ -216,14 +218,24 @@ public class ProjectCommandService {
         return project;
     }
 
-    private void validateAccountValues(List<ProjectNodeReqDTO.NodeInfoReqDTO> nodes) {
+    private void validateNodeProperties(List<ProjectNodeReqDTO.NodeInfoReqDTO> nodes) {
         for (ProjectNodeReqDTO.NodeInfoReqDTO node : nodes) {
             try {
                 parsingService.validateEnvValues(node.componentType(), node.properties());
+            } catch (ComponentPropertyValidationException e) {
+                throw new ProjectException(toProjectErrorCode(e.getKind()));
             } catch (ParsingException e) {
-                // validateEnvValues가 던지는 예외는 금지 문자 하나뿐이라 project 코드 하나로 바꾼다.
                 throw new ProjectException(ProjectErrorCode.UNSUPPORTED_ACCOUNT_VALUE_CHARACTER);
             }
         }
+    }
+
+    private ProjectErrorCode toProjectErrorCode(PropertyFieldKind kind) {
+        return switch (kind) {
+            case ACCOUNT -> ProjectErrorCode.UNSUPPORTED_ACCOUNT_VALUE_CHARACTER;
+            case IMAGE_VERSION -> ProjectErrorCode.INVALID_IMAGE_VERSION;
+            case VOLUME_NAME -> ProjectErrorCode.INVALID_VOLUME_NAME;
+            case CONTAINER_NAME -> ProjectErrorCode.INVALID_CONTAINER_NAME;
+        };
     }
 }

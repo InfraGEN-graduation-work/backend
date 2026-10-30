@@ -92,6 +92,21 @@ public enum ProjectErrorCode implements BaseErrorCode {
             "사용자 이름과 비밀번호에 큰따옴표, 백슬래시, 달러 기호, 줄바꿈은 사용할 수 없습니다.",
             "PROJECT400_8"
     ),
+    INVALID_IMAGE_VERSION(
+            HttpStatus.BAD_REQUEST,
+            "이미지 버전은 Docker 이미지 참조 형식이어야 합니다.",
+            "PROJECT400_9"
+    ),
+    INVALID_VOLUME_NAME(
+            HttpStatus.BAD_REQUEST,
+            "볼륨 이름은 영문 또는 숫자로 시작하고 영문, 숫자, 언더바, 점, 하이픈만 사용할 수 있습니다.",
+            "PROJECT400_10"
+    ),
+    INVALID_CONTAINER_NAME(
+            HttpStatus.BAD_REQUEST,
+            "컨테이너 이름은 영문 또는 숫자로 시작하는 2자 이상이어야 하고 영문, 숫자, 언더바, 점, 하이픈만 사용할 수 있습니다.",
+            "PROJECT400_11"
+    ),
     ;
     private final HttpStatus httpStatus;
     private final String message;

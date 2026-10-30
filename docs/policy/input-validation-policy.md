@@ -1,6 +1,6 @@
 # 입력 검증 정책
 
-노드 속성 입력에 적용하는 검증 규칙과 그 이유를 기록한다. 검증은 컴포넌트별 `ComponentParser`와 `ParsingService`가 생성 요청의 파싱 단계에서 수행한다. 환경변수 금지 문자는 프로젝트 저장 경로에서 검사하지 않는다.
+노드 속성 입력에 적용하는 검증 규칙과 그 이유를 기록한다. 검증은 프로젝트 저장 경로(`ProjectCommandService`)와 생성 요청의 파싱 단계(`ComponentParser`, `ParsingService`)에서 수행한다.
 
 ## 포트
 
@@ -17,7 +17,7 @@
 
 ## 환경변수 금지 문자
 
-- DB와 Redis 노드의 사용자 이름과 비밀번호에 큰따옴표, 백슬래시, 달러 기호, 줄바꿈, NUL이 있으면 `PARSING400_33`으로 거부한다. 값과 필드 이름은 응답에 노출하지 않는다.
+- DB와 Redis 노드의 사용자 이름과 비밀번호에 큰따옴표, 백슬래시, 달러 기호, 줄바꿈, NUL이 있으면 프로젝트 저장 시점에 `PROJECT400_8`로 거부하고, 생성 요청의 파싱 단계에서는 `PARSING400_33`으로 거부한다. 값과 필드 이름은 응답에 노출하지 않는다.
 - 이스케이프하지 않고 거부하는 이유는 이스케이프 규칙이 Docker Compose 전용이라 Node.js가 같은 값을 다르게 읽기 때문이다.
 - 생성 단계에도 같은 문자 집합을 검사하는 마지막 방어선이 있다. 줄바꿈과 NUL은 `GENERATION400_13`, 큰따옴표와 백슬래시와 달러 기호는 `GENERATION400_14`로 거부한다. 이 검사는 LOCAL `.env` 생성에서만 쓰이고 CLOUD Compose의 `${...}` 참조는 거치지 않는다.
 
@@ -29,6 +29,7 @@
   - 저장소 경로는 Docker가 이름을 정규화한 뒤 레지스트리 도메인, 태그, 다이제스트를 뺀 길이로 255자 이하여야 한다. 첫 구성 요소가 `localhost`이거나 `.`, `:`, 대문자를 포함하면 도메인으로 보고, 도메인과 `/`가 없는 이름(`mysql`)과 `docker.io/`, `index.docker.io/` 뒤의 한 단어 이름은 `library/`(8자)를 붙여 잰다. 그래서 한 단어 이름은 247자까지 허용한다.
   - 볼륨 이름은 값이 있을 때만 `[a-zA-Z0-9][a-zA-Z0-9_.-]*`를 허용한다. 비어 있으면 볼륨 없이 생성한다(Caddy는 도메인이 있으면 필수).
   - 컨테이너 이름은 값이 있을 때만 `[a-zA-Z0-9][a-zA-Z0-9_.-]+`(2자 이상)를 허용한다. 비어 있으면 Compose service 이름을 쓴다. Compose가 볼륨 이름에는 프로젝트 이름을 붙이지만 컨테이너 이름은 그대로 Docker에 넘기므로, Docker가 거부하는 1자 이름을 막는다.
-  - 에러 코드: MySQL은 `PARSING400_44`(이미지), `PARSING400_45`(볼륨), Redis는 `PARSING400_46`, `PARSING400_47`, PostgreSQL은 `PARSING400_48`, `PARSING400_49`, MongoDB는 `PARSING400_50`, `PARSING400_51`, Caddy는 `PARSING400_42`, `PARSING400_43`이다. 컨테이너 이름은 MySQL `PARSING400_52`, Redis `PARSING400_53`, PostgreSQL `PARSING400_54`, MongoDB `PARSING400_55`다.
+  - 에러 코드: 파싱 단계에서는 MySQL은 `PARSING400_44`(이미지), `PARSING400_45`(볼륨), Redis는 `PARSING400_46`, `PARSING400_47`, PostgreSQL은 `PARSING400_48`, `PARSING400_49`, MongoDB는 `PARSING400_50`, `PARSING400_51`, Caddy는 `PARSING400_42`, `PARSING400_43`이다. 컨테이너 이름은 MySQL `PARSING400_52`, Redis `PARSING400_53`, PostgreSQL `PARSING400_54`, MongoDB `PARSING400_55`다.
+  - 프로젝트 저장 시점(`PUT /projects/{id}`)에도 동일한 형식 검증이 `ComponentPropertyValidator`를 통해 적용되며, 값이 있을 때만 형식을 검사한다(미완성 노드의 저장을 허용하기 위함이다). 저장 시점의 에러 코드는 필드 종류별 4개다: 계정 값(사용자 이름, 비밀번호)은 `PROJECT400_8`, 이미지 버전은 `PROJECT400_9`, 볼륨 이름은 `PROJECT400_10`, 컨테이너 이름은 `PROJECT400_11`이다.
 - 형식 검사를 통과한 값도 따옴표 없이 쓰면 YAML이 `true`, `123`, `null`을 불리언, 숫자, null로 읽어 Compose가 거부한다. 그래서 생성기는 이 값을 큰따옴표 문자열로 출력한다([배포 옵션과 산출물 정책](generation-output-policy.md)).
 - NGINX의 이미지 버전과 컨테이너 이름은 NGINX 파서가 자체 규칙으로 검사하므로 위 검사보다 느슨하다(이미지는 문자 구성만, 컨테이너 이름은 1자 허용).

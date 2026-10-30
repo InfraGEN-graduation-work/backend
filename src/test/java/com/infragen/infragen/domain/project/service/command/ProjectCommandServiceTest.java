@@ -5,6 +5,11 @@ import com.infragen.infragen.domain.member.enums.Role;
 import com.infragen.infragen.domain.member.exception.MemberException;
 import com.infragen.infragen.domain.member.exception.code.error.MemberErrorCode;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
+import com.infragen.infragen.domain.parsing.exception.ComponentPropertyValidationException;
+import com.infragen.infragen.domain.parsing.exception.ParsingException;
+import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
+import com.infragen.infragen.domain.parsing.service.ParsingService;
+import com.infragen.infragen.domain.parsing.validator.PropertyFieldKind;
 import com.infragen.infragen.domain.collaboration.service.command.ProjectCollaborationVersionService;
 import com.infragen.infragen.domain.collaboration.repository.ProjectCollaborationCheckpointFailureRepository;
 import com.infragen.infragen.domain.collaboration.repository.ProjectCollaborationOperationRepository;
@@ -109,6 +114,9 @@ class ProjectCommandServiceTest {
 
     @Mock
     private ProjectCollaborationCheckpointFailureRepository checkpointFailureRepository;
+
+    @Mock
+    private ParsingService parsingService;
 
     @InjectMocks
     private ProjectCommandService projectCommandService;
@@ -683,6 +691,99 @@ class ProjectCommandServiceTest {
 
         // then
         assertEquals(ProjectErrorCode.PROJECT_ACCESS_DENIED, exception.getCode());
+        verifyNoInteractions(projectCollaborationVersionService, projectNodeRepository, projectEdgeRepository,
+                parsingService);
+    }
+
+    @Test
+    @DisplayName("graph 수정은 노드 계정 값에 금지 문자가 있으면 version 발급과 삭제 전에 거부한다")
+    void updateProject_ForbiddenAccountValue_RejectsBeforeVersionAndDelete() {
+        // given
+        Project project = Project.builder().member(owner(1L, Role.ROLE_USER)).build();
+        Map<String, Object> properties = Map.of("env", Map.of("rootPassword", "pa$$word1"));
+        var node = new ProjectNodeReqDTO.NodeInfoReqDTO(
+                "node-1", "DB", "MYSQL", BigDecimal.ONE, BigDecimal.ONE, properties);
+        var request = new ProjectReqDTO.UpdateProjectReqDTO("New", null, List.of(node), List.of(), 0L);
+        when(projectRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(project));
+        when(projectQueryService.getWriteableProject(100L, 1L)).thenReturn(project);
+        doThrow(new ParsingException(ParsingErrorCode.UNSUPPORTED_ENV_VALUE_CHARACTER))
+                .when(parsingService).validateEnvValues("MYSQL", properties);
+
+        // when
+        ProjectException exception = assertThrows(ProjectException.class,
+                () -> projectCommandService.updateProject(100L, request, 1L));
+
+        // then
+        assertEquals(ProjectErrorCode.UNSUPPORTED_ACCOUNT_VALUE_CHARACTER, exception.getCode());
+        verifyNoInteractions(projectCollaborationVersionService, projectNodeRepository, projectEdgeRepository);
+    }
+
+    @Test
+    @DisplayName("graph 수정은 노드 이미지 버전 형식이 올바르지 않으면 version 발급과 삭제 전에 INVALID_IMAGE_VERSION으로 거부한다")
+    void updateProject_InvalidImageVersion_RejectsBeforeVersionAndDelete() {
+        // given
+        Project project = Project.builder().member(owner(1L, Role.ROLE_USER)).build();
+        Map<String, Object> properties = Map.of("imageVersion", "invalid:image:version:extra");
+        var node = new ProjectNodeReqDTO.NodeInfoReqDTO(
+                "node-1", "DB", "MYSQL", BigDecimal.ONE, BigDecimal.ONE, properties);
+        var request = new ProjectReqDTO.UpdateProjectReqDTO("New", null, List.of(node), List.of(), 0L);
+        when(projectRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(project));
+        when(projectQueryService.getWriteableProject(100L, 1L)).thenReturn(project);
+        doThrow(new ComponentPropertyValidationException(PropertyFieldKind.IMAGE_VERSION, ParsingErrorCode.INVALID_MYSQL_IMAGE_VERSION))
+                .when(parsingService).validateEnvValues("MYSQL", properties);
+
+        // when
+        ProjectException exception = assertThrows(ProjectException.class,
+                () -> projectCommandService.updateProject(100L, request, 1L));
+
+        // then
+        assertEquals(ProjectErrorCode.INVALID_IMAGE_VERSION, exception.getCode());
+        verifyNoInteractions(projectCollaborationVersionService, projectNodeRepository, projectEdgeRepository);
+    }
+
+    @Test
+    @DisplayName("graph 수정은 노드 볼륨 이름 형식이 올바르지 않으면 version 발급과 삭제 전에 INVALID_VOLUME_NAME으로 거부한다")
+    void updateProject_InvalidVolumeName_RejectsBeforeVersionAndDelete() {
+        // given
+        Project project = Project.builder().member(owner(1L, Role.ROLE_USER)).build();
+        Map<String, Object> properties = Map.of("volumeName", "-invalid_volume");
+        var node = new ProjectNodeReqDTO.NodeInfoReqDTO(
+                "node-1", "DB", "MYSQL", BigDecimal.ONE, BigDecimal.ONE, properties);
+        var request = new ProjectReqDTO.UpdateProjectReqDTO("New", null, List.of(node), List.of(), 0L);
+        when(projectRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(project));
+        when(projectQueryService.getWriteableProject(100L, 1L)).thenReturn(project);
+        doThrow(new ComponentPropertyValidationException(PropertyFieldKind.VOLUME_NAME, ParsingErrorCode.INVALID_MYSQL_VOLUME_NAME))
+                .when(parsingService).validateEnvValues("MYSQL", properties);
+
+        // when
+        ProjectException exception = assertThrows(ProjectException.class,
+                () -> projectCommandService.updateProject(100L, request, 1L));
+
+        // then
+        assertEquals(ProjectErrorCode.INVALID_VOLUME_NAME, exception.getCode());
+        verifyNoInteractions(projectCollaborationVersionService, projectNodeRepository, projectEdgeRepository);
+    }
+
+    @Test
+    @DisplayName("graph 수정은 노드 컨테이너 이름 형식이 올바르지 않으면 version 발급과 삭제 전에 INVALID_CONTAINER_NAME으로 거부한다")
+    void updateProject_InvalidContainerName_RejectsBeforeVersionAndDelete() {
+        // given
+        Project project = Project.builder().member(owner(1L, Role.ROLE_USER)).build();
+        Map<String, Object> properties = Map.of("containerName", "a");
+        var node = new ProjectNodeReqDTO.NodeInfoReqDTO(
+                "node-1", "DB", "MYSQL", BigDecimal.ONE, BigDecimal.ONE, properties);
+        var request = new ProjectReqDTO.UpdateProjectReqDTO("New", null, List.of(node), List.of(), 0L);
+        when(projectRepository.findByIdForUpdate(100L)).thenReturn(Optional.of(project));
+        when(projectQueryService.getWriteableProject(100L, 1L)).thenReturn(project);
+        doThrow(new ComponentPropertyValidationException(PropertyFieldKind.CONTAINER_NAME, ParsingErrorCode.INVALID_MYSQL_CONTAINER_NAME))
+                .when(parsingService).validateEnvValues("MYSQL", properties);
+
+        // when
+        ProjectException exception = assertThrows(ProjectException.class,
+                () -> projectCommandService.updateProject(100L, request, 1L));
+
+        // then
+        assertEquals(ProjectErrorCode.INVALID_CONTAINER_NAME, exception.getCode());
         verifyNoInteractions(projectCollaborationVersionService, projectNodeRepository, projectEdgeRepository);
     }
 }

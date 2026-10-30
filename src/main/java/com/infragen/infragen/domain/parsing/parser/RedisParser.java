@@ -7,6 +7,7 @@ import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.RedisComponent;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
+import com.infragen.infragen.domain.parsing.validator.ComponentPropertyField;
 import com.infragen.infragen.domain.parsing.validator.ComposeYamlValueValidator;
 import com.infragen.infragen.domain.parsing.validator.EnvValueValidator;
 import com.infragen.infragen.global.enums.ComponentType;
@@ -23,10 +24,10 @@ public class RedisParser implements ComponentParser {
 
     @Override
     public BaseComponent parse(NodeDTO node, JsonNode props, int port) {
-        String imageVersion = props.path("imageVersion").asString();
-        String containerName = props.path("containerName").asString();
-        String volumeName = props.path("volumeName").asString();
-        String password = props.path("password").asString();
+        String imageVersion = ComponentPropertyField.REDIS_IMAGE_VERSION.read(props);
+        String containerName = ComponentPropertyField.REDIS_CONTAINER_NAME.read(props);
+        String volumeName = ComponentPropertyField.REDIS_VOLUME_NAME.read(props);
+        String password = ComponentPropertyField.REDIS_PASSWORD.read(props);
 
         if (imageVersion == null || imageVersion.isBlank()) {
             throw new ParsingException(ParsingErrorCode.MISSING_REDIS_IMAGE_VERSION);

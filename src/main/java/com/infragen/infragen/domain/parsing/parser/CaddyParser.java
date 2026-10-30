@@ -9,6 +9,7 @@ import com.infragen.infragen.domain.parsing.dto.response.BaseComponent;
 import com.infragen.infragen.domain.parsing.dto.response.CaddyComponent;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
+import com.infragen.infragen.domain.parsing.validator.ComponentPropertyField;
 import com.infragen.infragen.domain.parsing.validator.ComposeYamlValueValidator;
 import com.infragen.infragen.global.enums.ComponentType;
 
@@ -41,10 +42,10 @@ public class CaddyParser implements ComponentParser {
 
     @Override
     public BaseComponent parse(NodeDTO node, JsonNode props, int port) {
-        String imageVersion = props.path("imageVersion").asString();
+        String imageVersion = ComponentPropertyField.CADDY_IMAGE_VERSION.read(props);
         String containerName = props.path("containerName").asString();
         String domain = props.path("domain").asString();
-        String volumeName = props.path("volumeName").asString();
+        String volumeName = ComponentPropertyField.CADDY_VOLUME_NAME.read(props);
 
         if (imageVersion == null || imageVersion.isBlank()) {
             throw new ParsingException(ParsingErrorCode.MISSING_CADDY_IMAGE_VERSION);

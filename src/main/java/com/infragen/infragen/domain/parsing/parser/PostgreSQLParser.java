@@ -8,6 +8,7 @@ import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLComponent;
 import com.infragen.infragen.domain.parsing.dto.response.PostgreSQLEnvComponent;
 import com.infragen.infragen.domain.parsing.exception.ParsingException;
 import com.infragen.infragen.domain.parsing.exception.code.error.ParsingErrorCode;
+import com.infragen.infragen.domain.parsing.validator.ComponentPropertyField;
 import com.infragen.infragen.domain.parsing.validator.ComposeYamlValueValidator;
 import com.infragen.infragen.domain.parsing.validator.EnvValueValidator;
 import com.infragen.infragen.global.enums.ComponentType;
@@ -30,14 +31,14 @@ public class PostgreSQLParser implements ComponentParser {
 
     @Override
     public BaseComponent parse(NodeDTO node, JsonNode props, int port) {
-        String imageVersion = props.path("imageVersion").asString();
-        String containerName = props.path("containerName").asString();
-        String volumeName = props.path("volumeName").asString();
+        String imageVersion = ComponentPropertyField.POSTGRESQL_IMAGE_VERSION.read(props);
+        String containerName = ComponentPropertyField.POSTGRESQL_CONTAINER_NAME.read(props);
+        String volumeName = ComponentPropertyField.POSTGRESQL_VOLUME_NAME.read(props);
 
         JsonNode envNode = props.path("env");
         String dbName = envNode.path("databaseName").asString();
-        String password = envNode.path("password").asString();
-        String username = envNode.path("username").asString();
+        String password = ComponentPropertyField.POSTGRESQL_PASSWORD.read(props);
+        String username = ComponentPropertyField.POSTGRESQL_USERNAME.read(props);
 
         if (dbName == null || dbName.isBlank() || !dbName.matches("^[a-zA-Z0-9_]+$")) {
             throw new ParsingException(ParsingErrorCode.INVALID_DB_NAME);

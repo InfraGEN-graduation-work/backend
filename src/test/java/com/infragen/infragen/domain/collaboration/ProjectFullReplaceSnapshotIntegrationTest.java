@@ -62,6 +62,7 @@ import com.infragen.infragen.domain.collaboration.service.query.CollaborationSna
 import com.infragen.infragen.domain.member.entity.Member;
 import com.infragen.infragen.domain.member.repository.MemberRepository;
 import com.infragen.infragen.domain.member.service.query.MemberQueryService;
+import com.infragen.infragen.domain.parsing.service.ParsingService;
 import com.infragen.infragen.domain.project.converter.ProjectConverter;
 import com.infragen.infragen.domain.project.dto.request.ProjectEdgeReqDTO;
 import com.infragen.infragen.domain.project.dto.request.ProjectNodeReqDTO;
@@ -112,6 +113,8 @@ class ProjectFullReplaceSnapshotIntegrationTest {
     private GeneratedFileRepository generatedFileRepository;
     @MockitoBean
     private MemberQueryService memberQueryService;
+    @MockitoBean
+    private ParsingService parsingService;
     @MockitoBean
     private MemberRepository memberRepository;
     @MockitoBean

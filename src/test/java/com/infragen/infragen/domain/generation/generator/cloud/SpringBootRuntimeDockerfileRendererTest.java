@@ -31,6 +31,8 @@ class SpringBootRuntimeDockerfileRendererTest {
             () -> assertTrue(section.startsWith("## Spring Boot 앱\n")),
             () -> assertTrue(section.contains("`app.jar`라는 이름으로 `Dockerfile`과 같은 디렉터리에")),
             () -> assertTrue(section.contains("Compose가 `SERVER_PORT`로 그래프에 입력한 포트(`9090`)를 전달")),
+            () -> assertTrue(section.contains("`SPRING_APPLICATION_JSON`")),
+            () -> assertTrue(section.contains("`server.port`를 지정하면 `SERVER_PORT`보다 우선")),
             () -> assertFalse(section.contains("`SERVER_PORT=9090`")),
             () -> assertFalse(section.contains("`server.port`를 같은 값으로")),
             () -> assertTrue(section.contains("`SPRING_DATASOURCE_URL`")),

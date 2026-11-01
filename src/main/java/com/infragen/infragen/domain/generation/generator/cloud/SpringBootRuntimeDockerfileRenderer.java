@@ -60,7 +60,7 @@ public class SpringBootRuntimeDockerfileRenderer implements RuntimeDockerfileRen
             ### 배포 전에 준비할 것
 
             - 앱을 빌드한 실행 가능한 JAR를 `app.jar`라는 이름으로 `Dockerfile`과 같은 디렉터리에 두어 주세요.
-            - Compose가 `SERVER_PORT`로 그래프에 입력한 포트(`%d`)를 전달하므로 `server.port`를 따로 맞추지 않아도 앱이 해당 포트로 listen합니다. 외부 `.env`에 `SERVER_PORT`를 적어도 Compose가 전달하는 값이 우선합니다.
+            - Compose가 `SERVER_PORT`로 그래프에 입력한 포트(`%d`)를 전달하므로 `server.port`를 따로 맞추지 않아도 앱이 해당 포트로 listen합니다. 외부 `.env`에 `SERVER_PORT`를 적어도 Compose가 전달하는 값이 우선합니다. 다만 `SPRING_APPLICATION_JSON`, 실행 인자, JVM 시스템 속성으로 `server.port`를 지정하면 `SERVER_PORT`보다 우선하므로, 그런 설정은 제거하거나 그래프 포트(`%d`)와 같은 값으로 맞춰 주세요.
 
             ### DB 접속 설정
 
@@ -73,6 +73,6 @@ public class SpringBootRuntimeDockerfileRenderer implements RuntimeDockerfileRen
             ```
             docker compose -f docker-compose.cloud.yml up -d --build
             ```
-            """.formatted(port);
+            """.formatted(port, port);
     }
 }

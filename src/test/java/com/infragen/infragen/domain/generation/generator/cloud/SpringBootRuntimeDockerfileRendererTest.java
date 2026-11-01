@@ -1,6 +1,7 @@
 package com.infragen.infragen.domain.generation.generator.cloud;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -17,7 +18,7 @@ class SpringBootRuntimeDockerfileRendererTest {
     private final SpringBootRuntimeDockerfileRenderer renderer = new SpringBootRuntimeDockerfileRenderer();
 
     @Test
-    @DisplayName("앱 섹션은 app.jar 배치, 그래프 포트 listen 방법, 프레임워크 변수로 전달되는 DB 접속 정보를 안내한다")
+    @DisplayName("앱 섹션은 app.jar 배치, Compose의 SERVER_PORT 자동 전달, 프레임워크 변수로 전달되는 DB 접속 정보를 안내한다")
     void guideSection_SpringBoot_GuidesJarPortAndDatasource() {
         // given
         CloudDeployContext context = context(9090);
@@ -29,8 +30,11 @@ class SpringBootRuntimeDockerfileRendererTest {
         assertAll(
             () -> assertTrue(section.startsWith("## Spring Boot 앱\n")),
             () -> assertTrue(section.contains("`app.jar`라는 이름으로 `Dockerfile`과 같은 디렉터리에")),
-            () -> assertTrue(section.contains("그래프에 입력한 포트(`9090`)로 listen")),
-            () -> assertTrue(section.contains("`SERVER_PORT=9090`")),
+            () -> assertTrue(section.contains("Compose가 `SERVER_PORT`로 그래프에 입력한 포트(`9090`)를 전달")),
+            () -> assertTrue(section.contains("`SPRING_APPLICATION_JSON`")),
+            () -> assertTrue(section.contains("`server.port`를 지정하면 `SERVER_PORT`보다 우선")),
+            () -> assertFalse(section.contains("`SERVER_PORT=9090`")),
+            () -> assertFalse(section.contains("`server.port`를 같은 값으로")),
             () -> assertTrue(section.contains("`SPRING_DATASOURCE_URL`")),
             () -> assertTrue(section.contains("docker compose -f docker-compose.cloud.yml up -d --build"))
         );

@@ -44,6 +44,14 @@ public class SpringBootApplicationEnvMapper implements ApplicationEnvMapper {
         return environment;
     }
 
+    /** Spring Boot 앱은 relaxed binding으로 {@code SERVER_PORT} 환경변수를 {@code server.port}에 바인딩하므로 그래프 포트를 넘긴다. */
+    @Override
+    public SequencedMap<String, String> cloudRuntimeEnvironment(int port) {
+        SequencedMap<String, String> environment = new LinkedHashMap<>();
+        environment.put("SERVER_PORT", String.valueOf(port));
+        return environment;
+    }
+
     @Override
     public Optional<String> multipleDatabaseNotice(
         SequencedMap<ComponentType, DatabaseConnection> connections,

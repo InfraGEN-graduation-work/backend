@@ -41,7 +41,7 @@ Generate 요청의 배포 옵션 조합과 옵션별 산출물 구성, 생성 �
 ## 앱 접속 변수
 
 - 의존 인프라마다 타입별 중립 변수(`MYSQL_HOST`, `MYSQL_PORT`, `REDIS_HOST` 등)를 항상 만든다.
-- Spring Boot는 여기에 더해 프레임워크 변수(`SPRING_DATASOURCE_*`, `SPRING_MONGODB_*`)를 만든다. 관계형 DB가 둘 이상이면 어느 DB가 `SPRING_DATASOURCE_*`가 될지 정할 수 없으므로 만들지 않고 안내 주석을 남긴다.
+- Spring Boot는 여기에 더해 프레임워크 변수(`SPRING_DATASOURCE_*`, `SPRING_MONGODB_*`)를 만든다. 관계형 DB가 둘 이상이면 어느 DB가 `SPRING_DATASOURCE_*`가 될지 정할 수 없으므로 만들지 않고 안내 주석을 남긴다. CLOUD_DEPLOY Compose는 그래프에 입력한 포트를 `SERVER_PORT` 환경변수로 전달하며, 외부 `.env`에 `SERVER_PORT`가 있어도 Compose `environment`의 값이 우선한다.
 - Node.js는 프레임워크 변수가 없어 중립 변수만 쓴다. CLOUD_DEPLOY Compose는 그래프에 입력한 포트를 `PORT` 환경변수로 전달한다.
 
 ## 사용자 안내 문서

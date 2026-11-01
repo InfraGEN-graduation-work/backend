@@ -47,11 +47,10 @@ public class SpringBootRuntimeDockerfileRenderer implements RuntimeDockerfileRen
     }
 
     /**
-     * @return prebuilt {@code app.jar} 배치, listen 포트, 프레임워크 변수로 전달되는 DB 접속 정보를 안내하는 섹션
+     * @return prebuilt {@code app.jar} 배치, Compose의 {@code SERVER_PORT} 전달, 프레임워크 변수로 전달되는 DB 접속 정보를 안내하는 섹션
      */
     @Override
     public String guideSection(CloudDeployContext context) {
-        // Spring 매퍼는 포트 변수를 넘기지 않으므로 앱이 그래프 포트로 listen하도록 직접 맞춰야 Compose 포트 매핑이 맞는다.
         int port = context.applicationPort();
         return """
             ## Spring Boot 앱
@@ -61,7 +60,7 @@ public class SpringBootRuntimeDockerfileRenderer implements RuntimeDockerfileRen
             ### 배포 전에 준비할 것
 
             - 앱을 빌드한 실행 가능한 JAR를 `app.jar`라는 이름으로 `Dockerfile`과 같은 디렉터리에 두어 주세요.
-            - 앱이 그래프에 입력한 포트(`%d`)로 listen해야 Compose의 포트 연결이 맞습니다. Spring Boot의 기본 포트는 `8080`이므로, 다르면 `server.port`를 같은 값으로 설정하거나 외부 `.env`에 `SERVER_PORT=%d` 한 줄을 적어 주세요. 앱 컨테이너도 외부 `.env`를 읽습니다.
+            - Compose가 `SERVER_PORT`로 그래프에 입력한 포트(`%d`)를 전달하므로 `server.port`를 따로 맞추지 않아도 앱이 해당 포트로 listen합니다. 외부 `.env`에 `SERVER_PORT`를 적어도 Compose가 전달하는 값이 우선합니다.
 
             ### DB 접속 설정
 
@@ -74,6 +73,6 @@ public class SpringBootRuntimeDockerfileRenderer implements RuntimeDockerfileRen
             ```
             docker compose -f docker-compose.cloud.yml up -d --build
             ```
-            """.formatted(port, port);
+            """.formatted(port);
     }
 }

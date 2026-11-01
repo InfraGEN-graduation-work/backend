@@ -975,7 +975,7 @@ class TerraformIaCGeneratorTest {
         String guide = fileContent(bundle, "CLOUD_DEPLOY_GUIDE.md");
         assertAll(
             () -> assertTrue(guide.contains("\n## Spring Boot 앱\n")),
-            () -> assertTrue(guide.contains("그래프에 입력한 포트(`9090`)로 listen")),
+            () -> assertTrue(guide.contains("Compose가 `SERVER_PORT`로 그래프에 입력한 포트(`9090`)를 전달")),
             () -> assertFalse(guide.contains("## Caddy")),
             () -> assertFalse(guide.contains("## MySQL")),
             () -> assertFalse(guide.contains("## NGINX")),

@@ -22,13 +22,14 @@ class SpringBootApplicationEnvMapperTest {
     private final SpringBootApplicationEnvMapper mapper = new SpringBootApplicationEnvMapper();
 
     @Test
-    @DisplayName("CLOUD 실행 변수를 만들지 않아 Spring 산출물이 바뀌지 않는다")
-    void cloudRuntimeEnvironment_returnsEmpty() {
+    @DisplayName("CLOUD 실행 변수로 그래프 포트를 SERVER_PORT에 담는다")
+    void cloudRuntimeEnvironment_port_returnsServerPortVariable() {
         // when
-        var environment = mapper.cloudRuntimeEnvironment(8080);
+        var environment = mapper.cloudRuntimeEnvironment(9090);
 
         // then
-        assertTrue(environment.isEmpty());
+        assertEquals(List.of("SERVER_PORT"), List.copyOf(environment.keySet()));
+        assertEquals("9090", environment.get("SERVER_PORT"));
     }
 
     @Test

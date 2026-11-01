@@ -181,6 +181,7 @@ class TerraformIaCGeneratorTest {
                 .contains("description = \"외부에서 접속하는 포트 (방화벽 규칙이 허용하는 포트)\"")),
             () -> assertTrue(fileContent(first, "docker-compose.cloud.yml")
                 .contains("${APP_PORT:-9090}:9090")),
+            () -> assertTrue(fileContent(first, "docker-compose.cloud.yml").contains("      SERVER_PORT: \"9090\"\n")),
             () -> assertFalse(fileContent(first, "docker-compose.cloud.yml").contains("mysql:")),
             () -> assertFalse(fileContent(first, "docker-compose.cloud.yml").contains("redis:")),
             () -> assertFalse(fileContent(first, "docker-compose.cloud.yml").contains("depends_on:")),
@@ -635,6 +636,7 @@ class TerraformIaCGeneratorTest {
                 ports:
                   - "${APP_PORT:-9090}:9090"
                 environment:
+                  SERVER_PORT: "9090"
                   SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:?외부 .env에 설정 필요}"
                   SPRING_DATASOURCE_USERNAME: "${MYSQL_USER:?외부 .env에 설정 필요}"
                   SPRING_DATASOURCE_PASSWORD: "${MYSQL_PASSWORD:?외부 .env에 설정 필요}"
@@ -674,6 +676,7 @@ class TerraformIaCGeneratorTest {
                 ports:
                   - "${APP_PORT:-9090}:9090"
                 environment:
+                  SERVER_PORT: "9090"
                   SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/${POSTGRES_DB:?외부 .env에 설정 필요}"
                   SPRING_DATASOURCE_USERNAME: "${POSTGRES_USER:?외부 .env에 설정 필요}"
                   SPRING_DATASOURCE_PASSWORD: "${POSTGRES_PASSWORD:?외부 .env에 설정 필요}"
@@ -714,6 +717,7 @@ class TerraformIaCGeneratorTest {
                 ports:
                   - "${APP_PORT:-9090}:9090"
                 environment:
+                  SERVER_PORT: "9090"
                   SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:?외부 .env에 설정 필요}"
                   SPRING_DATASOURCE_USERNAME: "${MYSQL_USER:?외부 .env에 설정 필요}"
                   SPRING_DATASOURCE_PASSWORD: "${MYSQL_PASSWORD:?외부 .env에 설정 필요}"
@@ -761,6 +765,7 @@ class TerraformIaCGeneratorTest {
                 ports:
                   - "${APP_PORT:-9090}:9090"
                 environment:
+                  SERVER_PORT: "9090"
                   MYSQL_HOST: mysql
                   MYSQL_PORT: "3306"
                   POSTGRES_HOST: postgres
@@ -799,6 +804,8 @@ class TerraformIaCGeneratorTest {
                       context: .
                       dockerfile: Dockerfile
                     image: infragen-runtime:plan-only
+                    environment:
+                      SERVER_PORT: "9090"
                     env_file:
                       - .env
 
